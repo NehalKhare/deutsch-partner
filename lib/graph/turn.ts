@@ -2,13 +2,13 @@ import {
   evaluate,
   generate,
   honourAdvanceRequest,
-  honourMastery,
   loadState,
   loadThread,
   persistEvaluation,
   recordPerformance,
   recordVocabulary,
   retrieve,
+  standAtThreadPlace,
   type GraphDeps,
 } from "@/lib/graph/nodes";
 import { initialState, ran, type TurnInput, type TurnState } from "@/lib/graph/state";
@@ -17,11 +17,16 @@ import { nullLogger } from "@/lib/observability/logger";
 /**
  * One learner turn, start to end.
  *
- *   load state → verify thread → move on if asked → move up if earned →
- *   retrieve → generate → (stream) → evaluate
- *                                    → persist evaluation
- *                                    → record vocabulary
- *                                    → record performance
+ *   load state → verify thread → return to the thread's place →
+ *   move on if asked → retrieve → generate → (stream) → evaluate
+ *                                            → persist evaluation
+ *                                            → record vocabulary
+ *                                            → record performance
+ *
+ * Mastery moves nobody by itself. The tally opening the gate is announced in
+ * the chat, and the learner chooses between moving on and staying — the move,
+ * when they confirm it, arrives as an ordinary request and is recorded as
+ * earned because the tally says so.
  *
  * Split at the stream. Everything before it has to finish before the learner
  * sees a word; everything after it runs once the reply is complete, which is
@@ -79,11 +84,11 @@ export async function prepareTurn(
 
   // Both moves run before retrieval, so a learner who moves this turn is
   // retrieved for and answered at the level they arrive at, not the one they
-  // left. Asking is checked first and wins; the mastery gate then stands down
-  // for this turn, because one move per turn is as fast as a syllabus should
-  // travel.
+  // left. The place comes first: a fresh visit to a thread returns to the
+  // level it was opened at, and a "weiter" said into that visit advances
+  // from there rather than from wherever the learner last stood.
+  state = await standAtThreadPlace(state, deps);
   state = await honourAdvanceRequest(state, deps);
-  state = await honourMastery(state, deps);
 
   return retrieve(state, deps);
 }

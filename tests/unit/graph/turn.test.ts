@@ -40,10 +40,10 @@ describe("the happy path", () => {
     expect(state.notes.map((entry) => entry.node)).toEqual([
       "load_state",
       "load_thread",
-      // Both moves run before retrieval and generation, so a learner who
-      // moves this turn is answered at the level they arrive at.
+      // The place and the move both run before retrieval and generation, so
+      // a learner who moves this turn is answered at the level they arrive at.
+      "place",
       "advance",
-      "mastery",
       "retrieve",
       "generate",
       "evaluate",
@@ -291,8 +291,8 @@ describe("preparing a turn", () => {
     expect(state.notes.map((entry) => entry.node)).toEqual([
       "load_state",
       "load_thread",
+      "place",
       "advance",
-      "mastery",
       "retrieve",
     ]);
     expect(ran(state, "retrieve")).toBe(true);

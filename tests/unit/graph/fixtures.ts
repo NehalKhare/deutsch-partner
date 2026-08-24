@@ -60,6 +60,7 @@ const PROFILE = {
   inputPreference: "text" as const,
   outputPreference: "text" as const,
   correctionPreference: "gentle" as const,
+  masteryThreshold: 80 as const,
 };
 
 const STATE = {
@@ -106,6 +107,10 @@ export interface FakeOptions {
   /** The stored tally the mastery gate will read for the current level. */
   readonly tally?: { turns: number; strongTurns: number };
   readonly tallyReadFails?: boolean;
+  /** The level the thread was opened at; defaults to where the learner is. */
+  readonly threadMiniLevel?: number;
+  /** The learner's chosen pass mark, as a percentage. Defaults to 80. */
+  readonly masteryThreshold?: number;
   readonly recordFails?: boolean;
   readonly recordThrows?: boolean;
   readonly vocabularyFails?: boolean;
@@ -215,7 +220,14 @@ export function fakeGraph(options: FakeOptions = {}) {
 
   const deps: GraphDeps = {
     learners: {
-      getProfile: vi.fn(async () => (options.learnerMissing ? fail() : ok(PROFILE))),
+      getProfile: vi.fn(async () =>
+        options.learnerMissing
+          ? fail()
+          : ok({
+              ...PROFILE,
+              masteryThreshold: options.masteryThreshold ?? PROFILE.masteryThreshold,
+            }),
+      ),
       getState: vi.fn(async () => (options.learnerMissing ? fail() : ok(STATE))),
       upsertProfile: vi.fn(async () => ok(PROFILE)),
       upsertState: vi.fn(async (state: unknown) => {
@@ -235,7 +247,11 @@ export function fakeGraph(options: FakeOptions = {}) {
             error: { kind: "not_found" as const, message: "no", name: "RepositoryError" },
           };
         }
-        return ok({ id: threadId, learnerId: INPUT.learnerId });
+        return ok({
+          id: threadId,
+          learnerId: INPUT.learnerId,
+          miniLevel: options.threadMiniLevel ?? STATE.miniLevel,
+        });
       }),
     } as unknown as GraphDeps["conversations"],
 

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { Companion } from "@/components/companion/companion";
+import { MasteryProgress } from "@/components/chat/mastery-progress";
 import {
   createBrowserCapture,
   createBrowserPlayback,
@@ -12,14 +13,37 @@ import {
   type SpeechVoice,
 } from "@/components/chat/speech";
 import { SPEECH_RATES, speechRateFor } from "@/lib/ai/voice/providers";
+import { splitChatStream } from "@/lib/api/chat-trailer";
+import {
+  masteryStripStore,
+  useDevicePreference,
+  voiceEngineStore,
+} from "@/lib/settings/device";
 import { HISTORY_WINDOW } from "@/domain/conversation";
-import { buttonPrimary, field, focusRing } from "@/components/ui/styles";
+import { buttonPrimary, buttonQuiet, field, focusRing } from "@/components/ui/styles";
 import { cn } from "@/lib/utils";
 import { companionActivityFor, companionStateFor } from "@/domain/companion";
 import { TUTOR } from "@/domain/tutor";
+import {
+  hasMastered,
+  thresholdRatio,
+  turnQuality,
+  type TurnQuality,
+} from "@/learning/mastery";
 
 /** Shown when a refusal arrives with nothing a learner could act on. */
 const FALLBACK_ERROR = "Something went wrong. Please try again.";
+
+// The strip's visibility and the read-aloud engine are device preferences —
+// see lib/settings/device.ts for why they live in localStorage rather than
+// the profile.
+
+/** The tally for the level being stood on, tagged with which level that is. */
+interface PositionedTally {
+  readonly miniLevel: number;
+  readonly turns: number;
+  readonly strongTurns: number;
+}
 
 /*
  * Drawn here rather than pulled from an icon set. Two shapes at one size is
@@ -77,6 +101,26 @@ export interface ChatMessage {
 }
 
 /**
+ * A line in the conversation's flow that nobody spoke: the moment the level
+ * moved. It is rendered as a divider, never read aloud, and never sent back
+ * to the server as history — the transcript schema knows only the two
+ * speaking roles, which is exactly right.
+ */
+interface Milestone {
+  readonly id: string;
+  readonly role: "milestone";
+  readonly miniLevel: number;
+  readonly theme: string | null;
+}
+
+type FlowEntry = ChatMessage | Milestone;
+
+/** The lines that were actually said, which is all a transcript may carry. */
+function isSpeech(entry: FlowEntry): entry is ChatMessage {
+  return entry.role !== "milestone";
+}
+
+/**
  * The conversation, streamed.
  *
  * The learner's own message appears immediately and the tutor's arrives a word
@@ -122,6 +166,8 @@ export function Conversation({
   theme,
   cefr = "A1",
   voiceGender = "male",
+  masteryThreshold = 80,
+  initialTally,
   capture,
   playback,
   voice,
@@ -135,8 +181,21 @@ export function Conversation({
   miniLevel: number;
   /** What the current mini-level is called, so "next" is not a leap in the dark. */
   theme?: string;
+  /**
+   * The stored tally for the current level, so the mastery strip starts where
+   * the learner actually is rather than at zero. Absent when the level has no
+   * turns yet, or when the read failed — either way the strip starts empty.
+   */
+  initialTally?: { readonly turns: number; readonly strongTurns: number };
   /** The learner's chosen voice, from settings. Steers both speech paths. */
   voiceGender?: "male" | "female";
+  /**
+   * The learner's pass mark from settings: the share of evaluated turns that
+   * must be error-free before the level counts as cleared. The server holds
+   * the same value and applies it to the move's bookkeeping; this one only
+   * draws the strip and decides when the offer shows.
+   */
+  masteryThreshold?: number;
   /** Decides how fast the tutor speaks. A1 is read more slowly than B1. */
   cefr?: string;
   capture?: SpeechCapture;
@@ -144,11 +203,45 @@ export function Conversation({
   /** The browser's own voice, used when the server has none configured. */
   voice?: SpeechVoice;
 }) {
-  const [messages, setMessages] = useState<ChatMessage[]>([...initialMessages]);
+  const [messages, setMessages] = useState<FlowEntry[]>([...initialMessages]);
   // Where the learner stands right now. A turn that moves them — by asking,
-  // by the button, or by earning it — says so in the response headers, and
-  // this is what keeps the label and the companion honest without a reload.
+  // by the button, or by confirming an earned move — says so in the response
+  // headers, and this is what keeps the label and companion honest without a
+  // reload.
   const [position, setPosition] = useState({ miniLevel, theme: theme ?? null });
+  // The heading follows the conversation: threads are titled by the theme
+  // they were opened for, so when the level moves, the room is renamed to
+  // what is being practised now.
+  const [heading, setHeading] = useState(title ?? null);
+
+  // The level tally the mastery strip draws. Mirrored into a ref because the
+  // trailer that updates it arrives inside dispatch, whose closure would
+  // otherwise compare against the tally from the render it was created in.
+  const [tally, setTally] = useState<PositionedTally>({
+    miniLevel,
+    turns: initialTally?.turns ?? 0,
+    strongTurns: initialTally?.strongTurns ?? 0,
+  });
+  const tallyRef = useRef(tally);
+  function updateTally(next: PositionedTally) {
+    tallyRef.current = next;
+    setTally(next);
+  }
+  // How the newest counted turn went. Cleared when the next turn starts, so
+  // the verdict on the strip is always about the message just above it.
+  const [lastTurn, setLastTurn] = useState<TurnQuality | null>(null);
+  // The level whose "cleared" offer the learner waved away. Mastery moves
+  // nobody by itself: the gate opening is announced, and the learner chooses
+  // between moving on and staying. A new level makes the dismissal stale.
+  const [offerDeclinedFor, setOfferDeclinedFor] = useState<number | null>(null);
+  const showMastery = useDevicePreference(masteryStripStore) === "shown";
+  function toggleMastery() {
+    masteryStripStore.write(showMastery ? "hidden" : "shown");
+  }
+  // Which voice reads replies aloud: the speech model (device voice as its
+  // fallback), or the device's own voice alone. Chosen on the settings page,
+  // remembered per device.
+  const voiceEngine = useDevicePreference(voiceEngineStore);
   const [draft, setDraft] = useState("");
   const [streaming, setStreaming] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -224,10 +317,27 @@ export function Conversation({
     const movedTo = response.headers.get("x-mini-level");
     const movedTheme = response.headers.get("x-mini-level-theme");
     if (movedTo && Number.isFinite(Number(movedTo))) {
-      setPosition({
-        miniLevel: Number(movedTo),
-        theme: movedTheme ? decodeURIComponent(movedTheme) : null,
-      });
+      const level = Number(movedTo);
+      const levelTheme = movedTheme ? decodeURIComponent(movedTheme) : null;
+      setPosition({ miniLevel: level, theme: levelTheme });
+      if (level !== tallyRef.current.miniLevel) {
+        // A move means a new level with no evidence yet. The strip starts
+        // again; the tally the old level earned is the server's to keep.
+        updateTally({ miniLevel: level, turns: 0, strongTurns: 0 });
+        // And the move is part of the conversation's story: a milestone line
+        // marks it in the flow, and the room is renamed to the new topic —
+        // threads are titled by the theme they were opened for.
+        setMessages((previous) => [
+          ...previous,
+          {
+            id: `milestone-${nextId.current++}`,
+            role: "milestone",
+            miniLevel: level,
+            theme: levelTheme,
+          },
+        ]);
+        if (levelTheme) setHeading(levelTheme);
+      }
     }
 
     const reader = response.body.getReader();
@@ -238,14 +348,29 @@ export function Conversation({
       const { done, value } = await reader.read();
       if (done) break;
       text += decoder.decode(value, { stream: true });
-      setStreaming(text);
+      // Everything before the trailer delimiter is the tutor talking; the
+      // trailer itself must never appear in the bubble, even half-arrived.
+      setStreaming(splitChatStream(text).reply);
     }
 
+    const { reply, trailer } = splitChatStream(text);
     setStreaming("");
     setMessages((previous) => [
       ...previous,
-      { id: `reply-${nextId.current++}`, role: "assistant", content: text },
+      { id: `reply-${nextId.current++}`, role: "assistant", content: reply },
     ]);
+
+    // The tally after this turn, from the same write the mastery gate reads.
+    // The verdict is only worth showing when it is about a single counted
+    // turn at the level the strip is already watching.
+    if (trailer) {
+      const before =
+        tallyRef.current.miniLevel === trailer.tally.miniLevel
+          ? tallyRef.current
+          : null;
+      setLastTurn(turnQuality(before, trailer.tally));
+      updateTally(trailer.tally);
+    }
   }
 
   /**
@@ -264,12 +389,17 @@ export function Conversation({
     const id = `local-${nextId.current++}`;
 
     // Snapshotted before the optimistic append: the history is what was said
-    // before this message, which travels separately.
+    // before this message, which travels separately. Milestones are filtered
+    // out first — they are lines nobody spoke, and the server's transcript
+    // schema rightly refuses any role that is not a speaking one.
     const history = messages
+      .filter(isSpeech)
       .slice(-HISTORY_WINDOW)
       .map(({ role, content }) => ({ role, content }));
 
     setError(null);
+    // A verdict about the previous turn must not sit beside a new one.
+    setLastTurn(null);
     setSending(true);
     setMessages((previous) => [
       ...previous,
@@ -329,30 +459,40 @@ export function Conversation({
     player.stop();
     browserVoice.stop();
     setSpeakingId(message.id);
+
+    const speakWithDevice = () =>
+      browserVoice.speak(
+        message.content,
+        speechRateFor(cefr as keyof typeof SPEECH_RATES),
+        voiceGender,
+      );
+
     try {
-      // The speech model first, because it is the one that sounds like a
-      // person. The browser's own voice is the fallback, and it is a real one:
-      // it needs no key, costs nothing, and every desktop ships German.
-      const response = await fetch("/api/speak", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ text: message.content, cefr, voice: voiceGender }),
-      });
-      if (!response.ok) throw new Error("the server has no voice");
-      await player.play(await response.blob());
-    } catch {
-      // Deliberately cancelled reads do not fall back and do not complain.
-      if (session !== speakSession.current) return;
-      try {
-        await browserVoice.speak(
-          message.content,
-          speechRateFor(cefr as keyof typeof SPEECH_RATES),
-          voiceGender,
-        );
-      } catch {
-        if (session !== speakSession.current) return;
-        setVoiceNotice("That reply could not be read aloud.");
+      if (voiceEngine === "browser") {
+        // The learner chose the device's own voice, so the model is never
+        // asked: instant, free, and exactly as good as this device's speech.
+        await speakWithDevice();
+      } else {
+        // The speech model first, because it is the one that sounds like a
+        // person. The browser's own voice is the fallback, and it is a real
+        // one: it needs no key, costs nothing, and every desktop ships German.
+        try {
+          const response = await fetch("/api/speak", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ text: message.content, cefr, voice: voiceGender }),
+          });
+          if (!response.ok) throw new Error("the server has no voice");
+          await player.play(await response.blob());
+        } catch {
+          // Deliberately cancelled reads do not fall back and do not complain.
+          if (session !== speakSession.current) return;
+          await speakWithDevice();
+        }
       }
+    } catch {
+      if (session !== speakSession.current) return;
+      setVoiceNotice("That reply could not be read aloud.");
     } finally {
       if (session === speakSession.current) setSpeakingId(null);
     }
@@ -446,12 +586,12 @@ export function Conversation({
           className="[--companion-size:4.25rem]"
         />
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          {title ? (
+          {heading ? (
             <h1
               lang="de"
               className="truncate font-display text-xl font-semibold tracking-tight"
             >
-              {title}
+              {heading}
             </h1>
           ) : null}
           <p className="font-display text-xs uppercase tracking-wider text-chalk/60">
@@ -502,8 +642,32 @@ export function Conversation({
               Read replies aloud
             </button>
           ) : null}
+
+          {/* Some learners want the score in view; some find a falling bar
+              louder than the tutor. Their call, remembered on this device. */}
+          <button
+            type="button"
+            onClick={toggleMastery}
+            aria-pressed={showMastery}
+            className={cn(
+              "flex items-center gap-1.5 rounded-full px-2.5 py-1 font-display text-xs",
+              "uppercase tracking-wider transition-colors",
+              showMastery ? "text-apricot" : "text-chalk/70 hover:text-chalk",
+              focusRing,
+            )}
+          >
+            Show progress
+          </button>
         </div>
       </header>
+
+      {showMastery ? (
+        <MasteryProgress
+          tally={{ turns: tally.turns, strongTurns: tally.strongTurns }}
+          lastTurn={lastTurn}
+          threshold={masteryThreshold}
+        />
+      ) : null}
 
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         {/* An empty thread with nothing but a text box reads as broken. The
@@ -530,7 +694,30 @@ export function Conversation({
             times. */}
         <ol className="mt-auto flex flex-col gap-3" aria-live="polite">
           {messages.map((message) =>
-            message.role === "user" ? (
+            message.role === "milestone" ? (
+              // The conversation crossing into a new level, drawn as a seam
+              // in the flow so the transition is visible in the transcript
+              // itself, not only in the header.
+              <li
+                key={message.id}
+                data-role="milestone"
+                className="flex items-center gap-3 py-1 font-display text-xs uppercase tracking-wider text-apricot/90"
+              >
+                <span aria-hidden className="h-px flex-1 bg-apricot/30" />
+                <span>
+                  Moving up — Mini-level {message.miniLevel}
+                  {message.theme ? (
+                    <>
+                      {" · "}
+                      <span lang="de" className="normal-case tracking-normal">
+                        {message.theme}
+                      </span>
+                    </>
+                  ) : null}
+                </span>
+                <span aria-hidden className="h-px flex-1 bg-apricot/30" />
+              </li>
+            ) : message.role === "user" ? (
               <li
                 key={message.id}
                 data-role="user"
@@ -583,6 +770,44 @@ export function Conversation({
           ) : null}
         </ol>
       </div>
+
+      {/* The gate is open, and it is the learner's to walk through. Mastery
+          moves nobody by itself: this says the level is cleared and offers
+          the move, and "keep practising" is a real answer — the tutor will
+          happily stay. A status region, so the news is read out once. */}
+      {hasMastered(tally, thresholdRatio(masteryThreshold)) &&
+      offerDeclinedFor !== tally.miniLevel ? (
+        <section
+          role="status"
+          aria-label="Mini-level cleared"
+          className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-apricot/40 bg-apricot/10 px-4 py-3"
+        >
+          <p className="min-w-40 flex-1 text-sm leading-relaxed text-chalk">
+            <span className="font-display font-semibold text-apricot">
+              Mini-level {tally.miniLevel} cleared!
+            </span>{" "}
+            At least {masteryThreshold}% of your turns were error-free — the
+            bar you set. Move up now, or keep practising as long as you like.
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void send("Weiter bitte!", { restoreOnFailure: false })}
+              disabled={sending}
+              className={cn(buttonPrimary, "px-4 py-1.5 text-sm")}
+            >
+              Move on
+            </button>
+            <button
+              type="button"
+              onClick={() => setOfferDeclinedFor(tally.miniLevel)}
+              className={cn(buttonQuiet, "px-4 py-1.5 text-xs")}
+            >
+              Keep practising
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       {/* What the companion is doing, for somebody who cannot see it. One
           sentence for the whole wait rather than one per state: the reply

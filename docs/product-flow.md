@@ -154,9 +154,11 @@ request was made, a pure function decides what happens, and the tutor is told
 afterwards. Asking what a word means — *"Was heißt weitermachen?"* — is a
 vocabulary question and moves nobody.
 
-The level left behind is recorded as **skipped, not mastered**. A learner is
-allowed to walk past something that bores them, but the dashboard's progress
-figures must not then mean two things at once.
+The level left behind is recorded as **skipped, not mastered** — unless the
+tally says they had already cleared it, in which case the same request is
+recorded as an earned move (see 5c). A learner is allowed to walk past
+something that bores them, but the dashboard's progress figures must not then
+mean two things at once.
 
 The chat also carries a **Next mini-level** button, and it is deliberately not
 a second code path: it sends *"Weiter bitte!"* through the ordinary send, so
@@ -170,10 +172,19 @@ standing on the last A1 level deserves to know the next click lands in A2.
 
 Every evaluated turn adds one line to a per-level tally: evaluated, and
 error-free or not. When the tally at the current level reaches **five
-evaluated turns with four in five error-free**, the next turn moves the
-learner up before a word is written, and the tutor's reply congratulates them
-— a different sentence from the welcome an asked-for move gets, because
-earning and asking are different things.
+evaluated turns with the learner's pass mark met** — 80% error-free by
+default, lowerable to 50% or 33% with a slider in settings; the five-turn
+minimum is not negotiable — the gate is open, and the chat says so, plainly:
+a banner announces the level is cleared and offers the choice, **Move on** or
+**Keep practising**. Mastery moves nobody by itself. A learner who has just
+found their feet at a level is allowed to enjoy standing on them.
+
+Choosing to move goes through the same door every move does — the button
+sends *"Weiter bitte!"* through the ordinary send — and the tally decides the
+bookkeeping: with the gate open the level is recorded as **mastered** and the
+tutor's reply congratulates them; without it, as skipped, with a welcome
+instead. Earning and asking are different things, and the record keeps them
+different even though the click is the same.
 
 The gate is pure arithmetic over stored integers. The model's per-turn
 evaluation feeds the tally; it never decides the move. Formulaic messages the
@@ -181,8 +192,15 @@ evaluator skips — *"Danke!"* — add nothing, so five pleasantries cannot open
 the gate. And a level that was once skipped and later mastered is un-skipped:
 the record says where the learner is, not where they once gave up.
 
-> `learning/progression.ts` (`hasMastered`, `advanceOnMastery`),
-> `lib/graph/nodes.ts` (`honourMastery`, `recordPerformance`)
+The chat also draws the tally as it stands: a mastery strip under the header
+shows the strong-turn ratio against the four-in-five bar, the five evidence
+dots, and a per-turn verdict. It can be hidden, and the choice is remembered
+on the device.
+
+> `learning/mastery.ts` (`hasMastered`, `masteryFill`),
+> `learning/progression.ts` (`advanceOnMastery`),
+> `lib/graph/nodes.ts` (`honourAdvanceRequest`, `recordPerformance`),
+> `components/chat/mastery-progress.tsx`
 
 ### 6. Reviewing
 
@@ -316,9 +334,12 @@ runTurn()                                        ── lib/graph/turn.ts
   ├─ 1. load state ........ profile, level, mini-level, due words,
   │                          recurring mistakes                  (2 reads)
   ├─ 2. verify thread ..... the thread exists for this learner, or 404
-  ├─ 3. advance if asked .. "weiter" moves them one level, recorded as skipped
-  ├─ 4. advance if earned . the stored tally shows mastery: 5+ evaluated
-  │                          turns, 4 in 5 error-free — pure arithmetic
+  ├─ 3. return to the place a fresh visit to a thread stands the learner
+  │                          back at the mini-level it was opened at
+  ├─ 4. advance if asked .. "weiter" moves them one level — recorded as
+  │                          mastered when the tally shows the gate open
+  │                          (5+ evaluated turns, 4 in 5 error-free),
+  │                          as skipped otherwise — pure arithmetic
   ├─ 5. retrieve .......... embed the question, search the corpus two ways,
   │                          fuse, rank for this learner, take the top 5
   ├─ 6. generate .......... assemble the prompt, dispatch, stream
@@ -344,7 +365,10 @@ the transcript lives in the learner's browser, is resent with each turn as
 context, and dies with the tab. What the product keeps is what the practice
 *meant* — recorded mistakes, skill estimates, and the per-level tally that
 gates advancement. Going back to a thread means going back to the place, not
-the words.
+the words — and the place is enforced: a thread carries the mini-level it was
+opened at, and the first message of a fresh visit (an empty history is the
+mark of one) stands the learner back on it. A learner at mini-level 5 who
+reopens their mini-level 1 conversation is taught level 1 in it.
 
 ### Every node degrades except two
 

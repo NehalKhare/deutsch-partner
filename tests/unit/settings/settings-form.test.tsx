@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { SettingsForm } from "@/components/settings/settings-form";
@@ -31,6 +31,7 @@ const PROFILE: LearnerProfile = {
   outputPreference: "voice",
   correctionPreference: "explicit",
   voicePreference: "male",
+  masteryThreshold: 80,
 };
 
 const noop: SettingsAction = async () => INITIAL_SETTINGS_STATE;
@@ -103,6 +104,39 @@ describe("the voice", () => {
 
     await waitFor(() => expect(seen).toHaveLength(1));
     expect(seen[0]?.get("voicePreference")).toBe("female");
+  });
+});
+
+describe("the pass mark", () => {
+  it("shows the saved mark on the slider", () => {
+    renderForm(noop, { ...PROFILE, masteryThreshold: 50 });
+
+    const slider = screen.getByRole("slider", { name: /pass mark/i });
+    expect(slider).toHaveValue("1");
+    expect(slider).toHaveAccessibleDescription(/error-free/i);
+  });
+
+  it("submits the percent itself, not the slider's position", async () => {
+    const seen: FormData[] = [];
+    const action: SettingsAction = async (_state, formData) => {
+      seen.push(formData);
+      return SETTINGS_SAVED;
+    };
+    const user = userEvent.setup();
+    renderForm(action);
+
+    const slider = screen.getByRole("slider", { name: /pass mark/i });
+    fireEvent.change(slider, { target: { value: "0" } });
+    await user.click(screen.getByRole("button", { name: /save settings/i }));
+
+    await waitFor(() => expect(seen).toHaveLength(1));
+    expect(seen[0]?.get("masteryThreshold")).toBe("33");
+  });
+
+  it("says the five-turn minimum survives every setting", () => {
+    renderForm();
+
+    expect(screen.getByText(/at least five turns/i)).toBeInTheDocument();
   });
 });
 

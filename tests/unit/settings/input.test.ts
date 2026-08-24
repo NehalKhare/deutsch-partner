@@ -27,6 +27,7 @@ function form(over: Record<string, string | string[]> = {}): FormData {
     outputPreference: "text",
     correctionPreference: "gentle",
     voicePreference: "male",
+    masteryThreshold: "80",
   };
 
   for (const [key, value] of Object.entries({ ...defaults, ...over })) {
@@ -42,6 +43,23 @@ describe("what the form accepts", () => {
 
     expect(parsed.success).toBe(true);
     if (parsed.success) expect(parsed.data.correctionPreference).toBe("gentle");
+  });
+
+  it.each(["33", "50", "80"])("accepts a pass mark of %s", (mark) => {
+    const parsed = parseSettingsForm(form({ masteryThreshold: mark }));
+
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.masteryThreshold).toBe(Number(mark));
+  });
+
+  it("refuses a pass mark the product never offered", () => {
+    // A tampered "42" is refused, not rounded to something we can't explain.
+    const parsed = parseSettingsForm(form({ masteryThreshold: "42" }));
+
+    expect(parsed).toEqual({
+      success: false,
+      message: "Please check your pass mark and try again.",
+    });
   });
 
   it("treats no boxes ticked as an empty selection, not a missing field", () => {

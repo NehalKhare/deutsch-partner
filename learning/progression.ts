@@ -163,41 +163,17 @@ export function wasSkipped(state: LearnerState, miniLevel: number): boolean {
 }
 
 /**
- * When performance at a level counts as mastery.
- *
- * The routing document names mastery score calculation and level advancement
- * gating as work that must never be a model call, so the gate is arithmetic:
- * the model's per-turn evaluation feeds the tally, and the tally decides.
- *
- * Four strong turns out of five is the bar the product promises — a learner
- * writing four in five messages without an error is not being taught anything
- * by staying. The minimum is what "confident" means here: two good sentences
- * are a mood, five evaluated turns are evidence.
+ * The mastery gate itself lives in learning/mastery.ts — a leaf module,
+ * because the chat page draws the same arithmetic as a progress bar and must
+ * not pull the authored curriculum into the client bundle to do it. Re-said
+ * here so the callers that think of it as progression keep one import.
  */
-export const MASTERY_RATIO = 0.8;
-export const MASTERY_MIN_TURNS = 5;
-
-/**
- * Whether one evaluated turn counts towards mastery.
- *
- * A turn is strong when the evaluation found nothing to correct. Skill
- * estimates are deliberately not consulted: they are the model's opinion on a
- * continuous scale, and a threshold over an opinion is a model call with
- * extra steps. An empty error list is a fact.
- */
-export function isStrongTurn(evaluation: {
-  readonly errors: readonly unknown[];
-}): boolean {
-  return evaluation.errors.length === 0;
-}
-
-export function hasMastered(performance: {
-  readonly turns: number;
-  readonly strongTurns: number;
-}): boolean {
-  if (performance.turns < MASTERY_MIN_TURNS) return false;
-  return performance.strongTurns / performance.turns >= MASTERY_RATIO;
-}
+export {
+  MASTERY_MIN_TURNS,
+  MASTERY_RATIO,
+  hasMastered,
+  isStrongTurn,
+} from "@/learning/mastery";
 
 /**
  * Moves the learner on one level because they earned it.

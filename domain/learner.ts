@@ -21,6 +21,25 @@ export const INPUT_MODES = ["text", "voice"] as const;
 export const CORRECTION_PREFERENCES = ["gentle", "explicit", "minimal"] as const;
 
 /**
+ * The pass marks a learner may set for moving up: the share of evaluated
+ * turns that must be error-free before a mini-level counts as cleared.
+ *
+ * A closed set rather than a free percentage, because each value is a
+ * position on how to learn — relaxed, balanced, thorough — and a database
+ * CHECK can hold a set where it could not hold an opinion. 80 is the default
+ * and the bar the product recommends; the five-evaluated-turn minimum is not
+ * negotiable at any setting.
+ */
+export const MASTERY_THRESHOLDS = [33, 50, 80] as const;
+export type MasteryThreshold = (typeof MASTERY_THRESHOLDS)[number];
+
+export const masteryThresholdSchema = z.union([
+  z.literal(33),
+  z.literal(50),
+  z.literal(80),
+]);
+
+/**
  * Onboarding-time preferences. Strict, because this arrives from a form and an
  * unexpected property is a sign of tampering rather than of a new feature.
  */
@@ -40,6 +59,13 @@ export const learnerProfileSchema = z.strictObject({
    * is a learner who has not chosen, which is exactly what the default means.
    */
   voicePreference: z.enum(VOICE_GENDERS).default("male"),
+  /**
+   * The pass mark for clearing a mini-level, as a percentage of evaluated
+   * turns that were error-free. Defaulted for the same reason as the voice:
+   * a profile from before the column is a learner who has not chosen, and
+   * the default is the bar the product has always set.
+   */
+  masteryThreshold: masteryThresholdSchema.default(80),
 });
 
 export type LearnerProfile = z.infer<typeof learnerProfileSchema>;

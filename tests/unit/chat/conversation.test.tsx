@@ -1,9 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 
 import { Conversation, type ChatMessage } from "@/components/chat/conversation";
+import { encodeChatTrailer } from "@/lib/api/chat-trailer";
 import { TUTOR } from "@/domain/tutor";
 import { server } from "../../msw/server";
 
@@ -636,8 +637,122 @@ describe("where the learner stands", () => {
 
     await user.click(screen.getByRole("button", { name: /next mini-level/i }));
 
-    expect(await screen.findByText(/mini-level 16/i)).toBeInTheDocument();
-    expect(screen.getByText("Verabredungen")).toBeInTheDocument();
+    // The move is said twice on purpose: the position label under the
+    // heading, and a milestone seam in the conversation flow itself.
+    const said = await screen.findAllByText(/mini-level 16/i);
+    expect(said.length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Verabredungen").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("marks the move as a milestone in the conversation flow", async () => {
+    server.use(
+      http.post(
+        CHAT_ENDPOINT,
+        () =>
+          new HttpResponse("Super, weiter geht's!", {
+            status: 200,
+            headers: {
+              "x-mini-level": "16",
+              "x-mini-level-theme": encodeURIComponent("Verabredungen"),
+            },
+          }),
+      ),
+    );
+
+    const user = userEvent.setup();
+    const { container } = render(
+      <Conversation
+        threadId="1e2f0a4c-6b7d-4e8f-9a0b-1c2d3e4f5a6b"
+        miniLevel={15}
+        theme="Wie geht es dir?"
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /next mini-level/i }));
+    await waitFor(() => {
+      expect(container.querySelector("[data-role='milestone']")).toBeInTheDocument();
+    });
+
+    const milestone = container.querySelector("[data-role='milestone']");
+    expect(milestone).toHaveTextContent(/moving up/i);
+    expect(milestone).toHaveTextContent("Mini-level 16");
+    expect(milestone).toHaveTextContent("Verabredungen");
+  });
+
+  it("renames the room to the topic now being practised", async () => {
+    // Threads are titled by the theme they were opened for, so a heading
+    // still naming the old topic would contradict every reply under it.
+    server.use(
+      http.post(
+        CHAT_ENDPOINT,
+        () =>
+          new HttpResponse("Super, weiter geht's!", {
+            status: 200,
+            headers: {
+              "x-mini-level": "16",
+              "x-mini-level-theme": encodeURIComponent("Verabredungen"),
+            },
+          }),
+      ),
+    );
+
+    const user = userEvent.setup();
+    render(
+      <Conversation
+        threadId="1e2f0a4c-6b7d-4e8f-9a0b-1c2d3e4f5a6b"
+        title="Wie geht es dir?"
+        miniLevel={15}
+        theme="Wie geht es dir?"
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: "Wie geht es dir?" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /next mini-level/i }));
+
+    expect(
+      await screen.findByRole("heading", { name: "Verabredungen" }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps milestones out of the transcript it sends", async () => {
+    // The server's schema knows only the two speaking roles, and a milestone
+    // is a line nobody spoke.
+    const captured: Array<Record<string, unknown>> = [];
+    let calls = 0;
+    server.use(
+      http.post(CHAT_ENDPOINT, async ({ request }) => {
+        calls += 1;
+        captured.push((await request.json()) as Record<string, unknown>);
+        return calls === 1
+          ? new HttpResponse("Super!", {
+              status: 200,
+              headers: {
+                "x-mini-level": "16",
+                "x-mini-level-theme": encodeURIComponent("Verabredungen"),
+              },
+            })
+          : new HttpResponse("Weiter geht's!", { status: 200 });
+      }),
+    );
+
+    const user = userEvent.setup();
+    render(
+      <Conversation
+        threadId="1e2f0a4c-6b7d-4e8f-9a0b-1c2d3e4f5a6b"
+        miniLevel={15}
+        theme="Wie geht es dir?"
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /next mini-level/i }));
+    await waitFor(() => expect(screen.getByText("Super!")).toBeInTheDocument());
+
+    await user.type(screen.getByLabelText(/your message in german/i), "Gern!");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => expect(captured).toHaveLength(2));
+    const history = captured[1]?.history as Array<{ role: string }>;
+    expect(history.map((line) => line.role)).toEqual(["user", "assistant"]);
   });
 });
 
@@ -646,5 +761,328 @@ describe("what the product promises about storage", () => {
     renderConversation();
 
     expect(screen.getByText(/nothing you say here is stored/i)).toBeInTheDocument();
+  });
+});
+
+describe("progress towards mastery", () => {
+  // A real Storage, in memory. Node can expose a half-built localStorage
+  // global that shadows jsdom's (typeof "object", no methods), and a test
+  // that depends on which one wins is a test that fails per machine.
+  beforeEach(() => {
+    const store = new Map<string, string>();
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (key: string) => store.get(key) ?? null,
+        setItem: (key: string, value: string) => void store.set(key, String(value)),
+        removeItem: (key: string) => void store.delete(key),
+        clear: () => store.clear(),
+      },
+    });
+  });
+
+  /** A finished turn: the reply, then the tally trailer, then the close. */
+  function replyWithTally(
+    text: string,
+    tally: { miniLevel: number; turns: number; strongTurns: number },
+  ) {
+    return new HttpResponse(`${text}${encodeChatTrailer({ tally })}`, {
+      status: 200,
+    });
+  }
+
+  async function sendMessage(text = "Ich heiße Alex und wohne in Berlin.") {
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText(/your message in german/i), text);
+    await user.click(screen.getByRole("button", { name: "Send" }));
+  }
+
+  it("starts from the tally the server already holds", () => {
+    render(
+      <Conversation
+        threadId="1e2f0a4c-6b7d-4e8f-9a0b-1c2d3e4f5a6b"
+        miniLevel={1}
+        initialTally={{ turns: 5, strongTurns: 3 }}
+      />,
+    );
+
+    // 3 of 5 strong is 0.6 against the 0.8 target: three quarters full.
+    expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "75");
+    expect(screen.getByText("5 of 5 evaluated turns")).toBeInTheDocument();
+  });
+
+  it("moves the bar and credits the turn when the tally arrives", async () => {
+    server.use(
+      http.post(CHAT_ENDPOINT, () =>
+        replyWithTally("Sehr gut!", { miniLevel: 1, turns: 1, strongTurns: 1 }),
+      ),
+    );
+    const { container } = renderConversation();
+
+    await sendMessage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "100");
+    });
+    expect(container.querySelector("[data-turn-quality='strong']")).toBeInTheDocument();
+  });
+
+  it("drops the bar and names the errors when a turn was weak", async () => {
+    server.use(
+      http.post(CHAT_ENDPOINT, () =>
+        replyWithTally("Fast! Es heißt: mit dem Zug.", {
+          miniLevel: 1,
+          turns: 3,
+          strongTurns: 2,
+        }),
+      ),
+    );
+    const { container } = render(
+      <Conversation
+        threadId="1e2f0a4c-6b7d-4e8f-9a0b-1c2d3e4f5a6b"
+        miniLevel={1}
+        initialTally={{ turns: 2, strongTurns: 2 }}
+      />,
+    );
+
+    expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "100");
+    await sendMessage("Ich fahre mit den Zug.");
+
+    // 2 of 3 strong is ~0.67 against the 0.8 target.
+    await waitFor(() => {
+      expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "83");
+    });
+    expect(container.querySelector("[data-turn-quality='weak']")).toBeInTheDocument();
+  });
+
+  it("never lets the trailer leak into the tutor's bubble", async () => {
+    server.use(
+      http.post(CHAT_ENDPOINT, () =>
+        replyWithTally("Sehr gut!", { miniLevel: 1, turns: 1, strongTurns: 1 }),
+      ),
+    );
+    renderConversation();
+
+    await sendMessage();
+
+    expect(await screen.findByText("Sehr gut!")).toBeInTheDocument();
+    expect(screen.getByText("Sehr gut!").textContent).toBe("Sehr gut!");
+  });
+
+  it("starts the strip over when the learner moves to a new level", async () => {
+    server.use(
+      http.post(
+        CHAT_ENDPOINT,
+        () =>
+          new HttpResponse("Super, weiter geht's!", {
+            status: 200,
+            headers: {
+              "x-mini-level": "2",
+              "x-mini-level-theme": encodeURIComponent("Woher kommst du?"),
+            },
+          }),
+      ),
+    );
+    render(
+      <Conversation
+        threadId="1e2f0a4c-6b7d-4e8f-9a0b-1c2d3e4f5a6b"
+        miniLevel={1}
+        initialTally={{ turns: 5, strongTurns: 4 }}
+      />,
+    );
+
+    expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "100");
+    await userEvent
+      .setup()
+      .click(screen.getByRole("button", { name: /next mini-level/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "0");
+    });
+    expect(screen.getByText("0 of 5 evaluated turns")).toBeInTheDocument();
+  });
+
+  it("clears the last verdict the moment a new turn starts", async () => {
+    const first = replyWithTally("Sehr gut!", {
+      miniLevel: 1,
+      turns: 1,
+      strongTurns: 1,
+    });
+    const reply = replyStream();
+    let calls = 0;
+    server.use(
+      http.post(CHAT_ENDPOINT, () => {
+        calls += 1;
+        return calls === 1 ? first : new HttpResponse(reply.body, { status: 200 });
+      }),
+    );
+    const { container } = renderConversation();
+
+    await sendMessage();
+    await waitFor(() => {
+      expect(container.querySelector("[data-turn-quality]")).toBeInTheDocument();
+    });
+
+    await sendMessage("Und ich wohne in Berlin.");
+    await waitFor(() => {
+      expect(container.querySelector("[data-turn-quality]")).not.toBeInTheDocument();
+    });
+    reply.end();
+  });
+
+  it("hides on request and stays hidden across a reload", async () => {
+    const user = userEvent.setup();
+    const { unmount } = renderConversation();
+
+    expect(screen.getByRole("progressbar")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /show progress/i }));
+
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+    expect(window.localStorage.getItem("deutsch-partner.mastery-strip")).toBe(
+      "hidden",
+    );
+
+    // The next visit respects the choice without being asked again.
+    unmount();
+    renderConversation();
+    await waitFor(() => {
+      expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+    });
+  });
+
+  it("comes back when asked, and remembers that too", async () => {
+    window.localStorage.setItem("deutsch-partner.mastery-strip", "hidden");
+    const user = userEvent.setup();
+    renderConversation();
+
+    await waitFor(() => {
+      expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: /show progress/i }));
+
+    expect(screen.getByRole("progressbar")).toBeInTheDocument();
+    expect(window.localStorage.getItem("deutsch-partner.mastery-strip")).toBe(
+      "shown",
+    );
+  });
+});
+
+describe("the cleared-level offer", () => {
+  function renderCleared(initialTally = { turns: 5, strongTurns: 4 }) {
+    return render(
+      <Conversation
+        threadId="1e2f0a4c-6b7d-4e8f-9a0b-1c2d3e4f5a6b"
+        miniLevel={1}
+        theme="Hallo und Tschüss"
+        initialTally={initialTally}
+      />,
+    );
+  }
+
+  it("announces a level the stored tally already shows as cleared", () => {
+    renderCleared();
+
+    expect(screen.getByText(/mini-level 1 cleared/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Move on" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Keep practising" }),
+    ).toBeInTheDocument();
+  });
+
+  it("offers nothing while the level is not cleared", () => {
+    renderCleared({ turns: 5, strongTurns: 3 });
+
+    expect(screen.queryByText(/cleared/i)).not.toBeInTheDocument();
+  });
+
+  it("honours the learner's own pass mark, and says which bar it was", () => {
+    // The same 3-of-5 tally that says nothing at the default clears a 50%
+    // bar — and the banner names the bar, so the praise is never mysterious.
+    render(
+      <Conversation
+        threadId="1e2f0a4c-6b7d-4e8f-9a0b-1c2d3e4f5a6b"
+        miniLevel={1}
+        theme="Hallo und Tschüss"
+        initialTally={{ turns: 5, strongTurns: 3 }}
+        masteryThreshold={50}
+      />,
+    );
+
+    expect(screen.getByText(/mini-level 1 cleared/i)).toBeInTheDocument();
+    expect(screen.getByText(/at least 50% of your turns/i)).toBeInTheDocument();
+  });
+
+  it("appears the moment a turn's tally opens the gate", async () => {
+    server.use(
+      http.post(
+        CHAT_ENDPOINT,
+        () =>
+          new HttpResponse(
+            `Sehr gut!${encodeChatTrailer({
+              tally: { miniLevel: 1, turns: 5, strongTurns: 4 },
+            })}`,
+            { status: 200 },
+          ),
+      ),
+    );
+    const user = userEvent.setup();
+    renderCleared({ turns: 4, strongTurns: 3 });
+
+    expect(screen.queryByText(/cleared/i)).not.toBeInTheDocument();
+    await user.type(
+      screen.getByLabelText(/your message in german/i),
+      "Ich heiße Alex und wohne in Berlin.",
+    );
+    await user.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(await screen.findByText(/mini-level 1 cleared/i)).toBeInTheDocument();
+  });
+
+  it("keeps practising when asked to, without sending anything", async () => {
+    const requests: number[] = [];
+    server.use(
+      http.post(CHAT_ENDPOINT, () => {
+        requests.push(1);
+        return new HttpResponse("Gern!", { status: 200 });
+      }),
+    );
+    const user = userEvent.setup();
+    renderCleared();
+
+    await user.click(screen.getByRole("button", { name: "Keep practising" }));
+
+    expect(screen.queryByText(/cleared/i)).not.toBeInTheDocument();
+    expect(requests).toHaveLength(0);
+    // The tutor is still there and the level has not moved.
+    expect(screen.getByText(/mini-level 1/i)).toBeInTheDocument();
+  });
+
+  it("moves on through the same door the words would open", async () => {
+    const captured: Array<Record<string, unknown>> = [];
+    server.use(
+      http.post(CHAT_ENDPOINT, async ({ request }) => {
+        captured.push((await request.json()) as Record<string, unknown>);
+        return new HttpResponse("Willkommen auf Mini-Level 2!", {
+          status: 200,
+          headers: {
+            "x-mini-level": "2",
+            "x-mini-level-theme": encodeURIComponent("Woher kommst du?"),
+          },
+        });
+      }),
+    );
+    const user = userEvent.setup();
+    renderCleared();
+
+    await user.click(screen.getByRole("button", { name: "Move on" }));
+
+    await waitFor(() => expect(captured).toHaveLength(1));
+    expect(captured[0]?.message).toBe("Weiter bitte!");
+
+    // The offer closes once the move lands: the new level has no tally yet.
+    await waitFor(() => {
+      expect(screen.queryByText(/cleared/i)).not.toBeInTheDocument();
+    });
   });
 });

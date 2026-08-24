@@ -802,6 +802,121 @@ describe("one voice at a time", () => {
   });
 });
 
+describe("the chosen voice engine", () => {
+  // The store falls back to "ai" when storage is unusable, so these tests
+  // need a storage that actually works — the environment's own localStorage
+  // global cannot be relied on to have methods at all.
+  function stubStorage(): Map<string, string> {
+    const store = new Map<string, string>();
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (key: string) => store.get(key) ?? null,
+        setItem: (key: string, value: string) => void store.set(key, String(value)),
+        removeItem: (key: string) => void store.delete(key),
+        clear: () => store.clear(),
+      },
+    });
+    return store;
+  }
+
+  function countSpeakCalls(): () => number {
+    let calls = 0;
+    server.use(
+      http.post(SPEAK, () => {
+        calls += 1;
+        return new HttpResponse(new Blob(["mp3"]));
+      }),
+    );
+    return () => calls;
+  }
+
+  it("never asks the server when the device's voice is chosen", async () => {
+    stubStorage();
+    window.localStorage.setItem("deutsch-partner.voice-engine", "browser");
+    const speakCalls = countSpeakCalls();
+
+    const voice = fakeVoice();
+    const playback = fakePlayback();
+    const user = userEvent.setup();
+    render(
+      <Conversation
+        threadId="1e2f0a4c-6b7d-4e8f-9a0b-1c2d3e4f5a6b"
+        initialMessages={[REPLY]}
+        miniLevel={1}
+        cefr="A1"
+        capture={fakeCapture()}
+        playback={playback}
+        voice={voice}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /read this reply aloud/i }));
+
+    await waitFor(() => expect(voice.spoken).toHaveLength(1));
+    expect(voice.spoken[0]).toEqual({ text: "Wie geht es dir?", rate: SPEECH_RATES.A1 });
+    expect(speakCalls()).toBe(0);
+    expect(playback.played).toHaveLength(0);
+  });
+
+  it("keeps preferring the model when the choice is the AI voice", async () => {
+    stubStorage();
+    window.localStorage.setItem("deutsch-partner.voice-engine", "ai");
+    countSpeakCalls();
+
+    const voice = fakeVoice();
+    const playback = fakePlayback();
+    const user = userEvent.setup();
+    render(
+      <Conversation
+        threadId="1e2f0a4c-6b7d-4e8f-9a0b-1c2d3e4f5a6b"
+        initialMessages={[REPLY]}
+        miniLevel={1}
+        cefr="A1"
+        capture={fakeCapture()}
+        playback={playback}
+        voice={voice}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /read this reply aloud/i }));
+
+    await waitFor(() => expect(playback.played).toHaveLength(1));
+    expect(voice.spoken).toHaveLength(0);
+  });
+
+  it("says so when the chosen device voice fails, without asking the model behind the learner's back", async () => {
+    // They said "never the server". A silent fallback to the AI voice would
+    // be the setting lying about what it does.
+    stubStorage();
+    window.localStorage.setItem("deutsch-partner.voice-engine", "browser");
+    const speakCalls = countSpeakCalls();
+
+    const user = userEvent.setup();
+    render(
+      <Conversation
+        threadId="1e2f0a4c-6b7d-4e8f-9a0b-1c2d3e4f5a6b"
+        initialMessages={[REPLY]}
+        miniLevel={1}
+        capture={fakeCapture()}
+        playback={fakePlayback()}
+        voice={fakeVoice({
+          speak: async () => {
+            throw new Error("no voice here");
+          },
+        })}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /read this reply aloud/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/could not be read aloud/i)).toBeInTheDocument();
+    });
+    expect(speakCalls()).toBe(0);
+  });
+});
+
 describe("the advance button after a refusal", () => {
   it("does not put the synthetic request into the draft box", async () => {
     // The move is written before generation, so it can outlive a failed

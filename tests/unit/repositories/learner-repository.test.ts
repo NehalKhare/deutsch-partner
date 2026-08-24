@@ -152,6 +152,7 @@ describe("upsertProfile", () => {
       outputPreference: "text",
       correctionPreference: "gentle",
       voicePreference: "male",
+  masteryThreshold: 80,
     });
 
     const [[payload]] = fake.methodArgs("profiles", "upsert");
@@ -179,6 +180,7 @@ describe("upsertProfile", () => {
       outputPreference: "text",
       correctionPreference: "gentle",
       voicePreference: "male",
+  masteryThreshold: 80,
     } as never);
 
     expect(result).toMatchObject({ ok: false, error: { kind: "invalid_input" } });
@@ -201,6 +203,7 @@ describe("upsertProfile", () => {
       outputPreference: "text",
       correctionPreference: "gentle",
       voicePreference: "male",
+  masteryThreshold: 80,
     });
 
     expect(result).toMatchObject({ ok: false, error: { kind: "conflict" } });

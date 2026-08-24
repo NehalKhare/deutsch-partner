@@ -23,7 +23,7 @@ import {
   levelProgress,
   recommendNext,
 } from "@/lib/dashboard/summary";
-import { MASTERY_MIN_TURNS, MASTERY_RATIO } from "@/learning/progression";
+import { MASTERY_MIN_TURNS } from "@/learning/progression";
 import { createLearnerRepository } from "@/repositories/learner-repository";
 import { createServerSupabaseClient } from "@/lib/supabase/server-client";
 import type { DatabaseClient } from "@/repositories/types";
@@ -67,7 +67,9 @@ export default async function DashboardPage() {
   const next = recommendNext(data, interests);
   const bands = bandScores(data.levelScores);
   const tally = currentLevelTally(data);
-  const gatePercent = Math.round(MASTERY_RATIO * 100);
+  // The learner's own pass mark from settings, with the product default for
+  // a profile that could not be read — the same fallback the gate itself has.
+  const gatePercent = profile.ok ? profile.data.masteryThreshold : 80;
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-10 px-6 py-10 md:px-10 md:py-14">
@@ -98,7 +100,7 @@ export default async function DashboardPage() {
         </h2>
         {/* The gate, stated as the rule it is: the tally of evaluated turns
             is what actually moves a learner up, so it is the first number on
-            the page — with the bar showing accuracy against the 80% mark. */}
+            the page — with the bar showing accuracy against their own mark. */}
         {tally ? (
           <>
             <div

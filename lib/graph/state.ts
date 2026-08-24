@@ -47,6 +47,11 @@ export interface LoadedLearner {
 export interface TurnState {
   readonly input: TurnInput;
   readonly learner?: LoadedLearner;
+  /**
+   * The thread this turn speaks into — specifically the mini-level it was
+   * opened at, which is the place a fresh visit returns the learner to.
+   */
+  readonly thread?: { readonly miniLevel: number };
   readonly history?: readonly PromptMessage[];
   readonly intent?: RetrievalIntent;
   readonly knowledge?: readonly RetrievedChunk[];
@@ -55,6 +60,17 @@ export interface TurnState {
     readonly truncated: boolean;
   };
   readonly evaluation?: LearningEvaluation;
+  /**
+   * The level tally after this turn was added to it, exactly as the database
+   * returned it from the write. Present only when the turn was recorded — a
+   * triaged-out "Danke!" leaves it unset — and carried so the response can
+   * tell the learner how the turn counted without a second read.
+   */
+  readonly performance?: {
+    readonly miniLevel: number;
+    readonly turns: number;
+    readonly strongTurns: number;
+  };
   /** Accumulated euro cost of every model call this turn made. */
   readonly costEur: number;
   readonly notes: readonly TurnNote[];

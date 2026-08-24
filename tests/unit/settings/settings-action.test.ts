@@ -47,6 +47,7 @@ const STORED: LearnerProfile = {
   outputPreference: "text",
   correctionPreference: "gentle",
   voicePreference: "male",
+  masteryThreshold: 80,
 };
 
 const IDLE = { message: null, status: "idle" } as const;
@@ -60,6 +61,7 @@ function form(over: Record<string, string> = {}): FormData {
     outputPreference: "voice",
     correctionPreference: "explicit",
     voicePreference: "female",
+    masteryThreshold: "50",
     ...over,
   };
   for (const [key, value] of Object.entries(fields)) data.set(key, value);

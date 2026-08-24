@@ -1,12 +1,12 @@
 import { notFound } from "next/navigation";
 
 import { Conversation } from "@/components/chat/conversation";
-import { MIN_MINI_LEVEL } from "@/domain/cefr";
 import { getMiniLevel } from "@/learning/mini-levels";
 import { requireAuthenticatedUserId } from "@/lib/auth/current-user";
 import { roleplaySeed } from "@/lib/scenarios/roleplay";
 import { createConversationRepository } from "@/repositories/conversation-repository";
 import { createLearnerRepository } from "@/repositories/learner-repository";
+import { createPerformanceRepository } from "@/repositories/performance-repository";
 import { createScenarioRepository } from "@/repositories/scenario-repository";
 import { createServerSupabaseClient } from "@/lib/supabase/server-client";
 import type { DatabaseClient } from "@/repositories/types";
@@ -27,10 +27,10 @@ export const metadata = { title: "Conversation — Deutsch Partner" };
  * should look like — distinguishing "not yours" from "no such thread" would
  * confirm the thread exists to whoever guessed the id.
  *
- * The learner's mini-level is read alongside it only so the companion is the
- * size it has been earned to be. If that read fails the conversation still
- * happens, with a companion at the first size — the wrong blob is a far
- * smaller loss than no reply.
+ * The page is rendered at the thread's own mini-level — the place — not at
+ * the learner's current position: reopening a mini-level 1 conversation shows
+ * level 1 and its tally, and the first message of the visit stands the
+ * learner back there. The graph owns that move; this page only says it.
  */
 export default async function ThreadPage({
   params,
@@ -49,13 +49,26 @@ export default async function ThreadPage({
   const conversations = createConversationRepository(supabase);
 
   const learners = createLearnerRepository(supabase);
-  const [thread, state, profile] = await Promise.all([
+  const [thread, profile] = await Promise.all([
     conversations.getThread(threadId),
-    learners.getState(learnerId),
     learners.getProfile(learnerId),
   ]);
 
   if (!thread.ok) notFound();
+
+  // The thread's own place, not the learner's current position. Coming back
+  // to a mini-level 1 conversation means practising mini-level 1, however far
+  // the learner has walked since — the first message of a fresh visit stands
+  // them back here, and this page has to say so from the first paint.
+  const miniLevel = thread.data.miniLevel;
+
+  // That level's stored tally, so the mastery strip resumes where this level
+  // actually is rather than at zero. Read as the learner, RLS-scoped like the
+  // rest; if it fails the strip starts empty — a smaller loss than no page.
+  const tally = await createPerformanceRepository(supabase).getForLevel(
+    learnerId,
+    miniLevel,
+  );
 
   // A dialogue scenario opens the scene: its opening line arrives as the
   // partner's first message, so the roleplay needs no hidden instruction and
@@ -77,12 +90,20 @@ export default async function ThreadPage({
         threadId={threadId}
         title={thread.data.title}
         initialMessages={seed ? [seed] : []}
-        miniLevel={state.ok ? state.data.miniLevel : MIN_MINI_LEVEL}
-        theme={getMiniLevel(state.ok ? state.data.miniLevel : MIN_MINI_LEVEL).theme}
+        miniLevel={miniLevel}
+        theme={getMiniLevel(miniLevel).theme}
+        initialTally={
+          tally.ok && tally.data
+            ? { turns: tally.data.turns, strongTurns: tally.data.strongTurns }
+            : undefined
+        }
         // The thread's own level, so a reply is read out at the pace the
         // learner is being taught at rather than at a default.
         cefr={thread.data.cefr}
         voiceGender={profile.ok ? profile.data.voicePreference : "male"}
+        // The learner's own pass mark. The server applies the same value to
+        // the move's bookkeeping; this copy draws the strip and the offer.
+        masteryThreshold={profile.ok ? profile.data.masteryThreshold : 80}
       />
     </main>
   );

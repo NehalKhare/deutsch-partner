@@ -7,6 +7,7 @@ import {
   handleChatTurn,
   toReadableStream,
 } from "@/lib/api/chat";
+import { TRAILER_DELIMITER, splitChatStream } from "@/lib/api/chat-trailer";
 import {
   RATE_LIMITS,
   createRateLimiter,
@@ -122,9 +123,61 @@ describe("a valid turn", () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(await drain(toReadableStream(result.outcome))).toBe(
+    expect(splitChatStream(await drain(toReadableStream(result.outcome))).reply).toBe(
       "Guten Tag! Wohin fährst du?",
     );
+  });
+
+  it("closes the stream with the tally the turn just wrote", async () => {
+    // The fixture's message has one dative error, so the turn counts and
+    // counts as weak: one turn, none of them strong. The trailer must carry
+    // the same numbers the mastery gate will read next turn.
+    const { deps } = fakeGraph();
+
+    const result = await handleChatTurn(body(), IDENTITY, deps);
+    if (!result.ok) return;
+
+    const { reply, trailer } = splitChatStream(
+      await drain(toReadableStream(result.outcome)),
+    );
+
+    expect(reply).toBe("Guten Tag! Wohin fährst du?");
+    expect(trailer).toEqual({
+      tally: { miniLevel: 26, turns: 1, strongTurns: 0 },
+    });
+  });
+
+  it("sends no trailer for a turn the evaluator skipped", async () => {
+    // Five formulaic "Danke!"s must not move a mastery bar, so a skipped turn
+    // says nothing rather than repeating stale numbers.
+    const { deps } = fakeGraph();
+
+    const result = await handleChatTurn(
+      body({ message: "Danke schön!" }),
+      IDENTITY,
+      deps,
+    );
+    if (!result.ok) return;
+
+    const { trailer } = splitChatStream(
+      await drain(toReadableStream(result.outcome)),
+    );
+
+    expect(trailer).toBeNull();
+  });
+
+  it("sends no trailer when the tally write failed", async () => {
+    const { deps } = fakeGraph({ recordFails: true });
+
+    const result = await handleChatTurn(body(), IDENTITY, deps);
+    if (!result.ok) return;
+
+    const { reply, trailer } = splitChatStream(
+      await drain(toReadableStream(result.outcome)),
+    );
+
+    expect(reply).toBe("Guten Tag! Wohin fährst du?");
+    expect(trailer).toBeNull();
   });
 
   it("records the turn's tally before the stream closes", async () => {
@@ -278,6 +331,7 @@ describe("a stream that fails halfway", () => {
       toReadableStream({
         chunks: broken(),
         completed: Promise.resolve(null),
+        tally: Promise.resolve(null),
         position: null,
       }),
     );
@@ -292,11 +346,32 @@ describe("a stream that fails halfway", () => {
           yield "Hallo";
         })(),
         completed: Promise.reject(new Error("database down")),
+        tally: Promise.resolve(null),
         position: null,
       }),
     );
 
     expect(text).toBe("Hallo");
+  });
+
+  it("scrubs the trailer delimiter out of the model's own text", async () => {
+    // A model that somehow emits the framing byte must not be able to open
+    // the trailer early or hide half the reply behind it.
+    const text = await drain(
+      toReadableStream({
+        chunks: (async function* () {
+          yield `Hallo${TRAILER_DELIMITER}Welt`;
+        })(),
+        completed: Promise.resolve(null),
+        tally: Promise.resolve({ miniLevel: 26, turns: 1, strongTurns: 1 }),
+        position: null,
+      }),
+    );
+
+    expect(splitChatStream(text)).toEqual({
+      reply: "HalloWelt",
+      trailer: { tally: { miniLevel: 26, turns: 1, strongTurns: 1 } },
+    });
   });
 });
 

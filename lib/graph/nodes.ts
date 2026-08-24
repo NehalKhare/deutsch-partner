@@ -6,8 +6,10 @@ import {
   asksToAdvance,
   hasMastered,
   isStrongTurn,
+  switchToMiniLevel,
   type Moved,
 } from "@/learning/progression";
+import { thresholdRatio } from "@/learning/mastery";
 import { getMiniLevel } from "@/learning/mini-levels";
 import {
   newLearnerVocabulary,
@@ -176,7 +178,48 @@ export async function loadThread(
     return note(state, "load_thread", "failed", thread.error.kind);
   }
 
-  return note(state, "load_thread", "ok");
+  // The level the thread was opened at rides along: it is the place a fresh
+  // visit to this conversation returns the learner to.
+  return note(
+    { ...state, thread: { miniLevel: thread.data.miniLevel } },
+    "load_thread",
+    "ok",
+  );
+}
+
+// --- 2.4: stand where this conversation lives ---------------------------------
+
+/**
+ * Returns the learner to the level this thread was opened at.
+ *
+ * A thread carries its mini-level, and the product promises that coming back
+ * to a thread means coming back to the place: a learner standing at
+ * mini-level 5 who reopens their mini-level 1 conversation is taught level 1
+ * in it — not level 5 under a level-1 title.
+ *
+ * Only on a fresh visit. The transcript lives in the learner's browser and
+ * dies with the tab, so an empty history is the reliable mark of one; a turn
+ * that carries history is a conversation already under way, and dragging it
+ * back to its opening level would undo any move made inside it.
+ *
+ * The same pure function as the curriculum page's "Start here" button, so it
+ * marks nothing as skipped. The tutor is told nothing: the learner has not
+ * moved during this conversation — the conversation is where it always was.
+ */
+export async function standAtThreadPlace(
+  state: TurnState,
+  deps: GraphDeps,
+): Promise<TurnState> {
+  if (!state.learner) return note(state, "place", "skipped", "no learner");
+  if (!state.thread) return note(state, "place", "skipped", "no thread");
+  if ((state.history ?? []).length > 0) {
+    return note(state, "place", "skipped", "conversation under way");
+  }
+
+  const moved = switchToMiniLevel(state.learner.state, state.thread.miniLevel);
+  if (!moved) return note(state, "place", "skipped", "already there");
+
+  return applyMove(state, deps, moved, null, "place");
 }
 
 // --- 2.5: honour an explicit request to move on -----------------------------
@@ -189,6 +232,16 @@ export async function loadThread(
  * call, and a learner's message is untrusted input. So a pattern decides
  * whether a request was made, and a pure function decides what happens — the
  * tutor is told about the move afterwards and never asked to make it.
+ *
+ * Every move goes through here, including an earned one. Mastery does not
+ * move anybody by itself any more — the tally opening the gate is announced
+ * in the chat, and the learner chooses between moving on and staying to
+ * practise. What the tally still decides is the bookkeeping: a learner who
+ * cleared the level and then confirms the move has earned it, and recording
+ * that as a walkout because they said "weiter" instead of writing five more
+ * sentences would be a record against them. An unreadable tally moves them
+ * as asked — they did ask — and a level wrongly marked skipped is un-skipped
+ * the day it is mastered.
  *
  * It runs before generation so the reply is written from the new level rather
  * than about it. A failure here is not a failed turn: the learner still gets
@@ -203,14 +256,27 @@ export async function honourAdvanceRequest(
     return note(state, "advance", "skipped", "not asked");
   }
 
-  const moved = advanceOnRequest(state.learner.state);
+  const tally = await deps.performance.getForLevel(
+    state.input.learnerId,
+    state.learner.state.miniLevel,
+  );
+  // Against the learner's own pass mark, not the default: the bar they chose
+  // in settings is the bar the offer in the chat showed them.
+  const mastered =
+    tally.ok &&
+    tally.data !== null &&
+    hasMastered(tally.data, thresholdRatio(state.learner.profile.masteryThreshold));
+
+  const moved = mastered
+    ? advanceOnMastery(state.learner.state)
+    : advanceOnRequest(state.learner.state);
   if (!moved) {
     // The end of the path. Saying so is the tutor's job; this only records
     // that there was nowhere to go.
     return note(state, "advance", "skipped", "end of path");
   }
 
-  return applyMove(state, deps, moved, "asked", "advance");
+  return applyMove(state, deps, moved, mastered ? "earned" : "asked", "advance");
 }
 
 /**
@@ -226,7 +292,7 @@ async function applyMove(
   state: TurnState,
   deps: GraphDeps,
   moved: Moved,
-  because: "asked" | "earned",
+  because: "asked" | "earned" | null,
   node: string,
 ): Promise<TurnState> {
   if (!state.learner) return note(state, node, "skipped", "no learner");
@@ -257,54 +323,6 @@ async function applyMove(
   };
 
   return note({ ...state, learner }, node, "ok", `${moved.from}->${moved.to}`);
-}
-
-// --- 2.75: open the gate a learner has earned --------------------------------
-
-/**
- * Moves the learner up once their tally at this level shows mastery.
- *
- * The gate is pure arithmetic over the stored tally — the routing document
- * forbids a model deciding this — and the tally was fed by earlier turns'
- * evaluations, so "the AI is confident" means: at least five evaluated turns
- * here, and four in five of them error-free.
- *
- * It runs before generation for the same reason the asked-for move does: the
- * turn that opens the gate should be answered from the new level, with the
- * tutor congratulating them in it, rather than teaching one more turn of the
- * thing they just finished. A turn that already moved (they asked) is left
- * alone — one move per turn is as fast as a syllabus should travel.
- */
-export async function honourMastery(
-  state: TurnState,
-  deps: GraphDeps,
-): Promise<TurnState> {
-  if (!state.learner) return note(state, "mastery", "skipped", "no learner");
-  if (state.learner.context.justMoved !== null) {
-    return note(state, "mastery", "skipped", "already moved this turn");
-  }
-
-  const tally = await deps.performance.getForLevel(
-    state.input.learnerId,
-    state.learner.state.miniLevel,
-  );
-
-  if (!tally.ok) {
-    // Unreadable evidence is not evidence. They stay, and this turn's tally
-    // write will try again next turn.
-    return note(state, "mastery", "degraded", tally.error.kind);
-  }
-
-  if (!tally.data || !hasMastered(tally.data)) {
-    return note(state, "mastery", "skipped", "not yet earned");
-  }
-
-  const moved = advanceOnMastery(state.learner.state);
-  if (!moved) {
-    return note(state, "mastery", "skipped", "end of path");
-  }
-
-  return applyMove(state, deps, moved, "earned", "mastery");
 }
 
 // --- 3: retrieve ------------------------------------------------------------
@@ -634,11 +652,20 @@ export async function recordPerformance(
     return note(state, "record_performance", "failed", recorded.error.kind);
   }
 
+  // Kept on the turn, not just in the note: the response tells the learner
+  // how this turn counted, and the write's own return is the only figure
+  // guaranteed to agree with what the mastery gate will read next turn.
+  const performance = {
+    miniLevel: state.learner.state.miniLevel,
+    turns: recorded.data.turns,
+    strongTurns: recorded.data.strongTurns,
+  };
+
   return note(
-    state,
+    { ...state, performance },
     "record_performance",
     "ok",
-    `${recorded.data.strongTurns}/${recorded.data.turns}`,
+    `${performance.strongTurns}/${performance.turns}`,
   );
 }
 

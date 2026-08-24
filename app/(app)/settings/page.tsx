@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { updateSettingsAction } from "@/app/(app)/settings/actions";
 import { SettingsForm } from "@/components/settings/settings-form";
+import { VoiceSourceSetting } from "@/components/settings/voice-source";
 import {
   card,
   eyebrow,
@@ -98,6 +99,16 @@ export default async function SettingsPage() {
           action={updateSettingsAction}
           initialState={INITIAL_SETTINGS_STATE}
         />
+      </section>
+
+      <section
+        aria-labelledby="device-heading"
+        className={cn(card, "flex flex-col gap-4")}
+      >
+        <h2 id="device-heading" className={sectionTitle}>
+          On this device
+        </h2>
+        <VoiceSourceSetting />
       </section>
 
       <section aria-labelledby="privacy-heading" className={cn(card, "flex flex-col gap-2")}>

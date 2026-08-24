@@ -6,6 +6,11 @@ import {
   transcriptMessageSchema,
 } from "@/domain/conversation";
 import { nonEmptyTextSchema, uuidSchema } from "@/domain/primitives";
+import {
+  TRAILER_DELIMITER,
+  encodeChatTrailer,
+  type ChatTrailer,
+} from "@/lib/api/chat-trailer";
 import type { GraphDeps } from "@/lib/graph/nodes";
 import { runTurn } from "@/lib/graph/turn";
 import type { TurnInput } from "@/lib/graph/state";
@@ -89,6 +94,13 @@ export interface ChatOutcome {
   /** Resolves once the turn is evaluated and accounted for. */
   readonly completed: Promise<unknown>;
   /**
+   * The level tally after this turn was counted, or null when it was not —
+   * a triaged-out "Danke!", a failed evaluation, a failed write. Known only
+   * once the after-stream work has run, which is why it travels as a stream
+   * trailer rather than a header. Never rejects.
+   */
+  readonly tally: Promise<ChatTrailer["tally"] | null>;
+  /**
    * Where the learner stands as this reply is written — after any move this
    * turn made. Known before the first byte streams, which is what lets the
    * route say it in a header and the page keep its "you are here" honest
@@ -162,6 +174,12 @@ export async function handleChatTurn(
     outcome: {
       chunks: turn.turn.chunks,
       completed: turn.turn.completed,
+      // Derived rather than exposed: the stream needs three numbers, not the
+      // whole turn state. A turn that failed to complete simply has no tally.
+      tally: turn.turn.completed.then(
+        (state) => state.performance ?? null,
+        () => null,
+      ),
       position: learner
         ? { miniLevel: learner.state.miniLevel, theme: learner.miniLevel.theme }
         : null,
@@ -173,12 +191,15 @@ export async function handleChatTurn(
  * Turns the reply into bytes.
  *
  * Plain UTF-8 text rather than server-sent events: the client renders German
- * prose as it arrives and has no other event types to distinguish. Adding a
- * framing format nobody needs would be one more thing to get wrong.
+ * prose as it arrives and has one other thing to hear, not many — so the
+ * framing is one delimiter and one trailer (chat-trailer.ts) rather than an
+ * event format. The reply's own text is scrubbed of the delimiter first, so
+ * nothing a model emits can open the trailer early.
  *
  * The after-stream work is awaited inside the stream's own lifetime, so a
  * serverless runtime does not tear the process down between the last chunk and
- * the message being saved.
+ * the message being saved — and it is also what makes the trailer possible:
+ * by the time the stream may close, the tally has been written.
  */
 export function toReadableStream(outcome: ChatOutcome): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
@@ -187,7 +208,9 @@ export function toReadableStream(outcome: ChatOutcome): ReadableStream<Uint8Arra
     async start(controller) {
       try {
         for await (const chunk of outcome.chunks) {
-          controller.enqueue(encoder.encode(chunk));
+          controller.enqueue(
+            encoder.encode(chunk.replaceAll(TRAILER_DELIMITER, "")),
+          );
         }
       } catch {
         // The learner keeps whatever arrived. Closing quietly beats emitting
@@ -195,6 +218,8 @@ export function toReadableStream(outcome: ChatOutcome): ReadableStream<Uint8Arra
       } finally {
         try {
           await outcome.completed;
+          const tally = await outcome.tally;
+          if (tally) controller.enqueue(encoder.encode(encodeChatTrailer({ tally })));
         } catch {
           // Persistence and accounting log their own failures; a learner who
           // has already read the reply should not see this.

@@ -4,7 +4,11 @@ import { useActionState, useState } from "react";
 
 import { buttonPrimary, choice, control, field } from "@/components/ui/styles";
 import { cn } from "@/lib/utils";
-import type { LearnerProfile } from "@/domain/learner";
+import {
+  MASTERY_THRESHOLDS,
+  type LearnerProfile,
+  type MasteryThreshold,
+} from "@/domain/learner";
 import { TUTOR } from "@/domain/tutor";
 import type { SettingsAction, SettingsFormState } from "@/lib/settings/input";
 import {
@@ -32,6 +36,13 @@ import {
 
 const legendClass = "font-display text-sm font-medium text-chalk/80";
 const hintText = "text-xs text-chalk/45";
+
+/** What each pass mark is called when the slider stands on it. */
+const THRESHOLD_LABELS: Readonly<Record<MasteryThreshold, string>> = {
+  33: "Relaxed",
+  50: "Balanced",
+  80: "Thorough",
+};
 
 function countHint(chosen: number, max: number): string {
   if (chosen === 0) return "";
@@ -116,6 +127,7 @@ export function SettingsForm({
     outputPreference: profile.outputPreference,
     correctionPreference: profile.correctionPreference,
     voicePreference: profile.voicePreference,
+    masteryThreshold: profile.masteryThreshold,
   });
 
   const toggle =
@@ -179,6 +191,54 @@ export function SettingsForm({
             </label>
           ))}
         </div>
+      </fieldset>
+
+      {/* A slider over three positions rather than a free percentage: each
+          stop is a stance on how to learn, and the gate can explain a stance.
+          The submitted value is the percent itself, carried by the hidden
+          field, so the wire format is meaningful and the slider stays UI. */}
+      <fieldset className="flex flex-col gap-3">
+        <legend className={legendClass}>How high is the bar to move up?</legend>
+        <p id="masteryThreshold-hint" className={hintText}>
+          The share of your evaluated turns that must be error-free before a
+          mini-level counts as cleared. At least five turns are needed,
+          whatever you choose.
+        </p>
+        <input
+          type="range"
+          min={0}
+          max={MASTERY_THRESHOLDS.length - 1}
+          step={1}
+          value={Math.max(0, MASTERY_THRESHOLDS.indexOf(draft.masteryThreshold))}
+          onChange={(event) =>
+            setDraft((current) => ({
+              ...current,
+              masteryThreshold:
+                MASTERY_THRESHOLDS[Number(event.target.value)] ?? 80,
+            }))
+          }
+          aria-label="Pass mark for moving up"
+          aria-describedby="masteryThreshold-hint"
+          aria-valuetext={`${THRESHOLD_LABELS[draft.masteryThreshold]} — ${draft.masteryThreshold}% of turns error-free`}
+          className="w-full max-w-xs accent-apricot"
+        />
+        <p className="text-sm text-chalk/70" aria-hidden>
+          {MASTERY_THRESHOLDS.map((value, index) => (
+            <span key={value}>
+              {index > 0 ? " · " : ""}
+              <span
+                className={cn(
+                  draft.masteryThreshold === value
+                    ? "font-semibold text-apricot"
+                    : "text-chalk/45",
+                )}
+              >
+                {THRESHOLD_LABELS[value]} {value}%
+              </span>
+            </span>
+          ))}
+        </p>
+        <input type="hidden" name="masteryThreshold" value={draft.masteryThreshold} />
       </fieldset>
 
       <CheckboxGroup
