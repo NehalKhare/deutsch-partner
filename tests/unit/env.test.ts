@@ -1,0 +1,239 @@
+import { describe, expect, it } from "vitest";
+import {
+  EnvValidationError,
+  PUBLIC_ENV_KEYS,
+  SERVER_ENV_KEYS,
+  parseEnv,
+} from "@/lib/env/schema";
+
+/**
+ * A complete production environment. Individual tests delete one key at a time
+ * so each assertion names exactly one missing secret.
+ */
+function productionEnv(
+  overrides: Record<string, string | undefined> = {},
+): Record<string, string | undefined> {
+  return {
+    NODE_ENV: "production",
+    NEXT_PUBLIC_SUPABASE_URL: "https://project.supabase.co",
+    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_abc123def456",
+    SUPABASE_SECRET_KEY: "sb_secret_abc123def456",
+    OPENROUTER_API_KEY: "openrouter-key-value-long-enough",
+    APP_URL: "https://deutsch-partner.example",
+    ...overrides,
+  };
+}
+
+describe("parseEnv", () => {
+  describe("production mode", () => {
+    it("accepts a complete production environment", () => {
+      const env = parseEnv(productionEnv());
+
+      expect(env.NODE_ENV).toBe("production");
+      expect(env.NEXT_PUBLIC_SUPABASE_URL).toBe("https://project.supabase.co");
+      expect(env.SUPABASE_SECRET_KEY).toBe("sb_secret_abc123def456");
+    });
+
+    it.each([
+      "SUPABASE_SECRET_KEY",
+      "OPENROUTER_API_KEY",
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+    ])("fails when the required secret %s is missing", (key) => {
+      const source = productionEnv({ [key]: undefined });
+
+      expect(() => parseEnv(source)).toThrow(EnvValidationError);
+      expect(() => parseEnv(source)).toThrow(new RegExp(key));
+    });
+
+    it("reports every missing secret at once rather than one per run", () => {
+      const source = productionEnv({
+        SUPABASE_SECRET_KEY: undefined,
+        OPENROUTER_API_KEY: undefined,
+      });
+
+      try {
+        parseEnv(source);
+        expect.unreachable("expected parseEnv to throw");
+      } catch (error) {
+        expect(error).toBeInstanceOf(EnvValidationError);
+        expect((error as EnvValidationError).issues).toHaveLength(2);
+      }
+    });
+  });
+
+  describe("development and test modes", () => {
+    it.each(["development", "test"])(
+      "allows missing production secrets in %s so the app can boot",
+      (nodeEnv) => {
+        const env = parseEnv({ NODE_ENV: nodeEnv });
+
+        expect(env.NODE_ENV).toBe(nodeEnv);
+        expect(env.SUPABASE_SECRET_KEY).toBeUndefined();
+        expect(env.OPENROUTER_API_KEY).toBeUndefined();
+      },
+    );
+
+    it("still rejects a malformed value, because wrong is not the same as absent", () => {
+      expect(() =>
+        parseEnv({
+          NODE_ENV: "development",
+          NEXT_PUBLIC_SUPABASE_URL: "not-a-url",
+        }),
+      ).toThrow(EnvValidationError);
+    });
+
+    it("defaults NODE_ENV to development when unset", () => {
+      expect(parseEnv({}).NODE_ENV).toBe("development");
+    });
+
+    it("rejects an unrecognised NODE_ENV", () => {
+      expect(() => parseEnv({ NODE_ENV: "staging" })).toThrow(
+        EnvValidationError,
+      );
+    });
+  });
+
+  describe("secret redaction", () => {
+    it("never puts a rejected secret's own value in the error message", () => {
+      const source = productionEnv({ OPENROUTER_API_KEY: "sk-leak" });
+
+      try {
+        parseEnv(source);
+        expect.unreachable("expected parseEnv to throw");
+      } catch (error) {
+        const message = (error as EnvValidationError).message;
+        expect(message).toContain("OPENROUTER_API_KEY");
+        expect(message).not.toContain("sk-leak");
+      }
+    });
+
+    it("never puts an unrelated secret's value in the error message", () => {
+      const source = productionEnv({
+        NEXT_PUBLIC_SUPABASE_URL: "not-a-url",
+        SUPABASE_SECRET_KEY: "sb_secret_DO-NOT-LEAK-me",
+      });
+
+      try {
+        parseEnv(source);
+        expect.unreachable("expected parseEnv to throw");
+      } catch (error) {
+        expect((error as EnvValidationError).message).not.toContain(
+          "sb_secret_DO-NOT-LEAK-me",
+        );
+      }
+    });
+  });
+
+  describe("Supabase API key formats", () => {
+    // Supabase deprecates the legacy JWT anon/service_role keys at the end of
+    // 2026 in favour of sb_publishable_ / sb_secret_ keys. Validating the
+    // prefix turns a class of catastrophic paste errors into a boot failure.
+    const LEGACY_JWT =
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiJ9.signature";
+
+    it("rejects a secret key pasted into the browser-exposed slot", () => {
+      const source = productionEnv({
+        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_secret_abc123def456",
+      });
+
+      expect(() => parseEnv(source)).toThrow(
+        /NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY/,
+      );
+    });
+
+    it("never echoes the secret it just rejected from the public slot", () => {
+      const source = productionEnv({
+        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_secret_abc123def456",
+      });
+
+      try {
+        parseEnv(source);
+        expect.unreachable("expected parseEnv to throw");
+      } catch (error) {
+        expect((error as EnvValidationError).message).not.toContain(
+          "sb_secret_abc123def456",
+        );
+      }
+    });
+
+    it("rejects a publishable key pasted into the secret slot", () => {
+      expect(() =>
+        parseEnv(productionEnv({ SUPABASE_SECRET_KEY: "sb_publishable_abc" })),
+      ).toThrow(/SUPABASE_SECRET_KEY/);
+    });
+
+    it.each([
+      ["NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"],
+      ["SUPABASE_SECRET_KEY"],
+    ])("rejects a legacy JWT key in %s", (key) => {
+      const source = productionEnv({ [key]: LEGACY_JWT });
+
+      expect(() => parseEnv(source)).toThrow(new RegExp(key));
+      expect(() => parseEnv(source)).toThrow(/legacy/i);
+    });
+  });
+
+  describe("LangSmith tracing", () => {
+    it("is disabled by default", () => {
+      expect(parseEnv({}).LANGSMITH_TRACING).toBe(false);
+    });
+
+    it.each(["true", "1"])("accepts %s as enabled", (value) => {
+      const env = parseEnv({
+        LANGSMITH_TRACING: value,
+        LANGSMITH_API_KEY: "langsmith-key-long-enough",
+      });
+
+      expect(env.LANGSMITH_TRACING).toBe(true);
+    });
+
+    it("requires an API key when tracing is enabled", () => {
+      expect(() => parseEnv({ LANGSMITH_TRACING: "true" })).toThrow(
+        /LANGSMITH_API_KEY/,
+      );
+    });
+
+    it("does not require an API key when tracing is disabled", () => {
+      expect(() => parseEnv({ LANGSMITH_TRACING: "false" })).not.toThrow();
+    });
+
+    it("defaults the project name", () => {
+      expect(parseEnv({}).LANGSMITH_PROJECT).toBe("deutsch-partner");
+    });
+  });
+
+  describe("defaults", () => {
+    it("defaults APP_URL and APP_NAME for local development", () => {
+      const env = parseEnv({});
+
+      expect(env.APP_URL).toBe("http://localhost:3000");
+      expect(env.APP_NAME).toBe("Deutsch Partner");
+    });
+  });
+
+  it("ignores unrelated keys present in a real process.env", () => {
+    expect(() => parseEnv({ PATH: "/usr/bin", HOME: "/root" })).not.toThrow();
+  });
+});
+
+describe("environment key partitioning", () => {
+  it("marks every browser-exposed key with the NEXT_PUBLIC_ prefix", () => {
+    for (const key of PUBLIC_ENV_KEYS) {
+      expect(key.startsWith("NEXT_PUBLIC_")).toBe(true);
+    }
+  });
+
+  it("never gives a server-only key the NEXT_PUBLIC_ prefix", () => {
+    for (const key of SERVER_ENV_KEYS) {
+      expect(key.startsWith("NEXT_PUBLIC_")).toBe(false);
+    }
+  });
+
+  it("keeps the two sets disjoint", () => {
+    const publicKeys = new Set<string>(PUBLIC_ENV_KEYS);
+    for (const key of SERVER_ENV_KEYS) {
+      expect(publicKeys.has(key)).toBe(false);
+    }
+  });
+});

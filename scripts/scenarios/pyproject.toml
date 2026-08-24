@@ -1,0 +1,27 @@
+[project]
+name = "deutsch-partner-scenarios"
+version = "0.1.0"
+description = "Scenario corpus tooling: parse the dataset, embed it, and evaluate retrieval"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+eval = [
+    # <0.3 pins the evaluate() column contract (question/contexts/answer/
+    # ground_truth) that eval_ragas.py is written against.
+    "ragas>=0.2.6,<0.3",
+    "langchain-openai>=0.2",
+    "datasets>=3.0",
+    "pandas>=2.0",
+]
+dev = [
+    "pytest>=8.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# The scripts are flat modules beside this file, not an installed package;
+# resolved relative to rootdir, so the suite runs from the repository root.
+pythonpath = ["."]

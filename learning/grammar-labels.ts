@@ -1,0 +1,106 @@
+/**
+ * Human-readable names for the grammar slugs the curriculum targets.
+ *
+ * The slug is the join key to grammar_patterns.key; the label is what a
+ * learner reads. Keeping them apart means renaming the wording of a
+ * explanation never invalidates a database row, and a test asserts the two
+ * sets stay in step in both directions.
+ *
+ * Labels are phrased to drop into the middle of a sentence, so they start
+ * lower case unless the word is a German term.
+ */
+export const GRAMMAR_LABELS: Readonly<Record<string, string>> = {
+  // --- A1 ---
+  sein_present: "the present tense of sein",
+  personal_pronouns_nominative: "the personal pronouns in the nominative",
+  regular_verb_present: "regular verb endings in the present tense",
+  w_questions: "questions with wer, wo, was and wie",
+  numbers_0_100: "the numbers up to one hundred",
+  yes_no_questions: "yes-or-no questions with the verb in first place",
+  definite_articles_nominative: "der, die and das in the nominative",
+  noun_gender: "the gender that comes with each noun",
+  haben_present: "the present tense of haben",
+  indefinite_article_accusative: "ein and eine in the accusative",
+  possessive_articles_nominative: "mein, dein and ihr in the nominative",
+  plural_nouns: "the plural forms of common nouns",
+  verb_position_second: "the verb in second place",
+  gern_with_verbs: "gern to say what you like doing",
+  moechten_present: "ich möchte for ordering and asking",
+  accusative_case_objects: "the accusative case on direct objects",
+  wie_viel_questions: "questions with wie viel and wie viele",
+  separable_verbs: "separable verbs splitting around the sentence",
+  time_expressions_um_am: "times with um, am and von … bis",
+  dative_prepositions_place: "place prepositions taking the dative",
+  imperative_formal: "the formal imperative with Sie",
+  es_gibt: "es gibt with the accusative",
+  two_way_prepositions_static: "two-way prepositions answering wo",
+  perfekt_with_haben: "the Perfekt with haben",
+  past_participles_regular: "regular past participles with ge- … -t",
+  perfekt_with_sein: "the Perfekt with sein",
+  past_participles_irregular: "irregular past participles",
+  modal_verbs_koennen_muessen: "the modal verbs können and müssen",
+  negation_nicht_kein: "negation with nicht and kein",
+
+  // --- A2 ---
+  dative_case_people: "the dative case for the person affected",
+  modal_verb_wollen: "the modal verb wollen",
+  imperative_informal: "the informal imperative with du and ihr",
+  modal_verb_sollen: "the modal verb sollen for advice",
+  comparative_forms: "the comparative with -er and als",
+  subordinate_clause_weil: "weil clauses with the verb at the end",
+  two_way_prepositions_motion: "two-way prepositions answering wohin",
+  verbs_of_placement: "stellen, legen and hängen against stehen and liegen",
+  future_with_werden: "the future with werden",
+  subordinate_clause_wenn: "wenn clauses for conditions",
+  indirect_questions: "indirect questions inside a polite frame",
+  subordinate_clause_ob: "ob clauses for reported yes-or-no questions",
+  dative_prepositions_fixed: "mit, nach, von, zu, bei and seit with the dative",
+  temporal_clause_wenn: "wenn clauses for repeated events",
+  konjunktiv_ii_politeness: "würde and könnte for polite requests",
+  formal_register_sie: "the Sie register in writing",
+  subordinate_clause_dass: "dass clauses after saying and thinking",
+  adjective_endings_definite: "adjective endings after der, die and das",
+  adjective_endings_indefinite: "adjective endings after ein and kein",
+  modal_verb_duerfen: "the modal verb dürfen",
+  reflexive_verbs_accusative: "reflexive verbs with the accusative pronoun",
+  verbs_with_prepositions: "verbs with a fixed preposition",
+  da_wo_compounds: "the da- and wo- compounds",
+  praeteritum_common_verbs: "the Präteritum of war, hatte and the modals",
+  temporal_clause_als: "als for a single event in the past",
+  superlative_forms: "the superlative with am … -sten",
+  subordinate_clause_obwohl: "obwohl for conceding a point",
+  passive_present: "the passive in the present",
+  impersonal_man: "man for what people generally do",
+  genitive_case: "the genitive case",
+  subordinate_clause_damit: "damit for purpose",
+  connectors_deshalb_trotzdem: "deshalb and trotzdem joining two ideas",
+  word_order_main_clause: "word order in the main clause",
+
+  // --- B1 ---
+  opinion_phrases: "the set phrases for stating an opinion",
+  concessive_connectors: "zwar … aber and dennoch for conceding",
+  modal_particles: "the modal particles doch, ja and mal",
+  praeteritum_vs_perfekt: "choosing between the Präteritum and the Perfekt",
+  plusquamperfekt: "the Plusquamperfekt for what happened first",
+  relative_clauses_nominative_accusative:
+    "relative clauses in the nominative and accusative",
+  relative_clauses_dative_genitive:
+    "relative clauses in the dative and genitive",
+  relative_clauses_with_prepositions: "relative clauses after a preposition",
+  konjunktiv_ii_present: "the Konjunktiv II for wishes and hypotheses",
+  irreal_conditional_wenn: "unreal conditions with wenn",
+  passive_with_von_durch: "the passive with von and durch",
+  passive_with_modals: "the passive with a modal verb",
+  passive_past: "the passive in the past",
+  indirect_speech_konjunktiv_i: "the Konjunktiv I for reported speech",
+  reporting_verbs: "the verbs that introduce reported speech",
+  nominalisation: "turning verbs into nouns",
+  infinitive_clauses_zu: "infinitive clauses with zu",
+  purpose_clause_um_zu: "um … zu for purpose",
+  conditional_clauses_falls: "falls and sofern for conditions",
+  comparative_structures_je_desto: "je … desto for linked change",
+  participles_as_adjectives: "participles used as adjectives",
+  discourse_connectors: "the connectors that structure a talk",
+  futur_ii: "the Futur II for an assumption about the past",
+  repair_strategies: "the phrases that keep a conversation going",
+};

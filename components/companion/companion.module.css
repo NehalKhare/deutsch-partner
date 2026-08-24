@@ -1,0 +1,301 @@
+/*
+ * The companion.
+ *
+ * Drawn entirely with border-radius and pseudo-elements: no sprite sheet, no
+ * animation library, nothing to load. The face is driven by data attributes so
+ * the same markup covers all three moods and all five growth stages.
+ *
+ * Every facial feature is sized in container query units, so the face scales
+ * exactly with the body. Percentages would resolve against the auto-sized
+ * flex parents instead and collapse the features to specks.
+ */
+
+.root {
+  --eye: #1a1030;
+  --skin: var(--companion-skin, #f2a277);
+  --blush: var(--companion-blush, #dd7f52);
+
+  container-type: size;
+  position: relative;
+  inline-size: calc(var(--companion-size, 9rem) * var(--companion-scale, 1));
+  block-size: calc(var(--companion-size, 9rem) * var(--companion-scale, 1));
+  flex: none;
+  transition:
+    inline-size 600ms cubic-bezier(0.22, 1, 0.36, 1),
+    block-size 600ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Asymmetric radii on both axes, far enough apart to read as a blob rather
+   than a circle that failed to round evenly. */
+.body {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    115% 115% at 32% 24%,
+    color-mix(in oklab, var(--skin) 82%, white) 0%,
+    var(--skin) 52%,
+    var(--blush) 100%
+  );
+  border-radius: 64% 36% 55% 45% / 40% 58% 42% 60%;
+  box-shadow: 0 1.5rem 3.5rem -1.2rem color-mix(in oklab, var(--skin) 55%, transparent);
+  transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/*
+ * Listening leans in.
+ *
+ * A tilt is the one posture nobody adopts while talking, which is what makes
+ * it read as attention rather than as another mood. It is a static transform,
+ * not a loop: the companion is holding still and paying attention, and a
+ * character that fidgets while you type is a character you stop typing at.
+ */
+.root[data-emotion="listening"] .body {
+  transform: rotate(-7deg);
+}
+
+.root[data-animated="true"] .body {
+  animation: wobble 3.6s ease-in-out infinite;
+}
+
+/* Sitting slightly above centre: a face with its eyes on the midline reads as
+   a diagram, one with them a little higher reads as a creature. */
+.face {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 9cqh;
+  padding-block-end: 6cqh;
+}
+
+.eyes {
+  display: flex;
+  align-items: center;
+  gap: 22cqw;
+}
+
+.eye {
+  inline-size: 11cqw;
+  block-size: 13cqh;
+  background: var(--eye);
+  border-radius: 50%;
+  transform-origin: center;
+  animation: blink 6.5s ease-in-out infinite;
+  transition:
+    block-size 220ms ease,
+    inline-size 220ms ease;
+}
+
+/* Listening: eyes open wider. Attention, not surprise. */
+.root[data-emotion="listening"] .eye {
+  inline-size: 13cqw;
+  block-size: 17cqh;
+}
+
+/* Sad: lids drop, so they read as half-closed rather than merely smaller. */
+.root[data-emotion="sad"] .eye {
+  block-size: 6cqh;
+  border-radius: 40% 40% 50% 50%;
+}
+
+/* One arc, rotated for the opposite mood. */
+.mouth {
+  inline-size: 26cqw;
+  block-size: 11cqh;
+  border: 0 solid var(--eye);
+  border-block-end-width: max(2px, 2.5cqw);
+  border-radius: 0 0 60cqw 60cqw / 0 0 22cqh 22cqh;
+  transition:
+    transform 240ms ease,
+    inline-size 240ms ease,
+    block-size 240ms ease;
+}
+
+/* Small and closed. The open "o" this used to be reads as a vowel being
+   spoken, which is the opposite of the thing being signalled. */
+.root[data-emotion="listening"] .mouth {
+  inline-size: 13cqw;
+  block-size: 5cqh;
+  border-block-end-width: max(2px, 2.2cqw);
+  border-radius: 0 0 40cqw 40cqw / 0 0 14cqh 14cqh;
+}
+
+.root[data-emotion="sad"] .mouth {
+  inline-size: 20cqw;
+  transform: rotate(180deg) translateY(55%);
+}
+
+.root[data-animated="true"][data-emotion="smiling"] .mouth {
+  animation: speak 1080ms ease-in-out infinite;
+}
+
+@keyframes wobble {
+  0%,
+  100% {
+    transform: scale(1, 1) rotate(0deg);
+    border-radius: 64% 36% 55% 45% / 40% 58% 42% 60%;
+  }
+  50% {
+    transform: scale(1.04, 0.96) rotate(-2deg);
+    border-radius: 38% 62% 43% 57% / 57% 41% 59% 43%;
+  }
+}
+
+@keyframes blink {
+  0%,
+  92%,
+  100% {
+    transform: scaleY(1);
+  }
+  95% {
+    transform: scaleY(0.08);
+  }
+}
+
+/*
+ * Speech, at the rhythm speech actually has.
+ *
+ * Two evenly spaced stops read as a machine idling. Real speech opens and
+ * closes at uneven intervals and changes width as well as height, so the stops
+ * here are deliberately not on a grid and the loop length is prime enough to
+ * the blink that the two never lock into a pattern.
+ */
+@keyframes speak {
+  0% {
+    inline-size: 26cqw;
+    block-size: 11cqh;
+  }
+  14% {
+    inline-size: 21cqw;
+    block-size: 21cqh;
+  }
+  29% {
+    inline-size: 28cqw;
+    block-size: 8cqh;
+  }
+  43% {
+    inline-size: 22cqw;
+    block-size: 18cqh;
+  }
+  58% {
+    inline-size: 27cqw;
+    block-size: 10cqh;
+  }
+  71% {
+    inline-size: 20cqw;
+    block-size: 22cqh;
+  }
+  87% {
+    inline-size: 26cqw;
+    block-size: 13cqh;
+  }
+  100% {
+    inline-size: 26cqw;
+    block-size: 11cqh;
+  }
+}
+
+/*
+ * Idle: the tutor is looking at you.
+ *
+ * Three slow loops with deliberately co-prime periods (9s, 13s, 21s), so the
+ * combinations never repeat on a rhythm anyone could notice. Each loop is
+ * mostly rest — the active windows are a second or two — because a creature
+ * that is always doing something reads as a screensaver, while one that
+ * occasionally glances off and comes back reads as somebody in the room.
+ *
+ * Only idle gets this. Listening holds deliberately still (attention), and
+ * speaking already has the wobble.
+ */
+.root[data-activity="idle"] .body {
+  animation: idle-sway 9s ease-in-out infinite;
+}
+
+.root[data-activity="idle"] .eyes {
+  animation: idle-glance 13s ease-in-out infinite;
+}
+
+.root[data-activity="idle"] .mouth {
+  animation: idle-quirk 21s ease-in-out infinite;
+}
+
+/* A slow breath with one small lean. The border-radius shift keeps it a blob
+   rather than a balloon inflating. */
+@keyframes idle-sway {
+  0%,
+  100% {
+    transform: scale(1) rotate(0deg);
+    border-radius: 64% 36% 55% 45% / 40% 58% 42% 60%;
+  }
+  30% {
+    transform: scale(1.015, 0.99) rotate(1.2deg);
+    border-radius: 58% 42% 50% 50% / 44% 54% 46% 56%;
+  }
+  65% {
+    transform: scale(0.995, 1.01) rotate(-1.2deg);
+    border-radius: 64% 36% 55% 45% / 40% 58% 42% 60%;
+  }
+}
+
+/* Glance left, hold a beat, back; later a shorter glance right. The eyes move
+   together as a pair — the whole container shifts, so the blink keyframe on
+   each eye keeps running underneath. */
+@keyframes idle-glance {
+  0%,
+  24%,
+  46%,
+  70%,
+  86%,
+  100% {
+    transform: translateX(0);
+  }
+  28%,
+  38% {
+    transform: translateX(7cqw);
+  }
+  74%,
+  80% {
+    transform: translateX(-6cqw);
+  }
+}
+
+/* Once a cycle, a lopsided little smirk: the mouth widens a touch and tips a
+   few degrees, then thinks better of it. The one deliberately funny beat. */
+@keyframes idle-quirk {
+  0%,
+  38%,
+  52%,
+  100% {
+    transform: rotate(0deg);
+    inline-size: 26cqw;
+  }
+  42%,
+  47% {
+    transform: rotate(-6deg) translateX(2cqw);
+    inline-size: 31cqw;
+  }
+}
+
+/*
+ * A companion that jitters is one people look away from. Reduced motion keeps
+ * the pose and drops every loop, including the growth transition.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .root,
+  .body,
+  .eye,
+  .mouth {
+    transition: none;
+  }
+
+  .root[data-animated="true"] .body,
+  .eye,
+  .root[data-animated="true"][data-emotion="smiling"] .mouth,
+  .root[data-activity="idle"] .body,
+  .root[data-activity="idle"] .eyes,
+  .root[data-activity="idle"] .mouth {
+    animation: none;
+  }
+}

@@ -1,0 +1,242 @@
+import { z } from "zod";
+
+/**
+ * Environment validation.
+ *
+ * Two rules shape this module:
+ *
+ * 1. Production must fail loudly when a secret is absent. A half-configured
+ *    deployment that boots is worse than one that refuses to.
+ * 2. Development and test must boot without production secrets, so that a
+ *    contributor can run the app and the suite without provisioning anything.
+ *
+ * A malformed value is rejected in every mode, because wrong is not the same
+ * as absent.
+ */
+
+const MIN_SECRET_LENGTH = 10;
+
+const secret = () => z.string().min(MIN_SECRET_LENGTH).optional();
+
+/**
+ * Supabase API key formats.
+ *
+ * The legacy JWT `anon` and `service_role` keys are deprecated and are being
+ * retired at the end of 2026, superseded by `sb_publishable_` and `sb_secret_`
+ * keys. Validating the prefix costs nothing and converts two expensive
+ * mistakes into a boot failure: pasting a secret key into a browser-exposed
+ * variable, and starting a new project on a key format that is already going
+ * away.
+ */
+export const SUPABASE_PUBLISHABLE_PREFIX = "sb_publishable_";
+export const SUPABASE_SECRET_PREFIX = "sb_secret_";
+const LEGACY_JWT_PREFIX = "eyJ";
+
+export function supabaseKeySchema(prefix: string, label: string) {
+  return z
+    .string()
+    .min(MIN_SECRET_LENGTH)
+    .refine((value) => !value.startsWith(LEGACY_JWT_PREFIX), {
+      error:
+        `looks like a legacy JWT key. Supabase retires those at the end of ` +
+        `2026; use a ${label} key instead`,
+    })
+    .refine((value) => value.startsWith(prefix), {
+      error: `must be a ${label} key beginning with "${prefix}"`,
+    });
+}
+
+/**
+ * A provider-qualified model id, as OpenRouter states them: `vendor/model`.
+ * Validated so a typo becomes a boot failure rather than a 404 on the first
+ * learner turn.
+ */
+const MODEL_ID_PATTERN = /^[a-z0-9][\w.-]*\/[\w.:-]+$/i;
+
+const modelId = () =>
+  z
+    .string()
+    .min(3)
+    .max(160)
+    .regex(MODEL_ID_PATTERN, {
+      error: 'must be a provider-qualified model id, such as "vendor/model"',
+    })
+    .optional();
+
+const booleanish = z
+  .enum(["true", "1", "false", "0"])
+  .default("false")
+  .transform((value) => value === "true" || value === "1");
+
+const baseSchema = z.object({
+  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+
+  // Public: inlined into the browser bundle. Never put a secret here.
+  NEXT_PUBLIC_SUPABASE_URL: z.url().optional(),
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: supabaseKeySchema(
+    SUPABASE_PUBLISHABLE_PREFIX,
+    "publishable",
+  ).optional(),
+
+  // Server-only secrets.
+  SUPABASE_SECRET_KEY: supabaseKeySchema(
+    SUPABASE_SECRET_PREFIX,
+    "secret",
+  ).optional(),
+  /** Chat, completion and embedding traffic — everything the text product does. */
+  OPENROUTER_API_KEY: secret(),
+  /**
+   * Speech only. OpenRouter serves no speech-to-text or text-to-speech model,
+   * so voice goes direct. Also accepted as an embedding-key fallback for a
+   * deployment mid-migration.
+   */
+  OPENAI_API_KEY: secret(),
+
+  /**
+   * Per-tier model ids, overriding the registry's defaults for this
+   * environment. Absent means "use the registry". Model ids are configuration
+   * because availability and pricing move; a tier is what application code
+   * names, and a tier is all it names.
+   */
+  OPENROUTER_MODEL_REASONING: modelId(),
+  OPENROUTER_MODEL_STRONG: modelId(),
+  OPENROUTER_MODEL_MID: modelId(),
+  OPENROUTER_MODEL_CHEAP: modelId(),
+  OPENROUTER_MODEL_NANO: modelId(),
+  EMBEDDING_MODEL: modelId(),
+  SPEECH_TO_TEXT_MODEL: modelId(),
+  TEXT_TO_SPEECH_MODEL: modelId(),
+
+  /**
+   * Salt for the pseudonymous user id in logs and the usage ledger. Optional
+   * at boot and asserted at the point of use, like the Supabase secret key:
+   * a deployment that never writes a ledger row does not need one.
+   */
+  LOG_PSEUDONYM_SALT: secret(),
+
+  /**
+   * Comma-separated learner ids allowed to see the cost dashboard. Unset
+   * means nobody, which is the safe reading of an absent allowlist.
+   */
+  OPERATOR_USER_IDS: z.string().max(2000).optional(),
+
+  /**
+   * A euro-per-dollar rate to use until the first FX snapshot lands. Never a
+   * substitute for the daily snapshot; it exists so a cold database prices
+   * its first calls instead of recording them as unpriced.
+   */
+  FX_EUR_PER_USD_BOOTSTRAP: z.coerce.number().positive().max(100).optional(),
+
+  APP_URL: z.url().default("http://localhost:3000"),
+  APP_NAME: z.string().min(1).default("Deutsch Partner"),
+
+  LANGSMITH_TRACING: booleanish,
+  LANGSMITH_API_KEY: secret(),
+  LANGSMITH_PROJECT: z.string().min(1).default("deutsch-partner"),
+  LANGSMITH_ENDPOINT: z.url().optional(),
+});
+
+/** Keys the browser bundle is allowed to see. */
+export const PUBLIC_ENV_KEYS = [
+  "NEXT_PUBLIC_SUPABASE_URL",
+  "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+] as const;
+
+/** Secrets that must never leave the server. */
+export const SERVER_ENV_KEYS = [
+  "SUPABASE_SECRET_KEY",
+  "OPENROUTER_API_KEY",
+  "LANGSMITH_API_KEY",
+  "LOG_PSEUDONYM_SALT",
+  "OPENAI_API_KEY",
+] as const;
+
+/** Required in production. Optional elsewhere so the app can still boot. */
+const PRODUCTION_REQUIRED_KEYS = [
+  ...PUBLIC_ENV_KEYS,
+  "SUPABASE_SECRET_KEY",
+  "OPENROUTER_API_KEY",
+] as const;
+
+const envSchema = baseSchema.superRefine((env, ctx) => {
+  if (env.NODE_ENV === "production") {
+    for (const key of PRODUCTION_REQUIRED_KEYS) {
+      if (env[key] === undefined) {
+        ctx.addIssue({
+          code: "custom",
+          path: [key],
+          message: "is required in production",
+        });
+      }
+    }
+  }
+
+  if (env.LANGSMITH_TRACING && env.LANGSMITH_API_KEY === undefined) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["LANGSMITH_API_KEY"],
+      message: "is required when LANGSMITH_TRACING is enabled",
+    });
+  }
+});
+
+export type AppEnv = z.infer<typeof envSchema>;
+
+export class EnvValidationError extends Error {
+  readonly issues: readonly string[];
+
+  constructor(issues: readonly string[]) {
+    super(
+      `Invalid environment configuration:\n${issues
+        .map((issue) => `  - ${issue}`)
+        .join("\n")}`,
+    );
+    this.name = "EnvValidationError";
+    this.issues = issues;
+  }
+}
+
+/**
+ * Formats an issue without ever echoing the offending value. Validation errors
+ * surface in logs and CI output, so a message that quotes a rejected API key
+ * leaks it (see security-observability-guardrails.md S17).
+ */
+export function describeIssue(issue: z.core.$ZodIssue): string {
+  const key = issue.path.join(".") || "(root)";
+  let message = issue.message;
+
+  const received = "input" in issue ? issue.input : undefined;
+  if (typeof received === "string" && received.length > 0) {
+    message = message.split(received).join("[redacted]");
+  }
+
+  return `${key}: ${message}`;
+}
+
+/**
+ * Validates a raw environment source. Unknown keys are ignored, since a real
+ * `process.env` carries hundreds of unrelated entries.
+ */
+export function parseEnv(source: Record<string, string | undefined>): AppEnv {
+  const result = envSchema.safeParse(source);
+
+  if (!result.success) {
+    throw new EnvValidationError(result.error.issues.map(describeIssue));
+  }
+
+  return result.data;
+}
+
+/**
+ * Asserts a value that is optional at boot but mandatory at the point of use,
+ * such as the service role key inside a privileged client factory.
+ */
+export function requireEnvValue<T>(
+  value: T | undefined | "",
+  key: string,
+): T {
+  if (value === undefined || value === "") {
+    throw new EnvValidationError([`${key}: is required for this operation`]);
+  }
+  return value;
+}

@@ -1,0 +1,89 @@
+{
+  "description": "Golden retrieval test suites for the scenario corpus. Each case is a natural-language learner query, the slugs a correct retrieval should surface (any hit within top-k counts), and a reference answer used by ragas for context recall/precision.",
+  "suites": {
+    "dialogue": [
+      {
+        "question": "I want to practice ordering food at a restaurant",
+        "expected_slugs": ["dialogue-a1-im-restaurant", "dialogue-a2-die-falsche-bestellung"],
+        "reference": "The scenario 'Im Restaurant' (A1) practises ordering food: a customer orders a soup, a still water and a salad, then asks for the bill and pays 18 euros at a small German restaurant."
+      },
+      {
+        "question": "buying a train ticket and finding the right platform",
+        "expected_slugs": ["dialogue-a1-am-bahnhof"],
+        "reference": "The scenario 'Am Bahnhof' (A1) practises train travel: a traveler asks where platform five is, buys a return ticket to Hamburg for 42 euros, and is wished a good trip."
+      },
+      {
+        "question": "describing symptoms to a doctor and getting advice",
+        "expected_slugs": ["dialogue-a1-beim-arzt", "dialogue-a2-ein-verletzter-knochel", "dialogue-b2-eine-schwierige-diagnose"],
+        "reference": "The scenario 'Beim Arzt' (A1) practises a doctor's visit: a patient describes a headache and cough, is told to drink water and rest, takes tablets twice a day and returns on Friday."
+      },
+      {
+        "question": "making plans to meet a friend for coffee",
+        "expected_slugs": ["dialogue-a1-einen-freund-treffen"],
+        "reference": "The scenario 'Einen Freund treffen' (A1) practises making plans: two friends meet in town, agree to have coffee at three o'clock, and pick the café at the market square."
+      },
+      {
+        "question": "politely complaining that my order in a restaurant is wrong",
+        "expected_slugs": ["dialogue-a2-die-falsche-bestellung"],
+        "reference": "The scenario 'Die falsche Bestellung' (A2) practises polite complaints: a customer ordered vegetable lasagna but received meat lasagna, explains she does not eat meat, and the waiter apologises and brings the right dish."
+      },
+      {
+        "question": "debating the pros and cons of working from home",
+        "expected_slugs": ["dialogue-b2-homeoffice-freiheit-oder-falle"],
+        "reference": "The scenario 'Homeoffice: Freiheit oder Falle?' (B2) practises nuanced argument: two friends weigh flexibility against blurred work-life boundaries and lost spontaneous exchange, and settle on a hybrid model."
+      },
+      {
+        "question": "professional small talk and networking at a business dinner",
+        "expected_slugs": ["dialogue-b2-geschaftsessen"],
+        "reference": "The scenario 'Geschäftsessen' (B2) practises professional conversation: two professionals discuss a possible collaboration and international expansion while judging the food's acidity, seasoning and presentation."
+      },
+      {
+        "question": "my train was cancelled and I need to find another way to my destination",
+        "expected_slugs": ["dialogue-b2-gestrandet-am-bahnhof", "dialogue-a2-zugverspatung"],
+        "reference": "The scenario 'Gestrandet am Bahnhof' (B2) practises coping with a cancelled train: two strangers negotiate an alternative route via Nuremberg, consider a bus leg, and agree to share a taxi as a last resort."
+      }
+    ],
+    "comprehension": [
+      {
+        "question": "I want to test my reading comprehension on daily routines",
+        "expected_slugs": ["comprehension-a1-reading-ein-neuer-morgen"],
+        "reference": "The reading 'Ein neuer Morgen' (A1) tests daily-routine comprehension: Anna gets up at seven, eats bread with cheese, drinks coffee, and takes the bus to work in nice but cold weather."
+      },
+      {
+        "question": "a short German text about grocery shopping with questions",
+        "expected_slugs": ["comprehension-a1-reading-im-supermarkt"],
+        "reference": "The reading 'Im Supermarkt' (A1) covers grocery shopping: Tom needs milk, eggs, apples and bread, meets his neighbor Lisa who buys vegetables and rice, and then goes home."
+      },
+      {
+        "question": "understanding automated phone menus when calling a doctor's office",
+        "expected_slugs": ["comprehension-a1-telephone-beim-arzt-anrufen"],
+        "reference": "The telephone comprehension 'Beim Arzt anrufen' (A1) plays a doctor's office menu: press 1 for an appointment, 2 for prescriptions, 3 for consultation hours — for an appointment you press 1."
+      },
+      {
+        "question": "practice understanding train delay announcements at the station",
+        "expected_slugs": ["comprehension-a1-announcement-delay", "comprehension-a2-announcement-technical-problem", "comprehension-b2-announcement-multiple-disruptions"],
+        "reference": "The announcement comprehension 'Delay' (A1) tests listening for key facts: the train to Hamburg is ten minutes late and passengers should wait at platform 3."
+      },
+      {
+        "question": "a reading passage about a broken laptop being repaired",
+        "expected_slugs": ["comprehension-a2-reading-der-kaputte-laptop"],
+        "reference": "The reading 'Der kaputte Laptop' (A2) covers a repair: Jonas's laptop will not switch on, the charging cable does not help, the shop suspects a damaged hard drive, and he returns on Monday to hear if repair is worth it."
+      },
+      {
+        "question": "an online order arrived wrong — reading practice about deliveries",
+        "expected_slugs": ["comprehension-a2-reading-eine-falsche-lieferung"],
+        "reference": "The reading 'Eine falsche Lieferung' (A2) covers a wrong delivery: Laura ordered a black sweater, received a red one in the wrong size, contacted customer service with a photo, and returns it free of charge."
+      },
+      {
+        "question": "advanced reading about hybrid work and company culture",
+        "expected_slugs": ["comprehension-b2-reading-die-neue-arbeitswelt"],
+        "reference": "The reading 'Die neue Arbeitswelt' (B2) covers hybrid work: reactions were mixed, productivity rose in many teams, new employees needed more support, and the company introduced regular on-site days."
+      },
+      {
+        "question": "reading comprehension about sustainability and public transport",
+        "expected_slugs": ["comprehension-b2-reading-nachhaltigkeit-im-alltag"],
+        "reference": "The reading 'Nachhaltigkeit im Alltag' (B2) argues that sustainable behaviour depends on conditions, not just motivation: people keep driving because cars feel more convenient, so policy must make public transport more reliable, frequent and connected."
+      }
+    ]
+  }
+}

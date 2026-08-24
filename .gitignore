@@ -12,6 +12,10 @@
 
 # testing
 /coverage
+/test-results
+/playwright-report
+/blob-report
+/.playwright
 
 # next.js
 /.next/
@@ -32,6 +36,8 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# ...but the template must be committed so a new contributor knows what to set.
+!.env.example
 
 # vercel
 .vercel
@@ -39,3 +45,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# python (scripts/scenarios)
+__pycache__/
+.venv/
+scripts/scenarios/eval_report.json

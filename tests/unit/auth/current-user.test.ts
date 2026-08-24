@@ -1,0 +1,86 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const getClaims = vi.fn();
+const redirect = vi.fn((path: string) => {
+  throw new Error(`NEXT_REDIRECT:${path}`);
+});
+
+vi.mock("next/navigation", () => ({ redirect: (p: string) => redirect(p) }));
+vi.mock("@/lib/supabase/server-client", () => ({
+  createServerSupabaseClient: async () => ({ auth: { getClaims } }),
+}));
+
+const { getAuthenticatedUserId, requireAuthenticatedUserId } = await import(
+  "@/lib/auth/current-user"
+);
+
+const LEARNER = "11111111-1111-4111-8111-111111111111";
+
+beforeEach(() => {
+  getClaims.mockReset();
+  redirect.mockClear();
+});
+
+describe("getAuthenticatedUserId", () => {
+  it("returns the subject claim for a signed-in learner", async () => {
+    getClaims.mockResolvedValue({ data: { claims: { sub: LEARNER } }, error: null });
+
+    expect(await getAuthenticatedUserId()).toBe(LEARNER);
+  });
+
+  it("returns null when there is no session", async () => {
+    getClaims.mockResolvedValue({ data: null, error: null });
+
+    expect(await getAuthenticatedUserId()).toBeNull();
+  });
+
+  it("returns null when verification fails, rather than trusting the token", async () => {
+    getClaims.mockResolvedValue({ data: null, error: { message: "bad signature" } });
+
+    expect(await getAuthenticatedUserId()).toBeNull();
+  });
+
+  it("rejects a subject claim that is not a uuid", async () => {
+    // The claim decides which learner's rows we read. It has to be the shape
+    // the database expects, not merely present.
+    getClaims.mockResolvedValue({ data: { claims: { sub: "admin" } }, error: null });
+
+    expect(await getAuthenticatedUserId()).toBeNull();
+  });
+
+  it("returns null when the claims object has no subject at all", async () => {
+    getClaims.mockResolvedValue({ data: { claims: {} }, error: null });
+
+    expect(await getAuthenticatedUserId()).toBeNull();
+  });
+
+  it("fails closed if the auth call throws", async () => {
+    getClaims.mockRejectedValue(new Error("network"));
+
+    expect(await getAuthenticatedUserId()).toBeNull();
+  });
+});
+
+describe("requireAuthenticatedUserId", () => {
+  it("returns the id when signed in", async () => {
+    getClaims.mockResolvedValue({ data: { claims: { sub: LEARNER } }, error: null });
+
+    expect(await requireAuthenticatedUserId()).toBe(LEARNER);
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it("redirects to sign-in when there is no session", async () => {
+    getClaims.mockResolvedValue({ data: null, error: null });
+
+    await expect(requireAuthenticatedUserId()).rejects.toThrow(/NEXT_REDIRECT/);
+    expect(redirect).toHaveBeenCalledWith("/auth/login");
+  });
+
+  it("never returns a value when unauthenticated", async () => {
+    // A helper that returned undefined instead of redirecting would hand a
+    // page an empty learner id and let it query with it.
+    getClaims.mockResolvedValue({ data: null, error: null });
+
+    await expect(requireAuthenticatedUserId()).rejects.toThrow();
+  });
+});

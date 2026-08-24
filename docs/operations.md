@@ -1,0 +1,149 @@
+# Operations
+
+## Environment
+
+Copy `.env.example` to `.env.local`. Nothing in the example file is a real
+value, and none should ever be.
+
+| Variable | Needed for | Notes |
+| --- | --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL` | everything | Inlined into the browser bundle |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | everything | Starts `sb_publishable_`. RLS applies |
+| `SUPABASE_SECRET_KEY` | server | Starts `sb_secret_`. Bypasses RLS. Never in the browser |
+| `OPENROUTER_API_KEY` | chat, ingestion, retrieval | Everything the text product does: chat, completion and embeddings. Without it nothing generates and nothing embeds |
+| `OPENAI_API_KEY` | voice | Speech goes direct; OpenRouter serves no speech model. Without it the microphone is unavailable; the tutor still replies. Also an embedding-key fallback mid-migration |
+| `LOG_PSEUDONYM_SALT` | the ledger | Keys the pseudonymous learner id. Changing it makes past rows unjoinable to future ones |
+| `OPERATOR_USER_IDS` | the cost dashboard | Comma-separated UUIDs. Unset means nobody |
+| `FX_EUR_PER_USD_BOOTSTRAP` | pricing | Used only until the first FX snapshot lands |
+| `OPENROUTER_MODEL_*` | optional | Per-tier model overrides. Empty uses the registry |
+
+The legacy Supabase JWT `anon` and `service_role` keys are **rejected at boot**.
+They are retired at the end of 2026, and validating the prefix turns two
+expensive mistakes — a secret key in a browser variable, a new project on a
+dying key format — into a boot failure.
+
+Production requires the first four. Development and test boot without them, so a
+contributor can run the app and the suite without provisioning anything.
+
+## Getting a project running
+
+```bash
+pnpm install
+pnpm db:push          # 20 migrations: 22 tables, RLS, functions
+pnpm db:seed          # curriculum, vocabulary and grammar seeds
+pnpm dummy:user       # a confirmed fixture learner, credentials printed
+pnpm ingest           # embeds the corpus — this one costs money (~$0.001)
+pnpm scenarios:ingest # embeds the 50-scenario corpus — also costs money (~$0.001)
+pnpm dev
+```
+
+`pnpm scenarios:ingest` is Python (run through [uv](https://docs.astral.sh/uv/),
+which provisions its own interpreter) and needs `OPENROUTER_API_KEY`. Like
+`pnpm ingest` it is idempotent — unchanged items are skipped before any
+provider call — and `--dry-run` reports the parse (15 dialogues, 35
+comprehensions) with no key and no database. See `scripts/scenarios/README.md`.
+
+`pnpm ingest --dry-run` reports what would be written — 234 documents, 599
+chunks — without contacting a provider or needing a key. Useful for checking
+chunking and metadata on a laptop with nothing configured.
+
+`db:seed` exists because a migration runs once. The seeds are declarative and
+idempotent, so a fresh database gets them from `db:push` while one that already
+applied an earlier version gets the update from `db:seed`.
+
+## Everyday commands
+
+| Command | What it does |
+| --- | --- |
+| `pnpm verify` | Typecheck, lint, 2519 tests, then a production build |
+| `pnpm test:unit` | Unit and component tests |
+| `pnpm test:db` | Migrations, constraints and RLS against real Postgres via PGlite |
+| `pnpm test:e2e` | Playwright against a production build on port 3100 |
+| `pnpm db:advisors` | Supabase's security and performance linters |
+| `pnpm ingest` | The corpus pipeline. Safe to re-run; does nothing if nothing changed |
+| `pnpm scenarios:ingest` | The scenario corpus pipeline (Python). Same idempotence contract |
+| `pnpm scenarios:eval` | Retrieval evaluation: hit@5 plus ragas metrics. `--retrieval-only` skips the judge model |
+| `pnpm scenarios:test` | The Python parser and plan tests |
+| `pnpm curriculum:generate` | Rewrites the three generated seed migrations |
+
+## Cost
+
+A typical learner turn triggers five model calls:
+
+| Call | Tier | EUR |
+| --- | --- | --- |
+| `conversation.turn` (A1) | strong | 0.00454 |
+| `evaluation.learner_message` | mid | 0.00085 |
+| `extraction.errors` | cheap | 0.00055 |
+| `classification.intent` | nano | 0.00004 |
+| `retrieval.embedding` | embedding | negligible, and cached |
+| **total** | | **≈ 0.0064** |
+
+About **€0.64 per learner per 100 turns**. The conversation turn is 71% of it.
+
+Two independent controls bound it. **Rate limiting** bounds how often — 20
+messages a minute. **Euro budgets** bound how much, at four scopes, failing
+closed at 100%. Both are required: one request with a large context can cost
+more than a thousand small ones.
+
+Evaluation is skipped entirely for trivial messages. *Danke*, *Ja*, an emoji —
+none carries a level or grammar signal, and scoring them costs money and adds
+noise to a learner's estimated level.
+
+## When something breaks
+
+**A learner gets "your tutor is unavailable".** The turn was refused before
+generation. Look for `chat.turn_refused` in the logs — it carries the request
+id and which node failed, and no content.
+
+**Replies are short and generic.** Retrieval is probably degraded. `retrieve`
+will be marked `degraded` in the `turn.completed` log line, and
+`retrieval.arm_failed` will say which arm went quiet. A single failed arm halves
+the quality rather than removing the answer, which is why this can go unnoticed.
+
+**Scenario search says it is unavailable.** The search endpoint embeds the
+query, and without an embedding key (`OPENROUTER_API_KEY`) it degrades rather
+than failing the page — browsing and comprehension quizzes still work. Look for
+`scenario_search.disabled` (no key) or `scenario_search.embedding_failed`
+(provider or budget refusal) in the logs. An empty grid with search working
+means the corpus was never ingested: run `pnpm scenarios:ingest`.
+
+**Spend is climbing.** The cost dashboard breaks it down by task and by the
+model actually routed to — which is not always the one asked for, since
+OpenRouter may substitute. Alerts fire at 70%, 90% and 100% of the daily budget.
+`budget_denied` rows are a security audit event as well as a cost one: a learner
+who can trigger unbounded spend has found a financial denial of service.
+
+**Euro figures look wrong or are zero.** Check `fx_stale` on the ledger. A call
+made when no FX rate had ever been snapshotted records the exact dollars and
+declares itself unpriced rather than inventing a euro figure. The dashboard
+surfaces the count.
+
+**A migration will not apply.** pgvector lives in the `extensions` schema on a
+real Supabase project but is created in `public` locally, so new migrations must
+write `extensions.vector(1536)` and `operator(extensions.<=>)`. This only
+surfaces on push, because the migration role's search path is not the API
+role's.
+
+**The database tests pass and production does not.** PGlite has no pgvector, so
+the harness substitutes the embedding column and drops the HNSW index. Anything
+that depends on real vector behaviour is not covered there — a static test
+asserts the migrations declare it, and that is all.
+
+## Security posture
+
+- Row Level Security on every table a learner owns, with `USING` **and**
+  `WITH CHECK` on every update policy
+- Accounting tables have RLS enabled and **no policy at all** — only the secret
+  key reaches them
+- No `SECURITY DEFINER` function anywhere; a migration test fails the build if
+  one appears
+- The usage ledger is append-only, enforced by a trigger, and holds a
+  pseudonymous hash rather than a user id
+- Learner errors are returned to the browser as a small closed set of kinds with
+  safe messages; the original is attached non-enumerably so it cannot be
+  serialised into a response by accident
+- Secret values are never logged. Presence, length and prefix only
+
+One advisor finding is open: `auth_leaked_password_protection` is disabled on
+the project. Enabling it is a dashboard toggle.
