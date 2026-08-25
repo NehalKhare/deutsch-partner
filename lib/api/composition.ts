@@ -13,9 +13,9 @@ import { createFxRateService } from "@/lib/ai/gateway/fx";
 import { createGateway } from "@/lib/ai/gateway/factory";
 import { createOpenRouterEmbeddingTransport } from "@/lib/ai/gateway/openrouter-embeddings";
 import {
-  createOpenAISpeechToText,
-  createOpenAITextToSpeech,
-} from "@/lib/ai/voice/openai";
+  createOpenRouterSpeechToText,
+  createOpenRouterTextToSpeech,
+} from "@/lib/ai/voice/openrouter";
 import type {
   SpeechToTextProvider,
   TextToSpeechProvider,
@@ -149,7 +149,7 @@ export interface VoiceProviders {
 
 export function createVoiceProviders(): VoiceProviders | null {
   const env = serverEnv();
-  const apiKey = env.OPENAI_API_KEY;
+  const apiKey = env.OPENROUTER_API_KEY;
   if (!apiKey) return null;
 
   const registry = createModelRegistry(registryOverridesFromEnv(env));
@@ -160,8 +160,8 @@ export function createVoiceProviders(): VoiceProviders | null {
   };
 
   return {
-    speechToText: createOpenAISpeechToText(options),
-    textToSpeech: createOpenAITextToSpeech(options),
+    speechToText: createOpenRouterSpeechToText(options),
+    textToSpeech: createOpenRouterTextToSpeech(options),
   };
 }
 
@@ -183,11 +183,9 @@ function createEmbeddingServiceOrNull(
   operatorClient: DatabaseClient,
   logger: Logger,
 ): EmbeddingService | null {
-  // Embeddings ride OpenRouter like chat, so the one key covers everything
-  // the text product does. OPENAI_API_KEY is accepted as a fallback for a
-  // deployment mid-migration — it only works if that key is valid for
-  // OpenRouter, and voice still wants it for itself either way.
-  const embeddingKey = env.OPENROUTER_API_KEY ?? env.OPENAI_API_KEY;
+  // One key, for everything. Embeddings ride OpenRouter like chat, and so
+  // does speech now that its models are reachable there.
+  const embeddingKey = env.OPENROUTER_API_KEY;
   if (!embeddingKey) return null;
 
   const registry = createModelRegistry(registryOverridesFromEnv(env));

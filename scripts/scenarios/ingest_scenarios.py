@@ -10,7 +10,7 @@ Parses the two dataset files, classifies every item as a ``dialogue`` or a
 the same model and 1536-dimension width the application's retrieval gateway
 uses, so query vectors and corpus vectors stay comparable), and upserts into
 the ``scenarios`` table through PostgREST with the secret key. Authentication
-uses ``OPENROUTER_API_KEY``, falling back to ``OPENAI_API_KEY`` for a
+uses ``OPENROUTER_API_KEY``, the one key for every model call, for a
 deployment mid-migration.
 
 Idempotent by construction, like the TypeScript corpus pipeline: an item is
@@ -86,9 +86,8 @@ def require(env: dict[str, str], key: str) -> str:
 
 
 def embedding_key(env: dict[str, str]) -> str:
-    """OPENROUTER_API_KEY, or OPENAI_API_KEY as a mid-migration fallback —
-    the fallback only authenticates if that key is valid for OpenRouter."""
-    value = env.get("OPENROUTER_API_KEY", "").strip() or env.get("OPENAI_API_KEY", "").strip()
+    """OPENROUTER_API_KEY. One key covers every model call this product makes."""
+    value = env.get("OPENROUTER_API_KEY", "").strip()
     if not value:
         sys.exit("\n  OPENROUTER_API_KEY is not set. Add it to .env.local.\n")
     return value

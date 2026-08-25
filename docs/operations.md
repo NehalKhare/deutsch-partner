@@ -10,8 +10,7 @@ value, and none should ever be.
 | `NEXT_PUBLIC_SUPABASE_URL` | everything | Inlined into the browser bundle |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | everything | Starts `sb_publishable_`. RLS applies |
 | `SUPABASE_SECRET_KEY` | server | Starts `sb_secret_`. Bypasses RLS. Never in the browser |
-| `OPENROUTER_API_KEY` | chat, ingestion, retrieval | Everything the text product does: chat, completion and embeddings. Without it nothing generates and nothing embeds |
-| `OPENAI_API_KEY` | voice | Speech goes direct; OpenRouter serves no speech model. Without it the microphone is unavailable; the tutor still replies. Also an embedding-key fallback mid-migration |
+| `OPENROUTER_API_KEY` | everything | Every model call this product makes: chat, completion, embeddings, and speech in both directions. Without it nothing generates, nothing embeds, the microphone is unavailable, and reading aloud falls back to the browser's own voice |
 | `LOG_PSEUDONYM_SALT` | the ledger | Keys the pseudonymous learner id. Changing it makes past rows unjoinable to future ones |
 | `OPERATOR_USER_IDS` | the cost dashboard | Comma-separated UUIDs. Unset means nobody |
 | `MCP_SERVER_URL` | the Trainer's remote MCP tools | Streamable-HTTP endpoint; unset means local tools only. DeepWiki (`https://mcp.deepwiki.com/mcp`) needs no key |

@@ -202,10 +202,15 @@ Stated here so nobody has to discover it by reading the code.
   (10 transcriptions and 20 readings a minute) and the audio bounds (60 seconds,
   15 MB, 1000 characters) are the *only* ceiling on voice spend. That is a
   smaller hole than it sounds and a real one.
-- **Speech needs an OpenAI key.** OpenRouter carries all chat, completion and
-  embedding traffic, but lists no speech-to-text or text-to-speech model at
-  all — so `/api/transcribe` and
-  `/api/speak` go direct to OpenAI. Without `OPENAI_API_KEY` the microphone
+- **Speech rides OpenRouter, in a chat model's clothing.** It once could not:
+  the router listed no speech model, so voice went direct to OpenAI on a second
+  key. It now serves audio-capable chat models, so `/api/speak` and
+  `/api/transcribe` go through the same key as everything else — at the cost of
+  a shape. Audio output arrives only from a stream and only as headerless
+  `pcm16`, so `lib/ai/voice/openrouter.ts` wraps the samples in a WAV container
+  at the edge; and a chat model asked to read a line will read it and then
+  remark on having done so, out loud, unless told firmly not to
+  (`lib/ai/prompts/voice.ts`). Without `OPENROUTER_API_KEY` the microphone
   reports that speaking is unavailable, and reading a reply aloud falls through
   to the browser's own voice, which needs no key and costs nothing.
 - **`extraction.errors` and `evaluation.learner_message` overlap.** Both return

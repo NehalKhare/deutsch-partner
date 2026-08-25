@@ -10,16 +10,17 @@ import {
   transcriptionRequestSchema,
 } from "@/lib/ai/voice/providers";
 import {
-  createOpenAISpeechToText,
-  createOpenAITextToSpeech,
-} from "@/lib/ai/voice/openai";
+  createOpenRouterSpeechToText,
+  createOpenRouterTextToSpeech,
+  wavFromPcm16,
+} from "@/lib/ai/voice/openrouter";
 
 const audio = (bytes = 1024) => new Uint8Array(bytes).fill(1);
 
 const OPTIONS = {
   apiKey: "sk-voice-test-key",
-  transcribeModelId: "openai/whisper-1",
-  speechModelId: "openai/gpt-4o-mini-tts",
+  transcribeModelId: "openai/gpt-audio-mini",
+  speechModelId: "openai/gpt-audio-mini",
 };
 
 describe("what the domain may ask for", () => {
@@ -140,46 +141,65 @@ describe("bounding audio before it is uploaded", () => {
 });
 
 describe("the transcription transport", () => {
-  const response = (body: unknown, status = 200) =>
-    new Response(JSON.stringify(body), {
+  const said = (text: string, status = 200) =>
+    new Response(JSON.stringify({ choices: [{ message: { content: text } }] }), {
       status,
       headers: { "content-type": "application/json" },
     });
 
-  it("returns the text and the duration it was told", async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(response({ text: "Guten Tag" }));
+  const bodyOf = (fetchImpl: ReturnType<typeof vi.fn>) =>
+    JSON.parse(String((fetchImpl.mock.calls[0] as [string, RequestInit])[1].body));
 
-    const outcome = await createOpenAISpeechToText({ ...OPTIONS, fetchImpl }).transcribe({
-      audio: audio(),
-      format: "webm",
-      durationMs: 4200,
-    });
+  it("returns the text and the duration it was told", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(said("Guten Tag"));
+
+    const outcome = await createOpenRouterSpeechToText({
+      ...OPTIONS,
+      fetchImpl,
+    }).transcribe({ audio: audio(), format: "webm", durationMs: 4200 });
 
     expect(outcome).toMatchObject({
       text: "Guten Tag",
       durationMs: 4200,
-      modelIdResolved: "whisper-1",
+      modelIdResolved: "openai/gpt-audio-mini",
     });
   });
 
-  it("strips the registry's vendor prefix", async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(response({ text: "ja" }));
+  it("sends the recording as audio the model can hear, in the format it was recorded in", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(said("ja"));
 
-    await createOpenAISpeechToText({ ...OPTIONS, fetchImpl }).transcribe({
-      audio: audio(),
+    await createOpenRouterSpeechToText({ ...OPTIONS, fetchImpl }).transcribe({
+      audio: audio(8),
       format: "webm",
       durationMs: 1000,
     });
 
-    const form = (fetchImpl.mock.calls[0] as [string, RequestInit])[1].body as FormData;
-    expect(form.get("model")).toBe("whisper-1");
-    expect(form.get("language")).toBe("de");
+    const body = bodyOf(fetchImpl);
+    const parts = body.messages[0].content;
+    expect(body.model).toBe("openai/gpt-audio-mini");
+    expect(parts[1].type).toBe("input_audio");
+    expect(parts[1].input_audio.format).toBe("webm");
+    // Eight bytes of 0x01, base64. The bytes go in the body, never in a URL.
+    expect(parts[1].input_audio.data).toBe("AQEBAQEBAQE=");
+    // And it is told what it is listening to, in the language of the lesson.
+    expect(parts[0].text).toMatch(/German/);
+  });
+
+  it("keeps its own words out of the transcript", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(said("  Ich heiße Alex  "));
+
+    const outcome = await createOpenRouterSpeechToText({
+      ...OPTIONS,
+      fetchImpl,
+    }).transcribe({ audio: audio(), format: "webm", durationMs: 1000 });
+
+    expect(outcome.text).toBe("Ich heiße Alex");
   });
 
   it("sends the key as a bearer token and nowhere else", async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(response({ text: "ja" }));
+    const fetchImpl = vi.fn().mockResolvedValue(said("ja"));
 
-    await createOpenAISpeechToText({ ...OPTIONS, fetchImpl }).transcribe({
+    await createOpenRouterSpeechToText({ ...OPTIONS, fetchImpl }).transcribe({
       audio: audio(),
       format: "webm",
       durationMs: 1000,
@@ -191,9 +211,9 @@ describe("the transcription transport", () => {
   });
 
   it("never puts the key into the error it throws", async () => {
-    const transport = createOpenAISpeechToText({
+    const transport = createOpenRouterSpeechToText({
       ...OPTIONS,
-      fetchImpl: vi.fn().mockResolvedValue(response({ error: "no" }, 413)),
+      fetchImpl: vi.fn().mockResolvedValue(said("no", 413)),
     });
 
     await expect(
@@ -205,9 +225,13 @@ describe("the transcription transport", () => {
   });
 
   it("refuses a malformed response", async () => {
-    const transport = createOpenAISpeechToText({
+    const transport = createOpenRouterSpeechToText({
       ...OPTIONS,
-      fetchImpl: vi.fn().mockResolvedValue(response({ nope: true })),
+      fetchImpl: vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ nope: true }), {
+          headers: { "content-type": "application/json" },
+        }),
+      ),
     });
 
     await expect(
@@ -216,91 +240,195 @@ describe("the transcription transport", () => {
   });
 });
 
+describe("wrapping raw samples for a browser", () => {
+  it("writes a WAV header the samples can be played through", () => {
+    const wav = wavFromPcm16(new Uint8Array([1, 2, 3, 4]));
+    const view = new DataView(wav.buffer, wav.byteOffset, wav.byteLength);
+    const text = (at: number) =>
+      String.fromCharCode(...wav.slice(at, at + 4));
+
+    expect(wav.byteLength).toBe(44 + 4);
+    expect(text(0)).toBe("RIFF");
+    expect(text(8)).toBe("WAVE");
+    expect(text(36)).toBe("data");
+    expect(view.getUint32(4, true)).toBe(36 + 4);
+    expect(view.getUint16(20, true)).toBe(1); // uncompressed PCM
+    expect(view.getUint16(22, true)).toBe(1); // mono
+    // The rate the stream is actually in. Wrong here means a chipmunk.
+    expect(view.getUint32(24, true)).toBe(24_000);
+    expect(view.getUint16(34, true)).toBe(16);
+    expect(view.getUint32(40, true)).toBe(4);
+    expect([...wav.slice(44)]).toEqual([1, 2, 3, 4]);
+  });
+});
+
 describe("the speech transport", () => {
-  const audioResponse = () =>
-    new Response(new Uint8Array([1, 2, 3]), {
-      status: 200,
-      headers: { "content-type": "audio/mpeg" },
-    });
+  /** A streamed completion, as OpenRouter frames one. */
+  const streamed = (...frames: string[]) =>
+    new Response(
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          const encoder = new TextEncoder();
+          for (const frame of frames) controller.enqueue(encoder.encode(frame));
+          controller.close();
+        },
+      }),
+      { status: 200, headers: { "content-type": "text/event-stream" } },
+    );
 
-  it("returns bytes and what it was billed on", async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(audioResponse());
+  const audioFrame = (base64: string) =>
+    `data: ${JSON.stringify({ choices: [{ delta: { audio: { data: base64 } } }] })}\n\n`;
 
-    const outcome = await createOpenAITextToSpeech({ ...OPTIONS, fetchImpl }).synthesize({
+  /** Four bytes of PCM, as base64. */
+  const PCM = "AQIDBA==";
+
+  const bodyOf = (fetchImpl: ReturnType<typeof vi.fn>) =>
+    JSON.parse(String((fetchImpl.mock.calls[0] as [string, RequestInit])[1].body));
+
+  it("returns playable audio and what it was billed on", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(streamed(audioFrame(PCM), "data: [DONE]\n\n"));
+
+    const outcome = await createOpenRouterTextToSpeech({
+      ...OPTIONS,
+      fetchImpl,
+    }).synthesize({ text: "Guten Tag" });
+
+    // A container, not raw samples: nothing above this file should have to
+    // know the provider streams headerless PCM.
+    expect(outcome.format).toBe("wav");
+    expect(outcome.audio.byteLength).toBe(44 + 4);
+    expect(outcome.characters).toBe(9);
+    expect(outcome.modelIdResolved).toBe("openai/gpt-audio-mini");
+  });
+
+  it("asks in the only shape that returns audio at all", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(streamed(audioFrame(PCM)));
+
+    await createOpenRouterTextToSpeech({ ...OPTIONS, fetchImpl }).synthesize({
       text: "Guten Tag",
     });
 
-    expect(outcome.audio.byteLength).toBe(3);
-    expect(outcome.characters).toBe(9);
-    expect(outcome.format).toBe("mp3");
+    const body = bodyOf(fetchImpl);
+    // The provider refuses audio without both of these, in as many words.
+    expect(body.stream).toBe(true);
+    expect(body.audio.format).toBe("pcm16");
+    expect(body.modalities).toEqual(["text", "audio"]);
+    // A transport should not be creative about what it is reading.
+    expect(body.temperature).toBe(0);
+  });
+
+  it("tells the model to read the line and nothing else", async () => {
+    // Left to itself a chat model reads the sentence and then remarks on
+    // having read it, out loud, in the tutor's voice.
+    const fetchImpl = vi.fn().mockResolvedValue(streamed(audioFrame(PCM)));
+
+    await createOpenRouterTextToSpeech({ ...OPTIONS, fetchImpl }).synthesize({
+      text: "Guten Tag",
+    });
+
+    const body = bodyOf(fetchImpl);
+    expect(body.messages[0].role).toBe("system");
+    expect(body.messages[0].content).toMatch(/no comment/i);
+    expect(body.messages[1]).toEqual({ role: "user", content: "Guten Tag" });
   });
 
   it("maps the default voice onto the vendor's, rather than passing it through", async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(audioResponse());
+    const fetchImpl = vi.fn().mockResolvedValue(streamed(audioFrame(PCM)));
 
-    await createOpenAITextToSpeech({ ...OPTIONS, fetchImpl }).synthesize({
+    await createOpenRouterTextToSpeech({ ...OPTIONS, fetchImpl }).synthesize({
       text: "Guten Tag",
     });
 
-    const body = JSON.parse(
-      String((fetchImpl.mock.calls[0] as [string, RequestInit])[1].body),
-    );
-
-    expect(body.voice).toBe("ash");
-    expect(body.voice).not.toBe("tutor_warm");
+    expect(bodyOf(fetchImpl).audio.voice).toBe("ash");
+    expect(bodyOf(fetchImpl).audio.voice).not.toBe("tutor_warm");
   });
 
   it("maps the female choice onto the vendor's female voice", async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(audioResponse());
+    const fetchImpl = vi.fn().mockResolvedValue(streamed(audioFrame(PCM)));
 
-    await createOpenAITextToSpeech({ ...OPTIONS, fetchImpl }).synthesize({
+    await createOpenRouterTextToSpeech({ ...OPTIONS, fetchImpl }).synthesize({
       text: "Guten Tag",
       gender: "female",
     });
 
-    const body = JSON.parse(
-      String((fetchImpl.mock.calls[0] as [string, RequestInit])[1].body),
-    );
-
-    expect(body.voice).toBe("shimmer");
-    expect(body.voice).not.toBe("female");
+    expect(bodyOf(fetchImpl).audio.voice).toBe("shimmer");
   });
 
   it("maps the domain's voice onto the vendor's", async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(audioResponse());
+    const fetchImpl = vi.fn().mockResolvedValue(streamed(audioFrame(PCM)));
 
-    await createOpenAITextToSpeech({ ...OPTIONS, fetchImpl }).synthesize({
+    await createOpenRouterTextToSpeech({ ...OPTIONS, fetchImpl }).synthesize({
       text: "Guten Tag",
       voice: "tutor_neutral",
     });
 
-    const body = JSON.parse(
-      String((fetchImpl.mock.calls[0] as [string, RequestInit])[1].body),
-    );
-
-    expect(body.voice).toBe("onyx");
-    expect(body.model).toBe("gpt-4o-mini-tts");
+    expect(bodyOf(fetchImpl).audio.voice).toBe("onyx");
   });
 
-  it("sends the speed the level asked for", async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(audioResponse());
-
-    await createOpenAITextToSpeech({ ...OPTIONS, fetchImpl }).synthesize({
+  it("asks for a beginner's pace in words, because a chat model takes no speed", async () => {
+    const slow = vi.fn().mockResolvedValue(streamed(audioFrame(PCM)));
+    await createOpenRouterTextToSpeech({ ...OPTIONS, fetchImpl: slow }).synthesize({
       text: "Guten Tag",
       speed: speechRateFor("A1"),
     });
 
-    const body = JSON.parse(
-      String((fetchImpl.mock.calls[0] as [string, RequestInit])[1].body),
+    const quick = vi.fn().mockResolvedValue(streamed(audioFrame(PCM)));
+    await createOpenRouterTextToSpeech({ ...OPTIONS, fetchImpl: quick }).synthesize({
+      text: "Guten Tag",
+      speed: speechRateFor("B1"),
+    });
+
+    expect(SPEECH_RATES.A1).toBeLessThan(SPEECH_RATES.B1);
+    expect(bodyOf(slow).messages[0].content).toMatch(/slowly/i);
+    expect(bodyOf(quick).messages[0].content).not.toMatch(/slowly/i);
+  });
+
+  it("survives a frame split across two network reads", async () => {
+    // A read can end anywhere, including halfway through a base64 payload.
+    const whole = audioFrame(PCM);
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(streamed(whole.slice(0, 20), whole.slice(20)));
+
+    const outcome = await createOpenRouterTextToSpeech({
+      ...OPTIONS,
+      fetchImpl,
+    }).synthesize({ text: "Guten Tag" });
+
+    expect(outcome.audio.byteLength).toBe(44 + 4);
+  });
+
+  it("ignores a frame that is not audio rather than failing on it", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      streamed(
+        ": keep-alive\n\n",
+        `data: ${JSON.stringify({ choices: [{ delta: { content: "hm" } }] })}\n\n`,
+        audioFrame(PCM),
+        "data: [DONE]\n\n",
+      ),
     );
 
-    expect(body.speed).toBe(SPEECH_RATES.A1);
+    const outcome = await createOpenRouterTextToSpeech({
+      ...OPTIONS,
+      fetchImpl,
+    }).synthesize({ text: "Guten Tag" });
+
+    expect(outcome.audio.byteLength).toBe(44 + 4);
+  });
+
+  it("says so when a stream carried no audio at all", async () => {
+    const transport = createOpenRouterTextToSpeech({
+      ...OPTIONS,
+      fetchImpl: vi.fn().mockResolvedValue(streamed("data: [DONE]\n\n")),
+    });
+
+    await expect(transport.synthesize({ text: "x" })).rejects.toThrow(/no audio/i);
   });
 
   it("reports a refusal by status and nothing else", async () => {
     // A provider's own message can quote the prompt back, and the prompt is
     // the tutor's German or the learner's own words.
-    const transport = createOpenAITextToSpeech({
+    const transport = createOpenRouterTextToSpeech({
       ...OPTIONS,
       fetchImpl: vi
         .fn()

@@ -134,9 +134,9 @@ async function main(): Promise<void> {
 
   const url = requireEnvValue(env.NEXT_PUBLIC_SUPABASE_URL, "NEXT_PUBLIC_SUPABASE_URL");
   const secretKey = requireEnvValue(env.SUPABASE_SECRET_KEY, "SUPABASE_SECRET_KEY");
-  // Embeddings ride OpenRouter like chat. OPENAI_API_KEY is accepted as a
-  // fallback for a deployment mid-migration.
-  const embeddingKey = env.OPENROUTER_API_KEY ?? env.OPENAI_API_KEY;
+  // Embeddings ride OpenRouter like chat, and like speech: one key covers
+  // every model call this product makes.
+  const embeddingKey = env.OPENROUTER_API_KEY;
   if (!embeddingKey) abort("OPENROUTER_API_KEY is not set. Add it to .env.local.");
 
   // The repositories depend on the narrow slice of supabase-js they actually

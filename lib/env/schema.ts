@@ -83,14 +83,11 @@ const baseSchema = z.object({
     SUPABASE_SECRET_PREFIX,
     "secret",
   ).optional(),
-  /** Chat, completion and embedding traffic — everything the text product does. */
-  OPENROUTER_API_KEY: secret(),
   /**
-   * Speech only. OpenRouter serves no speech-to-text or text-to-speech model,
-   * so voice goes direct. Also accepted as an embedding-key fallback for a
-   * deployment mid-migration.
+   * Every model call this product makes: chat, completion, embeddings, and
+   * speech in both directions. One account to fund and one key to rotate.
    */
-  OPENAI_API_KEY: secret(),
+  OPENROUTER_API_KEY: secret(),
 
   /**
    * Per-tier model ids, overriding the registry's defaults for this
@@ -158,7 +155,6 @@ export const SERVER_ENV_KEYS = [
   "OPENROUTER_API_KEY",
   "LANGSMITH_API_KEY",
   "LOG_PSEUDONYM_SALT",
-  "OPENAI_API_KEY",
   "MCP_SERVER_API_KEY",
 ] as const;
 

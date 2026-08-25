@@ -22,8 +22,7 @@ not support 3.14 yet; uv provisions the right interpreter automatically).
 Environment comes from the repository's `.env.local` / `.env`:
 `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SECRET_KEY` and `OPENROUTER_API_KEY` —
 embeddings, answer generation and the judge all ride OpenRouter, so one key
-covers every model call here (`OPENAI_API_KEY` is accepted as an
-embedding-key fallback mid-migration). `EMBEDDING_MODEL` (default
+covers every model call here. `EMBEDDING_MODEL` (default
 `openai/text-embedding-3-small`, 1536 dimensions — the registry's embedding
 tier) and `RAGAS_JUDGE_MODEL` (default `openai/gpt-4o-mini`) can be
 overridden.

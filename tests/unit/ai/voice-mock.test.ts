@@ -6,9 +6,9 @@ import {
   createMockTextToSpeech,
 } from "@/lib/ai/voice/mock";
 import {
-  createOpenAISpeechToText,
-  createOpenAITextToSpeech,
-} from "@/lib/ai/voice/openai";
+  createOpenRouterSpeechToText,
+  createOpenRouterTextToSpeech,
+} from "@/lib/ai/voice/openrouter";
 import { MAX_AUDIO_MS, SPEECH_VOICES } from "@/lib/ai/voice/providers";
 
 /**
@@ -28,14 +28,14 @@ function realProviders() {
 
   const options = {
     apiKey: "sk-parity-test-key",
-    transcribeModelId: "openai/whisper-1",
-    speechModelId: "openai/gpt-4o-mini-tts",
+    transcribeModelId: "openai/gpt-audio-mini",
+    speechModelId: "openai/gpt-audio-mini",
     fetchImpl: call as unknown as typeof fetch,
   };
 
   return {
-    stt: createOpenAISpeechToText(options),
-    tts: createOpenAITextToSpeech(options),
+    stt: createOpenRouterSpeechToText(options),
+    tts: createOpenRouterTextToSpeech(options),
     call,
   };
 }

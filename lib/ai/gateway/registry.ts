@@ -109,8 +109,10 @@ const DEFAULTS: Readonly<Record<Tier, ModelEntry>> = {
   },
   stt: {
     tier: "stt",
-    provider: "openai",
-    modelId: "openai/whisper-1",
+    provider: "openrouter",
+    // An audio-in chat model rather than a transcription endpoint, because
+    // that is what the router serves. Cheap, and the same family as the voice.
+    modelId: "openai/gpt-audio-mini",
     fallbacks: [],
     hardMaxInputTokens: 0,
     hardMaxOutputTokens: 4_096,
@@ -118,8 +120,8 @@ const DEFAULTS: Readonly<Record<Tier, ModelEntry>> = {
   },
   tts: {
     tier: "tts",
-    provider: "openai",
-    modelId: "openai/gpt-4o-mini-tts",
+    provider: "openrouter",
+    modelId: "openai/gpt-audio-mini",
     fallbacks: [],
     hardMaxInputTokens: 4_096,
     hardMaxOutputTokens: 0,

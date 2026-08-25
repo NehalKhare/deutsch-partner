@@ -45,11 +45,13 @@ describe("model registry", () => {
     }
   });
 
-  it("keeps speech-to-text and speech off OpenRouter", () => {
-    // OpenRouter serves no speech model. Routing them there would fail at
-    // runtime and hide the fact that they have their own provider.
+  it("routes speech through OpenRouter like everything else", () => {
+    // It once could not: the router served no speech model, so voice went
+    // direct to OpenAI on a second key. It serves audio-capable chat models
+    // now, and a second provider account is a second thing to fund and
+    // rotate — so the rule is one key for every model call this app makes.
     for (const tier of ["stt", "tts"] as const) {
-      expect(registry.forTier(tier).provider).not.toBe("openrouter");
+      expect(registry.forTier(tier).provider).toBe("openrouter");
     }
   });
 

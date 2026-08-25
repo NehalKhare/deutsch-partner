@@ -23,8 +23,7 @@ Two layers of measurement:
 ``--retrieval-only`` skips the ragas layer entirely. Everything model-shaped —
 query embedding, answer generation, the judge — rides OpenRouter, so the
 environment is just ``NEXT_PUBLIC_SUPABASE_URL``, ``SUPABASE_SECRET_KEY`` and
-``OPENROUTER_API_KEY`` (``OPENAI_API_KEY`` works as an embedding-key fallback
-mid-migration), with ``EMBEDDING_MODEL`` and ``RAGAS_JUDGE_MODEL`` as
+``OPENROUTER_API_KEY``, with ``EMBEDDING_MODEL`` and ``RAGAS_JUDGE_MODEL`` as
 overrides. The report is written to ``scripts/scenarios/eval_report.json``.
 """
 
