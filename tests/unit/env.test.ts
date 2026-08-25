@@ -203,6 +203,58 @@ describe("parseEnv", () => {
     });
   });
 
+  describe("the Trainer's MCP server", () => {
+    it("is absent by default, which is a thinner trainer rather than an error", () => {
+      const env = parseEnv({});
+
+      expect(env.MCP_SERVER_URL).toBeUndefined();
+      expect(env.MCP_SERVER_API_KEY).toBeUndefined();
+    });
+
+    it("accepts a keyless server, because the recommended default needs none", () => {
+      const env = parseEnv({ MCP_SERVER_URL: "https://mcp.deepwiki.com/mcp" });
+
+      expect(env.MCP_SERVER_URL).toBe("https://mcp.deepwiki.com/mcp");
+    });
+
+    it("accepts a server with a key", () => {
+      const env = parseEnv({
+        MCP_SERVER_URL: "https://mcp.example.com/mcp",
+        MCP_SERVER_API_KEY: "mcp-key-long-enough",
+      });
+
+      expect(env.MCP_SERVER_API_KEY).toBe("mcp-key-long-enough");
+    });
+
+    it("rejects a key with no server to send it to", () => {
+      // Whoever set the key expected authenticated MCP calls to happen.
+      expect(() => parseEnv({ MCP_SERVER_API_KEY: "mcp-key-long-enough" })).toThrow(
+        /MCP_SERVER_URL/,
+      );
+    });
+
+    it("rejects a malformed server URL", () => {
+      expect(() => parseEnv({ MCP_SERVER_URL: "not a url" })).toThrow(
+        /MCP_SERVER_URL/,
+      );
+    });
+  });
+
+  describe("blank values", () => {
+    // A `KEY=` line in a .env file arrives as "", and it means "not set" —
+    // a placeholder must never validate as content or fail as too short.
+    it("treats an empty value as unset", () => {
+      const env = parseEnv({
+        MCP_SERVER_URL: "https://mcp.deepwiki.com/mcp",
+        MCP_SERVER_API_KEY: "",
+        OPENROUTER_API_KEY: "   ",
+      });
+
+      expect(env.MCP_SERVER_API_KEY).toBeUndefined();
+      expect(env.OPENROUTER_API_KEY).toBeUndefined();
+    });
+  });
+
   describe("defaults", () => {
     it("defaults APP_URL and APP_NAME for local development", () => {
       const env = parseEnv({});

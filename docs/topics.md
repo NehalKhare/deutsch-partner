@@ -173,16 +173,39 @@ Tool calling is when you hand a model a list of functions it may ask you to run
 — `get_weather(city)`, `search_flights(...)` — and it replies with a structured
 request instead of prose. Your code runs the function and hands back the result.
 
-### What was built: nothing, and that is deliberate
+### What was built: the Trainer's toolbox — and the tutor still has none
 
-**No provider tool-calling is used in this project.** There is no `tools` array
-in any request. Saying otherwise would be untrue.
+**Tool calling lives in one place: the Trainer** (`/trainer`), a LangChain
+agent that runs practice sessions. It holds six local tools, each a thin,
+learner-scoped wrapper over code that already existed:
 
-Here is the reasoning, because "we didn't need it" is not an answer on its own.
+| Tool | Wraps | Kind |
+| --- | --- | --- |
+| `get_review_session` | the review engine (`learning/review.ts`) | read |
+| `get_progress` | learner state + per-level tallies | read |
+| `get_grammar_pattern` | the 86-pattern grammar catalogue | read |
+| `search_knowledge` | the RAG retriever, sources collected for citation | read |
+| `record_review_outcome` | the deterministic vocabulary engine | **write** |
+| `fetch_simple_german_news` | nachrichtenleicht.de headlines, fenced | read |
 
+plus whatever a configured remote MCP server offers (section 2b). The rules
+they run under are the guardrails' (S11): the learner id is bound from the
+verified session and is never a tool argument; every call is audit-logged by
+name, never by content; anything fetched from outside is fenced as untrusted
+before the model reads it; and the one write tool keeps the split the whole
+product lives by — the model judges whether an answer was right, the
+spaced-repetition arithmetic decides what that does to the schedule, with a
+hard per-request write cap.
+
+> `lib/trainer/tools.ts`, `lib/trainer/agent.ts`, `lib/api/trainer.ts`
+
+### Why the tutor pipeline still has no tools
+
+The chat turn remains tool-free, and the original reasoning still holds there.
 Tool calling earns its cost when the model has to **decide** which action to
 take from a set of options whose relevance it can judge better than your code
-can. In this product, every candidate action is one your code can decide better:
+can. In the tutor's turn, every candidate action is one the code decides
+better:
 
 | A tool would have done | What does it instead | Why |
 | --- | --- | --- |
@@ -205,13 +228,23 @@ discarded where not.
 
 > `lib/ai/prompts/contract.ts`, `lib/ai/evaluation/`
 
-### What is already in place if tools are added
+The Trainer is the case where the table flips: which review item to quiz
+next, whether a free-form German answer was right, when to reach for the
+grammar shelf — those are judgement calls mid-conversation, which is exactly
+what tool calling is for.
 
-The guardrails set out the rules (S11) and the architecture already satisfies
-most of them: every call goes through one gateway that could enforce an
-allowlist, model output is never executed without validation, and the audit
-event for unusual tool usage is named. Adding tools would mean a tool registry
-inside the gateway and a per-task allowlist. Nothing would have to move.
+### 2b. The remote MCP connection
+
+The Trainer can also borrow tools from a **remote MCP server** over streamable
+HTTP — configured, not hardcoded (`MCP_SERVER_URL`, with DeepWiki's public
+keyless server as the documented default; `MCP_SERVER_API_KEY` rides as a
+bearer header when a server wants one). An unset server means a thinner
+trainer, never an error. Every borrowed tool is wrapped before the agent sees
+it: its output is truncated, angle-bracket-escaped and fenced in
+`<mcp_results>`, because a remote server's text is a third party inside the
+conversation and never gets to sound like policy (S10/S31).
+
+> `lib/trainer/mcp.ts`
 
 ---
 
@@ -441,21 +474,38 @@ row, and a `GET` that writes is a `GET` a link prefetch can trigger.
 
 ### What was actually used
 
+**LangChain v1 runs the Trainer.** The `/trainer` feature is a tool-calling
+agent built with `createAgent` from the `langchain` package (LangGraph
+underneath), holding the six local tools plus any remote MCP tools from
+`@langchain/mcp-adapters`. The loop is bounded twice: a hard recursion limit
+(`TRAINER_MAX_STEPS`), and a per-request euro ceiling enforced from inside the
+model's own callback.
+
+The gateway boundary survived the introduction. `ChatOpenAI` is instantiated
+in exactly one place — `lib/ai/gateway/langchain-model.ts`, inside the only
+directory allowed to touch a model SDK — with the model id resolved from the
+registry by tier, the ceilings taken from the task table
+(`trainer.session`), and a callback handler that writes one ledger row per
+LLM invocation through the same accountant every other call uses. The factory
+hands out the tier's whole ladder — the primary and its same-tier fallbacks —
+and the agent walks down it when OpenRouter serves no endpoint for a model
+under the account's data policy, the same resilience the chat transport has
+always had. The security suite's ban on `@langchain/openai` imports outside
+the gateway is what makes that a property rather than a habit.
+
 **LangSmith** is the tracing backend and is wired in configuration. Its key is
 withheld unless tracing is actually enabled, so a key left in the environment of
 an untraced deployment is never handed to a client that might use it.
 
-**`@langchain/core`** is a dependency and is not on any code path.
-
-**LangGraph is not used**, and the agent graph is our own code.
+**The tutor's graph is still not LangGraph**, and that remains deliberate.
 
 ### Why, honestly
 
 The routing document's architecture puts LangGraph above the model gateway, and
 that layering is right: orchestration should be separate from dispatch. What is
-in question is whether it needs a library.
+in question is whether every orchestration needs a library.
 
-The graph this product runs is seven nodes in a straight line with no cycles and
+The tutor's graph is seven nodes in a straight line with no cycles and
 one conditional exit. A graph engine earns its weight when you have branching
 that changes per turn, loops with convergence conditions, or state that has to
 survive a process restart mid-run. None of those is true yet.
@@ -470,11 +520,13 @@ failure independently switchable.**
 
 > `lib/graph/`, `tests/unit/graph/fixtures.ts`
 
-If the graph grows a real branch — a repair loop, a per-intent path — this is
-the file that gets replaced, and the node functions move across unchanged.
+The Trainer is the branch that finally earned the library: a loop whose shape
+changes per turn, decided by model output — exactly what the hand-rolled
+runner was never built for, and exactly what an agent framework is.
 
-The honest summary: **this project uses LangSmith for tracing and does not use
-LangChain or LangGraph for orchestration.**
+The honest summary: **the tutor's fixed pipeline is our own 120 lines; the
+Trainer's dynamic loop is LangChain's `createAgent`; LangSmith is the tracing
+backend; and the gateway remains the only place a model SDK lives.**
 
 ---
 

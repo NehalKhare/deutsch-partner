@@ -250,6 +250,30 @@ never appears from nowhere. The whole pipeline is drawn in
 > `app/(app)/scenarios/`, `lib/api/scenarios.ts`, `lib/scenarios/`,
 > `repositories/scenario-repository.ts`, `scripts/scenarios/`
 
+### 6c. Practising with the Trainer
+
+The Trainer (`/trainer`) is a workout where the chat is a conversation: a
+**LangChain agent** that runs the review session the review page only lists.
+Say *"Lass uns üben!"* and it looks up what is due, quizzes one item at a
+time, judges the answer itself, and records the outcome — through the same
+deterministic vocabulary engine a chat turn uses, so the model judges and the
+arithmetic schedules. It can also open the grammar catalogue, search the
+corpus (with the sources cited in the reply), fetch today's headlines from
+nachrichtenleicht.de as simple-German reading, and borrow tools from a
+configured remote MCP server, whose output is always fenced as untrusted.
+
+Every answer arrives with its receipts: the list of tools the agent used and
+the sources it read, because an agent that shows its work is the difference
+between an answer and an assertion. The loop is bounded three ways — a hard
+step cap, a per-request euro ceiling enforced from inside the model's ledger
+callback, and a fail-closed budget check before the first call — and each
+model invocation writes its own ledger row under the `trainer.session` task,
+so the cost dashboard sees the Trainer like everything else. The rate limit
+is half of chat's, because one request here is up to seven model calls.
+
+> `lib/trainer/`, `lib/api/trainer.ts`, `lib/ai/gateway/langchain-model.ts`,
+> `app/(app)/trainer/`
+
 ### 7. Seeing progress
 
 One screen: which mini-level, the score that gates it, what each band amounts

@@ -18,6 +18,11 @@ export const UNTRUSTED_TAGS = [
   "learner_memory",
   "recent_messages",
   "user_message",
+  // The Trainer's two windows on the outside world: whatever a remote MCP
+  // server returns, and the fetched simple-German news. Both are third-party
+  // text and neither gets to sound like policy.
+  "mcp_results",
+  "german_news",
 ] as const;
 
 export type UntrustedTag = (typeof UNTRUSTED_TAGS)[number];

@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 const DESTINATIONS = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/chat", label: "Chat" },
+  { href: "/trainer", label: "Trainer" },
   { href: "/scenarios", label: "Scenarios" },
   { href: "/curriculum", label: "Curriculum" },
   { href: "/review", label: "Review" },

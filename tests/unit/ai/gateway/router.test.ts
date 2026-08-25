@@ -34,6 +34,7 @@ const EXPECTED: Readonly<Record<TaskId, { tier: Tier; input: number; output: num
   // output ceiling is zero. An embedding emits a vector, not tokens.
   "ingestion.embedding": { tier: "embedding", input: 8191, output: 0 },
   "retrieval.embedding": { tier: "embedding", input: 8191, output: 0 },
+  "trainer.session": { tier: "mid", input: 6000, output: 700 },
 };
 
 describe("task router", () => {

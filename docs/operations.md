@@ -14,6 +14,8 @@ value, and none should ever be.
 | `OPENAI_API_KEY` | voice | Speech goes direct; OpenRouter serves no speech model. Without it the microphone is unavailable; the tutor still replies. Also an embedding-key fallback mid-migration |
 | `LOG_PSEUDONYM_SALT` | the ledger | Keys the pseudonymous learner id. Changing it makes past rows unjoinable to future ones |
 | `OPERATOR_USER_IDS` | the cost dashboard | Comma-separated UUIDs. Unset means nobody |
+| `MCP_SERVER_URL` | the Trainer's remote MCP tools | Streamable-HTTP endpoint; unset means local tools only. DeepWiki (`https://mcp.deepwiki.com/mcp`) needs no key |
+| `MCP_SERVER_API_KEY` | authenticated MCP servers | Sent as a bearer header; requires `MCP_SERVER_URL` |
 | `FX_EUR_PER_USD_BOOTSTRAP` | pricing | Used only until the first FX snapshot lands |
 | `OPENROUTER_MODEL_*` | optional | Per-tier model overrides. Empty uses the registry |
 
@@ -147,3 +149,31 @@ asserts the migrations declare it, and that is all.
 
 One advisor finding is open: `auth_leaked_password_protection` is disabled on
 the project. Enabling it is a dashboard toggle.
+
+## The Trainer's request duration
+
+One `/api/trainer` request is a whole agent loop — up to seven model calls
+plus tool fetches — and can legitimately run 30–90 seconds. The route declares
+`maxDuration = 120`; hosting plans with a lower function ceiling (Vercel's
+hobby tier caps at 60s) cut the loop short at their own limit, which surfaces
+to the learner as the trainer being unavailable for that turn. The step cap
+and the per-request euro ceiling bound the worst case either way.
+
+## OpenRouter's account data policy can hide models
+
+OpenRouter serves a model only through endpoints the account's privacy
+settings allow (https://openrouter.ai/settings/privacy). A restrictive policy
+can leave a registry default with **no endpoint at all** — the API answers
+`404 No endpoints available matching your guardrail restrictions and data
+policy` — and which models are affected depends on the account, not the code.
+Both model paths ride this out the same way: the chat transport and the
+Trainer's model ladder try the tier's same-tier fallbacks in order, and the
+ledger shows what actually happened (an error row for the refused model, then
+rows for the one that answered). If the ledger shows a tier permanently
+running on its fallback, either loosen the account's data policy or point the
+tier at an allowed model with its `OPENROUTER_MODEL_*` override — the
+fallback works, but it hides that the chosen primary is never used.
+
+A related note on `.env` hygiene: a blank line such as `MCP_SERVER_API_KEY=`
+reaches the process as an empty string, and `parseEnv` treats blank as unset
+rather than failing validation — so a placeholder line is harmless.

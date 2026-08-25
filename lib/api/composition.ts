@@ -38,8 +38,12 @@ import {
   createSecretKeySupabaseClient,
   createServerSupabaseClient,
 } from "@/lib/supabase/server-client";
+import { createTrainerModelLadder } from "@/lib/ai/gateway/langchain-model";
+import { loadMcpTools } from "@/lib/trainer/mcp";
+import type { TrainerDeps } from "@/lib/api/trainer";
 import { createConversationRepository } from "@/repositories/conversation-repository";
 import { createEmbeddingCache } from "@/repositories/ingestion-repository";
+import { createGrammarRepository } from "@/repositories/grammar-repository";
 import { createLearnerErrorRepository } from "@/repositories/learner-error-repository";
 import { createLearnerRepository } from "@/repositories/learner-repository";
 import { createPerformanceRepository } from "@/repositories/performance-repository";
@@ -307,6 +311,65 @@ export async function createRequestGraph(): Promise<RequestGraph> {
         : RETRIEVAL_UNAVAILABLE,
       evaluator: createEvaluator({ gateway, logger }),
       gateway,
+      logger,
+    },
+  };
+}
+
+/**
+ * The Trainer's dependencies.
+ *
+ * A parallel assembly rather than an extension of createRequestGraph: the
+ * chat graph drags an evaluator and a streaming gateway the trainer never
+ * uses, and the trainer needs two things the chat graph does not expose —
+ * the raw accounting bundle for its model's ledger callback, and the env for
+ * the MCP endpoint. The client split is identical: every tool reads and
+ * writes as the signed-in learner, and only the accounting rides the secret
+ * key.
+ */
+export async function createTrainerGraph(): Promise<{
+  readonly logger: Logger;
+  readonly deps: TrainerDeps;
+}> {
+  const env = serverEnv();
+  const logger = createLogger({
+    base: { service: "trainer", environment: env.NODE_ENV },
+  });
+
+  // RLS applies. Every tool the agent holds is scoped to the signed-in learner.
+  const learnerClient =
+    (await createServerSupabaseClient()) as unknown as DatabaseClient;
+  // Bypasses RLS. Ledger, budgets, pricing and FX — accounting only.
+  const operatorClient =
+    createSecretKeySupabaseClient() as unknown as DatabaseClient;
+
+  const accounting = createUsageAccounting(operatorClient, logger);
+  const embeddings = createEmbeddingServiceOrNull(env, operatorClient, logger);
+  if (!embeddings) {
+    logger.warn("trainer.retrieval_disabled", {
+      reason: "no embedding key configured",
+    });
+  }
+
+  return {
+    logger,
+    deps: {
+      learners: createLearnerRepository(learnerClient),
+      errors: createLearnerErrorRepository(learnerClient),
+      vocabulary: createVocabularyRepository(learnerClient),
+      performance: createPerformanceRepository(learnerClient),
+      grammar: createGrammarRepository(learnerClient),
+      retriever: embeddings
+        ? createRetriever({
+            search: createKnowledgeSearch(learnerClient, logger),
+            embeddings,
+            logger,
+          })
+        : RETRIEVAL_UNAVAILABLE,
+      budgets: accounting,
+      createModels: (context) =>
+        createTrainerModelLadder({ env, accounting, logger }, context),
+      loadMcp: (identity) => loadMcpTools(env, identity, logger),
       logger,
     },
   };

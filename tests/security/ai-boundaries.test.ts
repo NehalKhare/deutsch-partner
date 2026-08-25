@@ -154,10 +154,14 @@ describe("inside the gateway", () => {
   it("opens a connection from exactly the named transport files", () => {
     // One per provider surface the application actually talks to: OpenRouter
     // for chat, completion and embeddings; OpenAI directly for speech, which
-    // OpenRouter does not serve. A fourth needs a deliberate edit here.
+    // OpenRouter does not serve; and the Trainer's LangChain model, whose
+    // connections the OpenAI SDK opens under LangChain, pointed at OpenRouter,
+    // with the accountant attached in the constructor. A fifth needs a
+    // deliberate edit here.
     const transports = [
       join(GATEWAY_DIR, "openrouter.ts"),
       join(GATEWAY_DIR, "openrouter-embeddings.ts"),
+      join(GATEWAY_DIR, "langchain-model.ts"),
       join(VOICE_DIR, "openai.ts"),
     ];
     const offenders = files

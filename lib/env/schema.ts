@@ -134,6 +134,16 @@ const baseSchema = z.object({
   LANGSMITH_API_KEY: secret(),
   LANGSMITH_PROJECT: z.string().min(1).default("deutsch-partner"),
   LANGSMITH_ENDPOINT: z.url().optional(),
+
+  /**
+   * A remote MCP server the Trainer's agent may borrow tools from, over
+   * streamable HTTP. Unset means the Trainer runs on its local tools alone —
+   * a thinner trainer, never a boot failure. The key is optional because the
+   * recommended default (DeepWiki) needs none; a server that wants one gets
+   * it as a bearer header, never in the URL where it would reach logs.
+   */
+  MCP_SERVER_URL: z.url().optional(),
+  MCP_SERVER_API_KEY: secret(),
 });
 
 /** Keys the browser bundle is allowed to see. */
@@ -149,6 +159,7 @@ export const SERVER_ENV_KEYS = [
   "LANGSMITH_API_KEY",
   "LOG_PSEUDONYM_SALT",
   "OPENAI_API_KEY",
+  "MCP_SERVER_API_KEY",
 ] as const;
 
 /** Required in production. Optional elsewhere so the app can still boot. */
@@ -176,6 +187,16 @@ const envSchema = baseSchema.superRefine((env, ctx) => {
       code: "custom",
       path: ["LANGSMITH_API_KEY"],
       message: "is required when LANGSMITH_TRACING is enabled",
+    });
+  }
+
+  // A key with no server to send it to is a configuration mistake, not a
+  // spare part: whoever set it expected authenticated MCP calls to happen.
+  if (env.MCP_SERVER_API_KEY !== undefined && env.MCP_SERVER_URL === undefined) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["MCP_SERVER_URL"],
+      message: "is required when MCP_SERVER_API_KEY is set",
     });
   }
 });
@@ -218,7 +239,15 @@ export function describeIssue(issue: z.core.$ZodIssue): string {
  * `process.env` carries hundreds of unrelated entries.
  */
 export function parseEnv(source: Record<string, string | undefined>): AppEnv {
-  const result = envSchema.safeParse(source);
+  // A blank value in a .env file is "not set", not zero-length content:
+  // every loader hands `KEY=` through as "", and validating that as a
+  // secret would turn a placeholder line into a boot failure.
+  const populated = Object.fromEntries(
+    Object.entries(source).filter(
+      ([, value]) => value !== undefined && value.trim() !== "",
+    ),
+  );
+  const result = envSchema.safeParse(populated);
 
   if (!result.success) {
     throw new EnvValidationError(result.error.issues.map(describeIssue));

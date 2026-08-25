@@ -58,6 +58,10 @@ export const RATE_LIMITS = {
   // Scenario search embeds the query, so it is a model call with a bill —
   // small, cached across learners, but never unlimited (guardrails S7).
   search: { limit: 30, windowMs: 60_000 },
+  // Half of chat's quota because one trainer request is not one model call:
+  // the agent loop makes up to seven, plus whatever its tools fetch. The euro
+  // budgets bound the spend; this bounds how fast a learner can reach them.
+  trainer: { limit: 10, windowMs: 60_000 },
 } as const satisfies Record<string, RateLimitRule>;
 
 export type RateLimitScope = keyof typeof RATE_LIMITS;

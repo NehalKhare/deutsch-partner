@@ -49,6 +49,7 @@ export const TASK_IDS = [
   "ingestion.metadata_tagging",
   "ingestion.embedding",
   "retrieval.embedding",
+  "trainer.session",
 ] as const;
 
 export const taskIdSchema = z.enum(TASK_IDS);
@@ -104,6 +105,14 @@ const ROUTES: Readonly<Record<TaskId, TaskRoute>> = {
    */
   "ingestion.embedding": { tier: "embedding", maxInputTokens: 8191, maxOutputTokens: 0 },
   "retrieval.embedding": { tier: "embedding", maxInputTokens: 8191, maxOutputTokens: 0 },
+  /**
+   * The Trainer's agent loop. Mid tier on purpose: one request is up to
+   * seven model invocations (the step cap plus the final answer), so the
+   * strong tier's price would multiply where a coach's judgement does not
+   * need it. Each iteration is its own call under these ceilings, and each
+   * writes its own ledger row.
+   */
+  "trainer.session": { tier: "mid", maxInputTokens: 6000, maxOutputTokens: 700 },
 };
 
 export function routeFor(task: TaskId): TaskRoute {

@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import { CEFR_LEVELS } from "@/domain/cefr";
 import {
+  TRAINER_PROMPT_NAME,
+  TRAINER_PROMPT_VERSION,
+  trainerSystemPrompt,
+} from "@/lib/ai/prompts/trainer";
+import {
   PROMPT_CATALOGUE,
   behaviorPolicyFor,
   buildOutputContract,
@@ -164,5 +169,24 @@ describe("prompt versions are locked to their text", () => {
     );
 
     expect(new Set(perLevel).size).toBe(CEFR_LEVELS.length);
+  });
+});
+
+describe("the trainer's prompt", () => {
+  /**
+   * The same lock, for the one prompt that lives outside the catalogue: the
+   * Trainer's system prompt is a fixed string handed to an agent loop, so it
+   * is fingerprinted directly. Same contract as above — an edit is either a
+   * hash update (no behavioural effect) or a version bump, never unnoticed.
+   */
+  const RECORDED_TRAINER: Readonly<Record<string, string>> = {
+    "trainer.session@1": "f87108c1",
+  };
+
+  it("matches its recorded fingerprint", () => {
+    const key = `${TRAINER_PROMPT_NAME}@${TRAINER_PROMPT_VERSION}`;
+
+    expect(RECORDED_TRAINER[key]).toBeDefined();
+    expect(fingerprint(trainerSystemPrompt())).toBe(RECORDED_TRAINER[key]);
   });
 });
