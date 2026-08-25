@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 
+import { refreshFxRateAction } from "./actions";
 import {
   eyebrow,
   pageTitle,
@@ -11,11 +12,17 @@ import { cn } from "@/lib/utils";
 import { requireAuthenticatedUserId } from "@/lib/auth/current-user";
 import { isOperator } from "@/lib/auth/operator";
 import {
-  spendPerLearner,
+  conversionRate,
   createCostRepository,
+  inEur,
+  pricedInEur,
   spendAlerts,
+  spendPerLearner,
+  spendPerLearnerUsd,
   worstAlert,
 } from "@/lib/dashboard/costs";
+import { ensureDailyRate } from "@/lib/ops/fx-refresh";
+import { createFxRateSnapshots } from "@/repositories/usage-repository";
 import { createSecretKeySupabaseClient } from "@/lib/supabase/server-client";
 import type { DatabaseClient } from "@/repositories/types";
 
@@ -25,7 +32,14 @@ export const metadata = { title: "AI spend — Deutsch Partner" };
 const GLOBAL_DAILY_LIMIT_EUR = 50;
 
 /**
- * The operator's AI spend, in euro.
+ * The operator's AI spend.
+ *
+ * Reported in euro, with the dollars the provider actually charged beside it.
+ * Both, because the euro figure is derived: it is converted at write time
+ * against the rate snapshotted that day, and a row written when no rate had
+ * ever been snapshotted stores an exact dollar cost and a euro cost of zero.
+ * For as long as this page showed euro alone it reported a working product as
+ * free.
  *
  * Two gates, and both are server-side. The route checks an explicit operator
  * allowlist and 404s otherwise — not 403, because confirming the page exists
@@ -44,6 +58,14 @@ export default async function CostDashboardPage() {
   const from = new Date(to.getTime() - 24 * 60 * 60 * 1000);
 
   const client = createSecretKeySupabaseClient() as unknown as DatabaseClient;
+
+  // Before reading the ledger, because the rate is what the euro column on a
+  // deployment older than its first snapshot is derived from. The source is
+  // asked at most once a day whatever this page is doing, so the ordinary
+  // render costs one indexed read and no network at all; the button in the
+  // header is what asks again.
+  await ensureDailyRate({ snapshots: createFxRateSnapshots(client) });
+
   const summary = await createCostRepository(client).summary(from, to);
 
   if (!summary.ok) {
@@ -57,7 +79,36 @@ export default async function CostDashboardPage() {
 
   const data = summary.data;
   const alerts = spendAlerts(data, { globalDailyEur: GLOBAL_DAILY_LIMIT_EUR });
+
   const rate = data.fxRate[0];
+  const euro = pricedInEur(data);
+  const converting = conversionRate(data);
+
+  const money = (value: number) => value.toFixed(4);
+  const tiles: ReadonlyArray<{
+    readonly label: string;
+    readonly value: string | number;
+    readonly secondary?: string;
+  }> = [
+    {
+      label: "Spend",
+      value: `€${money(euro.total)}`,
+      secondary: `$${money(data.totals.cost_usd)}`,
+    },
+    { label: "Calls", value: data.totals.call_count },
+    { label: "Learners", value: data.totals.learner_count },
+    {
+      // The figure that decides whether this product can ship, so it is the
+      // last one that should be allowed to read zero while the ledger disagrees.
+      label: "Per learner",
+      value: `€${money(spendPerLearner(data))}`,
+      secondary: `$${money(spendPerLearnerUsd(data))}`,
+    },
+    { label: "Failures", value: data.totals.failures },
+    { label: "Denied", value: data.totals.budget_denials },
+    { label: "Truncated", value: data.totals.truncations },
+    { label: "Degraded", value: data.totals.degraded },
+  ];
 
   return (
     <main className="mx-auto flex w-full max-w-4xl flex-col gap-8 px-6 py-10 md:px-10 md:py-14">
@@ -67,8 +118,30 @@ export default async function CostDashboardPage() {
           Last 24 hours · status {worstAlert(alerts)}
           {rate
             ? ` · EUR ${rate.rate} per USD, ${rate.rateDate} (${rate.source})`
-            : " · no exchange rate recorded"}
+            : " · no exchange rate recorded, so every euro figure below is zero"}
         </p>
+
+        {/* Said once, here, rather than as a banner: it is a caveat about how
+            one figure was arrived at, not something wrong with the day. */}
+        {euro.estimatedCalls > 0 ? (
+          <p className="font-display text-sm text-chalk/40">
+            €{money(euro.estimated)} of that is {euro.estimatedCalls} call
+            {euro.estimatedCalls === 1 ? "" : "s"} converted at this rate — they
+            were written before any rate existed and carry none of their own.
+            The other €{money(euro.charged)} is what was charged.
+          </p>
+        ) : null}
+
+        <form action={refreshFxRateAction}>
+          <button
+            type="submit"
+            className="rounded-lg border border-haze/60 px-3 py-1 font-display text-xs uppercase tracking-wide text-chalk/60 transition-colors hover:border-chalk/40 hover:text-chalk"
+          >
+            {/* The source is read once a day on its own. This is the rest of
+                the day — it publishes in the afternoon. */}
+            Refresh rate
+          </button>
+        </form>
       </header>
 
       {alerts.length > 0 ? (
@@ -94,20 +167,18 @@ export default async function CostDashboardPage() {
       ) : null}
 
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {[
-          ["Spend", `€${data.totals.cost_eur.toFixed(4)}`],
-          ["Calls", data.totals.call_count],
-          ["Learners", data.totals.learner_count],
-          ["Per learner", `€${spendPerLearner(data).toFixed(4)}`],
-          ["Failures", data.totals.failures],
-          ["Denied", data.totals.budget_denials],
-          ["Truncated", data.totals.truncations],
-          ["Degraded", data.totals.degraded],
-        ].map(([label, value]) => (
-          <div key={String(label)} className={stat}>
-            <dt className={eyebrow}>{label}</dt>
+        {tiles.map((tile) => (
+          <div key={tile.label} className={stat}>
+            <dt className={eyebrow}>{tile.label}</dt>
             <dd className="mt-1 font-display text-xl font-semibold tabular-nums text-chalk">
-              {value}
+              {tile.value}
+              {/* Euro leads and dollars sit under it, quietly: the same money
+                  twice, one figure of which can be missing. */}
+              {tile.secondary === undefined ? null : (
+                <span className="block text-sm font-normal text-chalk/45">
+                  {tile.secondary}
+                </span>
+              )}
             </dd>
           </div>
         ))}
@@ -126,12 +197,13 @@ export default async function CostDashboardPage() {
               <th scope="col" className="text-right">Tokens in</th>
               <th scope="col" className="text-right">Tokens out</th>
               <th scope="col" className="text-right">EUR</th>
+              <th scope="col" className="text-right">USD</th>
             </tr>
           </thead>
           <tbody>
             {data.byTask.length === 0 ? (
               <tr className="border-t border-haze/50">
-                <td colSpan={6} className="py-3 font-body text-chalk/45">
+                <td colSpan={7} className="py-3 font-body text-chalk/45">
                   No calls in this window.
                 </td>
               </tr>
@@ -146,7 +218,10 @@ export default async function CostDashboardPage() {
                 <td className="text-right tabular-nums">{row.calls}</td>
                 <td className="text-right tabular-nums">{row.inputTokens}</td>
                 <td className="text-right tabular-nums">{row.outputTokens}</td>
-                <td className="text-right tabular-nums">{row.costEur.toFixed(6)}</td>
+                <td className="text-right tabular-nums">
+                  {inEur(row.costEur, row.costUsdUnpriced, converting).toFixed(6)}
+                </td>
+                <td className="text-right tabular-nums">{row.costUsd.toFixed(6)}</td>
               </tr>
             ))}
           </tbody>
@@ -163,12 +238,13 @@ export default async function CostDashboardPage() {
               <th scope="col" className="py-1">Model</th>
               <th scope="col" className="text-right">Calls</th>
               <th scope="col" className="text-right">EUR</th>
+              <th scope="col" className="text-right">USD</th>
             </tr>
           </thead>
           <tbody>
             {data.byModel.length === 0 ? (
               <tr className="border-t border-haze/50">
-                <td colSpan={3} className="py-3 font-body text-chalk/45">
+                <td colSpan={4} className="py-3 font-body text-chalk/45">
                   No calls in this window.
                 </td>
               </tr>
@@ -177,7 +253,10 @@ export default async function CostDashboardPage() {
               <tr key={row.modelId} className="border-t border-haze/50 text-chalk/80">
                 <td className="py-1">{row.modelId}</td>
                 <td className="text-right tabular-nums">{row.calls}</td>
-                <td className="text-right tabular-nums">{row.costEur.toFixed(6)}</td>
+                <td className="text-right tabular-nums">
+                  {inEur(row.costEur, row.costUsdUnpriced, converting).toFixed(6)}
+                </td>
+                <td className="text-right tabular-nums">{row.costUsd.toFixed(6)}</td>
               </tr>
             ))}
           </tbody>

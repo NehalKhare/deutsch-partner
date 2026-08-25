@@ -131,9 +131,9 @@ retrieval evaluation.
 
 ## Status
 
-Every phase of the build specification is implemented: 2519 tests across 135
+Every phase of the build specification is implemented: 2850 tests across 154
 files (plus 31 Python tests), typecheck, lint and a production build clean,
-and 25 migrations for the linked project.
+and 28 migrations for the linked project.
 
 **No chat model has ever been called.** Every test drives a fake transport; the
 real transports are written and tested against a fake `fetch`. The embedding

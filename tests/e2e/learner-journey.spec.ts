@@ -88,7 +88,22 @@ test.describe("the learner journey", () => {
 
     await expect(page.getByRole("progressbar")).toBeVisible();
     await expect(page.getByRole("heading", { name: /vocabulary/i })).toBeVisible();
-    await expect(page.getByRole("heading", { name: /recent conversations/i })).toBeVisible();
+  });
+
+  test("7a. opens a vocabulary figure into the words behind it", async ({ page }) => {
+    await signIn(page);
+
+    // A count on its own is not something a learner can use. Whether there are
+    // words yet depends on what this fixture has said, so both states are
+    // asserted for what they are: the panel opens either way.
+    const known = page.getByRole("button", { name: /known/i });
+    await expect(known).toHaveAttribute("aria-expanded", "false");
+
+    await known.click();
+
+    await expect(known).toHaveAttribute("aria-expanded", "true");
+    const panel = page.locator(`#${await known.getAttribute("aria-controls")}`);
+    await expect(panel).toBeVisible();
   });
 
   test("7b. offers something to do next, and the link works", async ({ page }) => {
@@ -111,44 +126,10 @@ test.describe("the learner journey", () => {
     await expect(page.getByRole("heading", { name: /overdue/i })).toBeVisible();
   });
 
-  test("9. deletes a conversation, and it is gone on reload", async ({ page }) => {
-    await signIn(page);
-    const threadId = await startThread(page);
-
-    await page.goto("/dashboard");
-    const row = page.locator("li", { has: page.locator(`a[href="/chat/${threadId}"]`) });
-    await expect(row).toBeVisible();
-
-    // The row's live region is present and not display:none before there is
-    // anything in it. A region hidden until its message arrives is one a
-    // screen reader can miss entirely.
-    await expect(row.getByRole("status")).toHaveCount(1);
-    await expect(row.getByRole("status")).not.toHaveCSS("display", "none");
-
-    // One press arms, the second deletes. A single-press delete on a list of
-    // links is a mis-click away from losing a conversation.
-    await row.getByRole("button", { name: /^delete/i }).first().click();
-    await expect(row.getByText(/cannot be undone/i)).toBeVisible();
-    await row.getByRole("button", { name: /for good/i }).click();
-
-    await expect(row).toHaveCount(0);
-
-    // And the keyboard is somewhere, rather than back at the top of the
-    // document with no word about what happened.
-    await expect(page.getByText(/^Deleted /)).toBeVisible();
-    await expect(page.getByText(/^Deleted /)).toBeFocused();
-
-    // The row going is the client being told. This is the database being asked
-    // again, which is the part that could be a lie.
-    await page.reload();
-    await expect(page.locator(`a[href="/chat/${threadId}"]`)).toHaveCount(0);
-
-    // And the thread itself is a 404, not merely hidden from a list.
-    await page.goto(`/chat/${threadId}`);
-    await expect(page.getByRole("heading", { level: 1 })).not.toHaveText(
-      /Hallo|Tsch/,
-    );
-  });
+  // The conversation list this journey used to end on is gone from the
+  // dashboard, and with it the only route to the delete control. The action
+  // and its component are still tested in tests/unit; there is no longer a
+  // page from which to drive them.
 });
 
 test.describe("what a signed-out visitor cannot do", () => {

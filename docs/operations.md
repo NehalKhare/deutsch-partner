@@ -15,7 +15,7 @@ value, and none should ever be.
 | `OPERATOR_USER_IDS` | the cost dashboard | Comma-separated UUIDs. Unset means nobody |
 | `MCP_SERVER_URL` | the Trainer's remote MCP tools | Streamable-HTTP endpoint; unset means local tools only. DeepWiki (`https://mcp.deepwiki.com/mcp`) needs no key |
 | `MCP_SERVER_API_KEY` | authenticated MCP servers | Sent as a bearer header; requires `MCP_SERVER_URL` |
-| `FX_EUR_PER_USD_BOOTSTRAP` | pricing | Used only until the first FX snapshot lands |
+| `FX_EUR_PER_USD_BOOTSTRAP` | pricing | Optional. Prices calls made before the first `pnpm fx:refresh` lands; without it those rows are recorded as unpriced |
 | `OPENROUTER_MODEL_*` | optional | Per-tier model overrides. Empty uses the registry |
 
 The legacy Supabase JWT `anon` and `service_role` keys are **rejected at boot**.
@@ -30,9 +30,10 @@ contributor can run the app and the suite without provisioning anything.
 
 ```bash
 pnpm install
-pnpm db:push          # 20 migrations: 22 tables, RLS, functions
+pnpm db:push          # 28 migrations: 24 tables, RLS, functions
 pnpm db:seed          # curriculum, vocabulary and grammar seeds
 pnpm dummy:user       # a confirmed fixture learner, credentials printed
+pnpm fx:refresh       # the euro rate — until this runs, spend is recorded unpriced
 pnpm ingest           # embeds the corpus — this one costs money (~$0.001)
 pnpm scenarios:ingest # embeds the 50-scenario corpus — also costs money (~$0.001)
 pnpm dev
@@ -56,7 +57,7 @@ applied an earlier version gets the update from `db:seed`.
 
 | Command | What it does |
 | --- | --- |
-| `pnpm verify` | Typecheck, lint, 2519 tests, then a production build |
+| `pnpm verify` | Typecheck, lint, 2850 tests, then a production build |
 | `pnpm test:unit` | Unit and component tests |
 | `pnpm test:db` | Migrations, constraints and RLS against real Postgres via PGlite |
 | `pnpm test:e2e` | Playwright against a production build on port 3100 |
@@ -66,6 +67,7 @@ applied an earlier version gets the update from `db:seed`.
 | `pnpm scenarios:eval` | Retrieval evaluation: hit@5 plus ragas metrics. `--retrieval-only` skips the judge model |
 | `pnpm scenarios:test` | The Python parser and plan tests |
 | `pnpm curriculum:generate` | Rewrites the three generated seed migrations |
+| `pnpm fx:refresh` | Snapshots the euro rate the ledger prices in. Asks the source at most once a day, so an hourly cron is fine; `--force` asks anyway |
 
 ## Cost
 
@@ -115,10 +117,30 @@ OpenRouter may substitute. Alerts fire at 70%, 90% and 100% of the daily budget.
 `budget_denied` rows are a security audit event as well as a cost one: a learner
 who can trigger unbounded spend has found a financial denial of service.
 
-**Euro figures look wrong or are zero.** Check `fx_stale` on the ledger. A call
-made when no FX rate had ever been snapshotted records the exact dollars and
-declares itself unpriced rather than inventing a euro figure. The dashboard
-surfaces the count.
+**Euro figures are zero.** The rate table is empty and nothing can be
+converted. The cost dashboard fetches the rate itself when it renders — at most
+once a day, guarded on when the source was last *read* rather than which date
+it answered with, because the reference rate for a day is published in the
+afternoon. **Refresh rate** in the page header asks again immediately;
+`pnpm fx:refresh --force` does the same from a terminal. If euro figures are
+still zero after that, the source is unreachable: check for `fx.source_unavailable`
+in the logs.
+
+Two euro figures are on that page and they are not the same claim. Rows written
+while a rate existed were converted at write time and their stored `cost_eur` is
+final — never restated, whatever the rate does afterwards. Rows written before
+any rate existed carry none, and the ledger is append-only, so they keep their
+stored zero for good; the dashboard converts *those* rows at the newest rate for
+display and states how much of the total that is. Nothing is written back.
+
+The dashboard distinguishes two states that both set `fx_stale` on the ledger.
+`fx_unpriced` fires only when rows carry no rate *and* none has been snapshotted
+to convert them at — once there is a rate the caveat moves to the line under the
+title, where a note about a figure belongs. `fx_pipeline` means the newest
+snapshot is more than four days old: the source publishes on business days, so a
+long weekend is fine and a week is a job that has stopped. Rows priced at a
+carried-forward rate are counted, not alerted on — they are priced correctly, at
+the last rate the source published.
 
 **A migration will not apply.** pgvector lives in the `extensions` schema on a
 real Supabase project but is created in `public` locally, so new migrations must

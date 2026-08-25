@@ -12,6 +12,12 @@ import type { DatabaseClient } from "@/repositories/types";
  * true at the rate that applied then, and restating it when the rate moves
  * would make last month's figures change without last month changing.
  *
+ * Dollars come through beside it, because euro is the derived figure and can
+ * be missing. A call whose row was written before any rate had been snapshotted
+ * carries an exact dollar cost and a euro cost of zero, and a screen that
+ * showed only the second would report a busy day as free. Euro leads; dollars
+ * are what makes the page true when it cannot.
+ *
  * Nothing here carries conversation content or an identifying field. The
  * ledger only ever held a pseudonym, so there is nothing on this screen to
  * leak even to somebody who reaches it.
@@ -25,13 +31,19 @@ export const costSummarySchema = z.object({
     call_count: numeric.int().min(0),
     learner_count: numeric.int().min(0),
     cost_eur: numeric.min(0),
+    cost_usd: numeric.min(0),
+    /** The dollars belonging to rows that carry no euro figure of their own. */
+    cost_usd_unpriced: numeric.min(0),
     input_tokens: numeric.int().min(0),
     output_tokens: numeric.int().min(0),
     failures: numeric.int().min(0),
     budget_denials: numeric.int().min(0),
     truncations: numeric.int().min(0),
     degraded: numeric.int().min(0),
+    /** Rows carrying no rate at all. Their euro figure is zero and is not spend. */
     unpriced: numeric.int().min(0),
+    /** Rows priced at a rate from an earlier day. Normal over a weekend. */
+    carried_forward: numeric.int().min(0),
   }),
   byTask: z
     .array(
@@ -40,6 +52,8 @@ export const costSummarySchema = z.object({
         tier: tierSchema,
         calls: numeric.int().min(0),
         costEur: numeric.min(0),
+        costUsd: numeric.min(0),
+        costUsdUnpriced: numeric.min(0),
         inputTokens: numeric.int().min(0),
         outputTokens: numeric.int().min(0),
       }),
@@ -51,6 +65,8 @@ export const costSummarySchema = z.object({
         modelId: z.string(),
         calls: numeric.int().min(0),
         costEur: numeric.min(0),
+        costUsd: numeric.min(0),
+        costUsdUnpriced: numeric.min(0),
       }),
     )
     .max(50),
@@ -91,6 +107,71 @@ export function createCostRepository(client: DatabaseClient): CostRepository {
   };
 }
 
+// --- completing the euro column ---------------------------------------------
+
+/** The precision the ledger's numeric columns store. */
+const SCALE = 1e8;
+
+export interface EuroTotal {
+  /** Stored euro plus the estimate below. What the page leads with. */
+  readonly total: number;
+  /** What was charged, converted on the day and never restated. */
+  readonly charged: number;
+  /** Unpriced dollars at the newest rate. An estimate, and labelled as one. */
+  readonly estimated: number;
+  /** How many rows the estimate covers. Zero means the total is all charged. */
+  readonly estimatedCalls: number;
+}
+
+/**
+ * The rate the page converts unpriced rows at, or undefined.
+ *
+ * The newest snapshot, which is not the rate any of those rows would have had
+ * — they have none, which is the entire problem with them.
+ */
+export function conversionRate(summary: CostSummary): number | undefined {
+  return summary.fxRate[0]?.rate;
+}
+
+/** Stored euro, plus whatever dollars carry no euro of their own, converted. */
+export function inEur(
+  costEur: number,
+  unpricedUsd: number,
+  rate: number | undefined,
+): number {
+  if (rate === undefined) return costEur;
+
+  return Math.round((costEur + unpricedUsd * rate) * SCALE) / SCALE;
+}
+
+/**
+ * What the window cost in euro, including the rows nobody could price.
+ *
+ * Two kinds of money added together, and the split is kept because they are
+ * not the same claim. The charged part was converted at the rate that applied
+ * on the day and is what the provider billed. The estimated part is dollars
+ * from rows written before any rate existed, converted at today's — a figure
+ * that is right about the magnitude and cannot be right about the day.
+ *
+ * Nothing here writes. The ledger is append-only and those rows keep their
+ * stored zero; this is the reading, not a correction.
+ */
+export function pricedInEur(summary: CostSummary): EuroTotal {
+  const rate = conversionRate(summary);
+  const totals = summary.totals;
+  const estimated =
+    rate === undefined
+      ? 0
+      : Math.round(totals.cost_usd_unpriced * rate * SCALE) / SCALE;
+
+  return {
+    total: Math.round((totals.cost_eur + estimated) * SCALE) / SCALE,
+    charged: totals.cost_eur,
+    estimated,
+    estimatedCalls: rate === undefined ? 0 : totals.unpriced,
+  };
+}
+
 // --- alerting ---------------------------------------------------------------
 
 export const ALERT_LEVELS = ["ok", "warn", "degrade", "deny"] as const;
@@ -115,7 +196,9 @@ export function spendAlerts(
   limits: { readonly globalDailyEur: number },
 ): readonly SpendAlert[] {
   const alerts: SpendAlert[] = [];
-  const spent = summary.totals.cost_eur;
+  // The completed figure, not the stored one: a limit checked against a column
+  // that reads zero for every unpriced row is a limit nothing can reach.
+  const spent = pricedInEur(summary).total;
   const ratio = limits.globalDailyEur > 0 ? spent / limits.globalDailyEur : Infinity;
 
   if (ratio >= 1) {
@@ -148,13 +231,22 @@ export function spendAlerts(
     });
   }
 
-  if (summary.totals.unpriced > 0) {
+  if (summary.totals.unpriced > 0 && conversionRate(summary) === undefined) {
+    // Only when there is no rate to convert them with. Once there is one the
+    // page states what it converted and at which rate, in the line under the
+    // title, which is where a caveat about a figure belongs — a banner that
+    // fires on every window containing an old call is a banner nobody reads.
     alerts.push({
       level: "warn",
-      scope: "fx_stale",
-      detail: `${summary.totals.unpriced} call${summary.totals.unpriced === 1 ? "" : "s"} could not be priced in euro`,
+      scope: "fx_unpriced",
+      detail:
+        `${summary.totals.unpriced} call${summary.totals.unpriced === 1 ? "" : "s"} ` +
+        "carry no exchange rate and no rate has been snapshotted to convert them at",
     });
   }
+
+  const pipeline = fxPipelineAlert(summary);
+  if (pipeline) alerts.push(pipeline);
 
   if (summary.totals.truncations > 0) {
     alerts.push({
@@ -176,9 +268,63 @@ export const worstAlert = (alerts: readonly SpendAlert[]): AlertLevel =>
     "ok",
   );
 
+/**
+ * Whether the rate behind the euro column is still being refreshed.
+ *
+ * The snapshot job runs daily and the source publishes on business days, so a
+ * rate one day old is ordinary and a rate three days old over a weekend still
+ * is. Older than that, or absent entirely, and the job has stopped: every row
+ * written since has been priced at a rate nobody checked, or not priced at all.
+ */
+const FX_PIPELINE_STALE_AFTER_DAYS = 4;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function fxPipelineAlert(summary: CostSummary): SpendAlert | null {
+  const newest = summary.fxRate[0];
+
+  if (newest === undefined) {
+    // Nothing to warn about on a window with no calls in it.
+    return summary.totals.call_count === 0
+      ? null
+      : {
+          level: "warn",
+          scope: "fx_pipeline",
+          detail: "no exchange rate has ever been snapshotted; run the refresh job",
+        };
+  }
+
+  const published = Date.parse(`${newest.rateDate}T00:00:00.000Z`);
+  if (Number.isNaN(published)) return null;
+
+  const age = (summary.window.to.getTime() - published) / DAY_MS;
+
+  return age <= FX_PIPELINE_STALE_AFTER_DAYS
+    ? null
+    : {
+        level: "warn",
+        scope: "fx_pipeline",
+        detail: `the newest exchange rate is from ${newest.rateDate}`,
+      };
+}
+
 /** Cost per learner over the window. The number that decides whether this ships. */
 export function spendPerLearner(summary: CostSummary): number {
   return summary.totals.learner_count === 0
     ? 0
-    : summary.totals.cost_eur / summary.totals.learner_count;
+    : pricedInEur(summary).total / summary.totals.learner_count;
+}
+
+/**
+ * The same figure in dollars.
+ *
+ * Not a nicety: euro is derived and can be zero for a window in which real
+ * money was spent, and cost per learner is the number that decides whether
+ * this product can ship. It should not be able to read zero while the ledger
+ * says otherwise.
+ */
+export function spendPerLearnerUsd(summary: CostSummary): number {
+  return summary.totals.learner_count === 0
+    ? 0
+    : summary.totals.cost_usd / summary.totals.learner_count;
 }

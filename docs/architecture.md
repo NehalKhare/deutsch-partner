@@ -192,8 +192,24 @@ Stated here so nobody has to discover it by reading the code.
   Which tier each task belongs on is the routing document's judgement, unmeasured.
 - **Rate limiting is in-memory.** Per instance, and forgiving on restart. The
   interface is what a Redis backing swaps into.
-- **No pricing snapshot job and no FX snapshot job.** Both tables are read
-  correctly and both degrade correctly when empty.
+- **No pricing snapshot job.** `model_pricing_snapshots` is read correctly and
+  degrades correctly when empty, and it is still empty: it is the fallback for a
+  provider that reports no cost of its own, and OpenRouter reports one on every
+  call the gateway makes. So the estimator behind the budget gate has nothing to
+  read, and a provider that went quiet about cost would be recorded as free.
+  The FX snapshot job it was listed beside now exists — `pnpm fx:refresh`,
+  snapshotting the ECB daily reference rate, which is what the euro column on
+  the cost dashboard is derived from. Its absence was not a degraded figure but
+  a wrong one: with the rate table empty, every ledger row ever written declared
+  itself unpriced and the dashboard reported months of real dollars as €0.0000.
+  The cost dashboard also reads the source itself, at most once a day, and
+  carries a control to ask again — the rate publishes in the afternoon.
+- **Rows written before the first rate are converted for display, not fixed.**
+  They carry no rate and the ledger is append-only, so their stored `cost_eur`
+  stays zero for good. The dashboard converts their dollars at the newest rate
+  so the page can answer "what did this cost in euro", keeps that figure apart
+  from what was actually charged, and says which is which. It is right about
+  the magnitude and cannot be right about the day.
 - **Voice calls are not budgeted or ledgered.** Every other model call in the
   product is routed, capped, priced and written to an append-only ledger.
   Transcription and speech are not: they are billed per minute and per

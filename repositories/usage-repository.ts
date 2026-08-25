@@ -5,7 +5,12 @@ import {
   type BudgetSnapshot,
   type BudgetSource,
 } from "@/lib/ai/gateway/budget-gate";
-import type { FxRateStore, StoredFxRate } from "@/lib/ai/gateway/fx";
+import type {
+  FxRateSnapshots,
+  FxRateStore,
+  FxWriteResult,
+  StoredFxRate,
+} from "@/lib/ai/gateway/fx";
 import type {
   BudgetIncrement,
   LedgerRow,
@@ -215,6 +220,61 @@ export function createUsageAccounting(
         currency: parsed.data.currency,
         fetchedAt: parsed.data.fetched_at,
       };
+    },
+  };
+}
+
+const fetchedRowSchema = z.object({ fetched_at: z.coerce.date() });
+
+/**
+ * The daily rate snapshot, written.
+ *
+ * Its own factory rather than another method on UsageAccounting: that bundle is
+ * what the gateway holds on every request, and a request has no business being
+ * able to rewrite the exchange rate it is about to be priced at.
+ *
+ * One row per currency pair per day, replaced on conflict, so a job that runs
+ * twice — or runs again after the source publishes later in the day — records
+ * the day once rather than twice.
+ */
+export function createFxRateSnapshots(client: DatabaseClient): FxRateSnapshots {
+  return {
+    async lastFetchedAt(): Promise<Date | null> {
+      // Ordered by when we asked, not by the date we were told. Before the
+      // source publishes today's rate it answers with yesterday's, and a job
+      // that keyed off the answer's date would ask again on every page view.
+      const outcome = await client
+        .from("fx_rates")
+        .select("fetched_at")
+        .eq("base_currency", "USD")
+        .eq("quote_currency", "EUR")
+        .order("fetched_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (outcome.error || outcome.data === null) return null;
+
+      const parsed = fetchedRowSchema.safeParse(outcome.data);
+
+      return parsed.success ? parsed.data.fetched_at : null;
+    },
+
+    async save(rate: StoredFxRate): Promise<FxWriteResult> {
+      const outcome = await client.from("fx_rates").upsert(
+        {
+          base_currency: "USD",
+          quote_currency: "EUR",
+          rate: rate.eurPerUsd,
+          rate_date: rate.rateDate,
+          source: rate.source,
+          fetched_at: new Date().toISOString(),
+        },
+        { onConflict: "base_currency,quote_currency,rate_date" },
+      );
+
+      return outcome.error
+        ? { ok: false, detail: outcome.error.code ?? "fx_write_failed" }
+        : { ok: true };
     },
   };
 }

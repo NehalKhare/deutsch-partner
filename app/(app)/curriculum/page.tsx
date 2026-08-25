@@ -8,6 +8,7 @@ import {
 import { PendingButton } from "@/components/curriculum/pending-button";
 import { SwitchLevel } from "@/components/curriculum/switch-level";
 import {
+  ARTICLE_COLOR,
   buttonQuiet,
   card,
   eyebrow,
@@ -28,17 +29,6 @@ import { createServerSupabaseClient } from "@/lib/supabase/server-client";
 import type { DatabaseClient } from "@/repositories/types";
 
 export const metadata = { title: "Curriculum — Deutsch Partner" };
-
-/**
- * The gender colours German course books have printed for decades: der blue,
- * die red, das green. Used wherever an article appears, so the association is
- * learned by exposure. Defined once here; the tokens live in the theme.
- */
-const ARTICLE_COLOR: Readonly<Record<string, string>> = {
-  der: "text-der",
-  die: "text-die",
-  das: "text-das",
-};
 
 const ARTICLE_BORDER: Readonly<Record<string, string>> = {
   der: "border-t-der/60",

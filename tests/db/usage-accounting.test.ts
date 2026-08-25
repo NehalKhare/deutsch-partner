@@ -112,6 +112,7 @@ beforeEach(async () => {
   // deliberately refuses a delete, which is the point of the test below.
   await database.db.exec(`
     truncate public.model_invocations, public.budget_counters, public.budget_limits;
+    truncate public.fx_rates;
   `);
 });
 
@@ -434,6 +435,142 @@ describe("the accounting tables are operator-only", () => {
       await expect(
         database.db.query(`select * from public.budget_snapshot($1, $2)`, [HASH_BOB, NOW]),
       ).rejects.toThrow();
+    });
+  });
+});
+
+describe("cost_dashboard", () => {
+  // Rows are stamped by the database's own clock, so the window is expressed
+  // against it rather than against a date written down here.
+  const CALL = `public.cost_dashboard(now() - interval '1 hour', now() + interval '1 hour')`;
+
+  async function summary() {
+    const result = await database.db.query<{ cost_dashboard: unknown }>(
+      `select ${CALL}`,
+    );
+    return result.rows[0].cost_dashboard as {
+      totals: Record<string, number>;
+      byTask: Array<Record<string, number | string>>;
+      byModel: Array<Record<string, number | string>>;
+      fxRate: Array<Record<string, unknown>>;
+    };
+  }
+
+  it("sums the dollars the provider charged, not only the euro", async () => {
+    // The state every deployment starts in: real spend, no rate ever
+    // snapshotted, and a euro column that can only be zero. A summary that
+    // reported euro alone described a working product as free.
+    await record({ cost_usd: 0.004, fx_rate_eur_per_usd: null, fx_stale: true, cost_eur: 0 }, []);
+    await record({ cost_usd: 0.006, fx_rate_eur_per_usd: null, fx_stale: true, cost_eur: 0 }, []);
+
+    const totals = (await summary()).totals;
+
+    expect(Number(totals.cost_usd)).toBeCloseTo(0.01, 8);
+    expect(Number(totals.cost_eur)).toBe(0);
+    expect(Number(totals.call_count)).toBe(2);
+  });
+
+  it("counts a row with no rate as unpriced", async () => {
+    await record({ fx_rate_eur_per_usd: null, fx_stale: true, cost_eur: 0 }, []);
+
+    const totals = (await summary()).totals;
+
+    expect(Number(totals.unpriced)).toBe(1);
+    expect(Number(totals.carried_forward)).toBe(0);
+  });
+
+  it("counts a row priced at yesterday's rate as carried forward, not unpriced", async () => {
+    // Both set fx_stale, and they are not the same thing: this row is priced
+    // correctly, at a rate the source published on the last day it published.
+    // Counting them together is why the warning could never clear.
+    await record({ fx_stale: true }, []);
+
+    const totals = (await summary()).totals;
+
+    expect(Number(totals.unpriced)).toBe(0);
+    expect(Number(totals.carried_forward)).toBe(1);
+  });
+
+  it("separates the dollars that carry no euro figure of their own", async () => {
+    // What the read layer converts at today's rate — and only this, because
+    // adding a rate to the whole dollar column would count the priced rows
+    // twice.
+    await record({ cost_usd: 0.004, fx_rate_eur_per_usd: null, fx_stale: true, cost_eur: 0 }, []);
+    await record({ cost_usd: 0.006 }, []);
+
+    const totals = (await summary()).totals;
+
+    expect(Number(totals.cost_usd)).toBeCloseTo(0.01, 8);
+    expect(Number(totals.cost_usd_unpriced)).toBeCloseTo(0.004, 8);
+  });
+
+  it("reports no unpriced dollars for a window that was fully priced", async () => {
+    await record({ cost_usd: 0.006 }, []);
+
+    expect(Number((await summary()).totals.cost_usd_unpriced)).toBe(0);
+  });
+
+  it("splits the unpriced dollars down into the breakdowns too", async () => {
+    await record({ cost_usd: 0.004, fx_rate_eur_per_usd: null, fx_stale: true, cost_eur: 0 }, []);
+    await record({ cost_usd: 0.006 }, []);
+
+    const data = await summary();
+
+    expect(Number(data.byTask[0].costUsd)).toBeCloseTo(0.01, 8);
+    expect(Number(data.byTask[0].costUsdUnpriced)).toBeCloseTo(0.004, 8);
+    expect(Number(data.byModel[0].costUsdUnpriced)).toBeCloseTo(0.004, 8);
+  });
+
+  it("carries the dollars down into the per-task and per-model breakdowns", async () => {
+    await record({ cost_usd: 0.004, fx_rate_eur_per_usd: null, fx_stale: true, cost_eur: 0 }, []);
+
+    const data = await summary();
+
+    expect(Number(data.byTask[0].costUsd)).toBeCloseTo(0.004, 8);
+    expect(Number(data.byModel[0].costUsd)).toBeCloseTo(0.004, 8);
+  });
+
+  it("orders the breakdowns by dollars, so the order survives an unpriced window", async () => {
+    await record(
+      { task: "trainer.session", tier: "mid", cost_usd: 0.05, fx_rate_eur_per_usd: null, fx_stale: true, cost_eur: 0 },
+      [],
+    );
+    await record(
+      { task: "conversation.turn", cost_usd: 0.001, fx_rate_eur_per_usd: null, fx_stale: true, cost_eur: 0 },
+      [],
+    );
+
+    const data = await summary();
+
+    expect(data.byTask.map((row) => row.task)).toEqual([
+      "trainer.session",
+      "conversation.turn",
+    ]);
+  });
+
+  it("states the rate behind the euro column when there is one", async () => {
+    await database.db.exec(`
+      insert into public.fx_rates (base_currency, quote_currency, rate, rate_date, source)
+      values ('USD', 'EUR', 0.85, current_date, 'ecb');
+    `);
+
+    const rates = (await summary()).fxRate;
+
+    expect(rates).toHaveLength(1);
+    expect(rates[0]).toMatchObject({ source: "ecb" });
+  });
+
+  it("reports an empty window without failing", async () => {
+    const totals = (await summary()).totals;
+
+    expect(Number(totals.call_count)).toBe(0);
+    expect(Number(totals.cost_usd)).toBe(0);
+    expect(Number(totals.cost_eur)).toBe(0);
+  });
+
+  it("is granted to nobody but the secret key", async () => {
+    await database.asLearner(ALICE, async () => {
+      await expect(database.db.query(`select ${CALL}`)).rejects.toThrow();
     });
   });
 });

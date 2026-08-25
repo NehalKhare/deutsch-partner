@@ -1,8 +1,7 @@
 import Link from "next/link";
 
-import { deleteThreadAction } from "@/app/(app)/chat/actions";
 import { Companion } from "@/components/companion/companion";
-import { ThreadList } from "@/components/chat/thread-list";
+import { VocabularyTiles } from "@/components/dashboard/vocabulary-tiles";
 import {
   card,
   eyebrow,
@@ -23,12 +22,24 @@ import {
   levelProgress,
   recommendNext,
 } from "@/lib/dashboard/summary";
+import { vocabularyWords } from "@/lib/dashboard/vocabulary";
 import { MASTERY_MIN_TURNS } from "@/learning/progression";
 import { createLearnerRepository } from "@/repositories/learner-repository";
+import { createVocabularyRepository } from "@/repositories/vocabulary-repository";
 import { createServerSupabaseClient } from "@/lib/supabase/server-client";
 import type { DatabaseClient } from "@/repositories/types";
 
 export const metadata = { title: "Dashboard — Deutsch Partner" };
+
+/**
+ * How many progress rows to read for the vocabulary lists.
+ *
+ * The tiles are counted in the database over every row a learner has; this
+ * caps what the lists behind them can show, and the panel says so when the two
+ * differ. Two hundred is comfortably more words than the catalogue introduces
+ * before B2, and small enough to send with a page.
+ */
+const VOCABULARY_SHOWN = 200;
 
 /**
  * The learner's progress.
@@ -44,9 +55,14 @@ export default async function DashboardPage() {
   const learnerId = await requireAuthenticatedUserId();
   const supabase = (await createServerSupabaseClient()) as unknown as DatabaseClient;
 
-  const [summary, profile] = await Promise.all([
+  const vocabulary = createVocabularyRepository(supabase);
+
+  const [summary, profile, practised] = await Promise.all([
     createDashboardRepository(supabase).summary(),
     createLearnerRepository(supabase).getProfile(learnerId),
+    // The learner's progress rows. The words they point at are fetched below,
+    // because an id is not something to show anybody.
+    vocabulary.listForLearner(learnerId, VOCABULARY_SHOWN),
   ]);
 
   if (!summary.ok) {
@@ -61,6 +77,16 @@ export default async function DashboardPage() {
   }
 
   const data = summary.data;
+  const records = practised.ok ? practised.data : [];
+  const items = await vocabulary.findByIds(
+    records.map((record) => record.vocabularyItemId),
+  );
+  const words = vocabularyWords({
+    records,
+    items: items.ok ? items.data : [],
+    now: new Date(),
+  });
+
   const interests = profile.ok ? profile.data.interests : [];
   const target = getMiniLevel(data.level.miniLevel).masteryCriteria.vocabularyMastered;
   const progress = Math.round(levelProgress(data, target) * 100);
@@ -248,21 +274,17 @@ export default async function DashboardPage() {
             met, mastered, and are due to review. Say something to start.
           </p>
         ) : null}
-        <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {[
-            ["Known", data.vocabulary.total],
-            ["Mastered", data.vocabulary.mastered],
-            ["Due", data.vocabulary.due],
-            ["Tricky", data.vocabulary.weak],
-          ].map(([label, value]) => (
-            <div key={String(label)} className={stat}>
-              <dt className={eyebrow}>{label}</dt>
-              <dd className="mt-1 font-display text-2xl font-semibold tabular-nums text-chalk">
-                {value}
-              </dd>
-            </div>
-          ))}
-        </dl>
+        {/* Each figure opens into the words behind it. A count on its own is
+            something to look at; the list is something to read. */}
+        <VocabularyTiles
+          counts={{
+            known: data.vocabulary.total,
+            mastered: data.vocabulary.mastered,
+            due: data.vocabulary.due,
+            tricky: data.vocabulary.weak,
+          }}
+          words={words}
+        />
       </section>
 
       {next ? (
@@ -326,21 +348,6 @@ export default async function DashboardPage() {
           </ul>
         </section>
       ) : null}
-
-      <section aria-labelledby="threads-heading" className="flex flex-col gap-4">
-        <h2 id="threads-heading" className={sectionTitle}>
-          Recent conversations
-        </h2>
-        {/* Including when it is empty: the list owns that state, so deleting
-            the last conversation does not unmount the thing announcing it. */}
-        <ThreadList
-          threads={data.recentThreads.map((thread) => ({
-            id: thread.id,
-            title: thread.title,
-          }))}
-          action={deleteThreadAction}
-        />
-      </section>
     </main>
   );
 }

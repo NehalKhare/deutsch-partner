@@ -33,6 +33,28 @@ export interface FxRateStore {
   latestOnOrBefore(rateDate: string): Promise<StoredFxRate | null>;
 }
 
+export type FxWriteResult =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly detail: string };
+
+/**
+ * The other end of the store: what the daily snapshot job writes.
+ *
+ * Separate from the read side because the two have different callers and very
+ * different privileges — every request reads a rate, and one scheduled job
+ * writes one. Writing a day that already has a rate replaces it, so re-running
+ * the job is the normal case rather than a duplicate.
+ */
+export interface FxRateSnapshots {
+  save(rate: StoredFxRate): Promise<FxWriteResult>;
+  /**
+   * When the source was last read successfully — not the date it answered
+   * with. The two differ every morning before the source publishes, and it is
+   * this one that answers "have we already asked today".
+   */
+  lastFetchedAt(): Promise<Date | null>;
+}
+
 export interface FxRateService {
   resolve(onDate: Date): Promise<FxRate | null>;
 }

@@ -83,3 +83,16 @@ export const page = "mx-auto flex w-full flex-col gap-8 px-6 py-10 md:px-10 md:p
 
 /** The rule that separates the header, the footer and the major bands. */
 export const hairline = "border-haze/60";
+
+/**
+ * The gender colours German course books have printed for decades: der blue,
+ * die red, das green. Used wherever an article appears, so the association is
+ * learned by exposure rather than taught — which is the only way it is ever
+ * learned. Here rather than on one page, because the second page to show a
+ * word must colour it the same or the exposure teaches nothing.
+ */
+export const ARTICLE_COLOR: Readonly<Record<string, string>> = {
+  der: "text-der",
+  die: "text-die",
+  das: "text-das",
+};

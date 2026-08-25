@@ -92,13 +92,33 @@ function modelWith(
   return { ...created, turn, handler: callbacks[0]! };
 }
 
-const OUTPUT = (over: Record<string, unknown> = {}) => ({
-  generations: [],
-  llmOutput: {
-    tokenUsage: { promptTokens: 900, completionTokens: 120 },
-    ...over,
-  },
+/** What the router served, which is not always what was asked for. */
+const RESOLVED_MODEL = "vendor/model-2026-01";
+
+/**
+ * Exactly what LangChain hands a callback, which is the whole point of this
+ * fixture: the token counts on llmOutput, and the provider's own usage block
+ * — the only place the dollar figure ever appears — on the generation's
+ * message. A fixture that put the cost on llmOutput instead would pass
+ * against a reader that can never work in production.
+ */
+const OUTPUT = (usage: Record<string, unknown> = {}) => ({
+  generations: [
+    [
+      {
+        text: "",
+        message: {
+          response_metadata: {
+            model_name: RESOLVED_MODEL,
+            usage: { prompt_tokens: 900, completion_tokens: 120, ...usage },
+          },
+        },
+      },
+    ],
+  ],
+  llmOutput: { tokenUsage: { promptTokens: 900, completionTokens: 120 } },
 });
+
 
 describe("what the factory resolves", () => {
   it("takes the tier and model from the task table and the registry", () => {
@@ -221,11 +241,60 @@ describe("the ledger seam", () => {
     const { handler } = modelWith(accounting);
 
     await handler.handleLLMStart({}, [], "run-1");
-    await handler.handleLLMEnd(OUTPUT({ usage: { cost: 0.004 } }), "run-1");
+    await handler.handleLLMEnd(OUTPUT({ cost: 0.004 }), "run-1");
 
     expect(rows[0]?.costUsd).toBe(0.004);
     // Priced at the bootstrap rate of 0.9 euro per dollar.
     expect(rows[0]?.costEur).toBeCloseTo(0.0036);
+  });
+
+  it("records the model the router actually served", async () => {
+    const { accounting, rows } = fakeAccounting();
+    const { handler } = modelWith(accounting);
+
+    await handler.handleLLMStart({}, [], "run-1");
+    await handler.handleLLMEnd(OUTPUT(), "run-1");
+
+    expect(rows[0]?.modelIdResolved).toBe(RESOLVED_MODEL);
+    expect(rows[0]?.modelId).not.toBe(RESOLVED_MODEL);
+  });
+
+  it("keeps the reasoning and cached prompt tokens the provider reported", async () => {
+    const { accounting, rows } = fakeAccounting();
+    const { handler } = modelWith(accounting);
+
+    await handler.handleLLMStart({}, [], "run-1");
+    await handler.handleLLMEnd(
+      OUTPUT({
+        completion_tokens_details: { reasoning_tokens: 56 },
+        prompt_tokens_details: { cached_tokens: 704 },
+      }),
+      "run-1",
+    );
+
+    expect(rows[0]).toMatchObject({ reasoningTokens: 56, cachedInputTokens: 704 });
+  });
+
+  it("reads nothing from llmOutput but the counts", async () => {
+    // The regression this file exists to hold: a dollar figure parked on
+    // llmOutput is a shape LangChain does not produce, and a reader that
+    // believed in it recorded every Trainer call as free.
+    const { accounting, rows } = fakeAccounting();
+    const { handler } = modelWith(accounting);
+
+    await handler.handleLLMStart({}, [], "run-1");
+    await handler.handleLLMEnd(
+      {
+        generations: [],
+        llmOutput: {
+          tokenUsage: { promptTokens: 900, completionTokens: 120 },
+          usage: { cost: 0.004 },
+        },
+      },
+      "run-1",
+    );
+
+    expect(rows[0]).toMatchObject({ inputTokens: 900, outputTokens: 120, costUsd: 0 });
   });
 
   it("falls back to the pricing store when the provider stayed silent", async () => {
@@ -245,7 +314,7 @@ describe("the ledger seam", () => {
     const { handler } = modelWith(accounting, turn);
 
     await handler.handleLLMStart({}, [], "run-1");
-    await handler.handleLLMEnd(OUTPUT({ usage: { cost: 0.01 } }), "run-1");
+    await handler.handleLLMEnd(OUTPUT({ cost: 0.01 }), "run-1");
 
     expect(turn.spentEur()).toBeCloseTo(0.009);
   });

@@ -23,6 +23,7 @@
     "dummy:user": "tsx scripts/create-dummy-user.ts",
     "db:seed": "tsx scripts/apply-seeds.ts",
     "ingest": "tsx scripts/ingest.ts",
+    "fx:refresh": "tsx scripts/refresh-fx.ts",
     "scenarios:ingest": "uv run --project scripts/scenarios scripts/scenarios/ingest_scenarios.py",
     "scenarios:eval": "uv run --project scripts/scenarios --extra eval scripts/scenarios/eval_ragas.py",
     "scenarios:test": "uv run --project scripts/scenarios --extra dev -m pytest scripts/scenarios/tests"

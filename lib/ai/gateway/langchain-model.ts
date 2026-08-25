@@ -82,34 +82,70 @@ export class TrainerBudgetExhausted extends Error {
 interface UsageFigures {
   readonly inputTokens: number;
   readonly outputTokens: number;
+  readonly reasoningTokens: number | null;
+  readonly cachedInputTokens: number | null;
   readonly reportedUsd: number | null;
   readonly modelIdResolved: string | null;
 }
 
+/** The provider's own usage block, as OpenRouter sends it back. */
+interface ProviderUsage {
+  readonly prompt_tokens?: unknown;
+  readonly completion_tokens?: unknown;
+  readonly cost?: unknown;
+  readonly prompt_tokens_details?: { readonly cached_tokens?: unknown };
+  readonly completion_tokens_details?: { readonly reasoning_tokens?: unknown };
+}
+
+const whole = (value: unknown): number | null =>
+  typeof value === "number" && Number.isFinite(value)
+    ? Math.max(0, Math.round(value))
+    : null;
+
 /**
- * Reads what the provider said a call cost, defensively: LangChain surfaces
- * token usage in llmOutput.tokenUsage, and OpenRouter's own dollar figure
- * rides an extra usage field that may or may not survive the SDK. Absence is
- * answered by the pricing store, never by a guess here.
+ * Reads what the provider said a call cost.
+ *
+ * Not from llmOutput, which is where you would look first and where there is
+ * nothing to find: @langchain/openai builds it as `{ tokenUsage }` and drops
+ * every other field of the response, so OpenRouter's dollar figure never
+ * arrives there however politely the request asks for it. Reading it from
+ * there is why every Trainer call in the ledger was recorded as free.
+ *
+ * The raw block survives on the generation's message instead, under
+ * response_metadata.usage — cost, cached prompt tokens and reasoning tokens
+ * all of it — and that is what this reads, with llmOutput.tokenUsage kept as
+ * the fallback for the counts alone. Verified against @langchain/openai 1.5.
+ *
+ * The block describes the response, not one choice within it, and the SDK
+ * copies it onto every generation. Read once, from the first, or a model
+ * asked for two candidates bills twice.
  */
 function usageFrom(output: LLMResult): UsageFigures {
-  const llmOutput = (output.llmOutput ?? {}) as {
-    tokenUsage?: { promptTokens?: number; completionTokens?: number };
-    usage?: { cost?: number };
-    model?: string;
-    model_name?: string;
+  const metadata = (
+    output.generations?.[0]?.[0] as { message?: { response_metadata?: unknown } } | undefined
+  )?.message?.response_metadata as
+    | { usage?: ProviderUsage; model_name?: unknown }
+    | undefined;
+
+  const usage = metadata?.usage ?? {};
+  const counted = (output.llmOutput ?? {}) as {
+    tokenUsage?: { promptTokens?: unknown; completionTokens?: unknown };
   };
 
-  const count = (value: number | undefined) =>
-    Number.isFinite(value) ? Math.max(0, Math.round(value as number)) : 0;
-
-  const cost = llmOutput.usage?.cost;
+  const cost = usage.cost;
+  const model = metadata?.model_name;
 
   return {
-    inputTokens: count(llmOutput.tokenUsage?.promptTokens),
-    outputTokens: count(llmOutput.tokenUsage?.completionTokens),
+    inputTokens:
+      whole(usage.prompt_tokens) ?? whole(counted.tokenUsage?.promptTokens) ?? 0,
+    outputTokens:
+      whole(usage.completion_tokens) ?? whole(counted.tokenUsage?.completionTokens) ?? 0,
+    // Null rather than zero: the ledger distinguishes a model that reported no
+    // reasoning tokens from one that was never asked.
+    reasoningTokens: whole(usage.completion_tokens_details?.reasoning_tokens),
+    cachedInputTokens: whole(usage.prompt_tokens_details?.cached_tokens),
     reportedUsd: typeof cost === "number" && cost >= 0 ? cost : null,
-    modelIdResolved: llmOutput.model ?? llmOutput.model_name ?? null,
+    modelIdResolved: typeof model === "string" && model.length > 0 ? model : null,
   };
 }
 
@@ -165,6 +201,8 @@ class LedgerCallback extends BaseCallbackHandler {
     await this.record(runId, "error", errorNameFor(error), {
       inputTokens: 0,
       outputTokens: 0,
+      reasoningTokens: null,
+      cachedInputTokens: null,
       reportedUsd: null,
       modelIdResolved: null,
     });
@@ -205,8 +243,8 @@ class LedgerCallback extends BaseCallbackHandler {
       modelIdResolved: usage.modelIdResolved ?? this.identity.modelId,
       inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens,
-      reasoningTokens: null,
-      cachedInputTokens: null,
+      reasoningTokens: usage.reasoningTokens,
+      cachedInputTokens: usage.cachedInputTokens,
       maxOutputTokens: this.identity.maxOutputTokens,
       truncated: false,
       escalated: false,
