@@ -79,6 +79,26 @@ describe("what the learner sees", () => {
     expect(screen.queryByText(/is enough to start/i)).not.toBeInTheDocument();
   });
 
+  it("shows an emphasised word as emphasis, not as asterisks", async () => {
+    const { container } = renderConversation([
+      { id: "a", role: "assistant", content: "Ja, super: **das Buch**." },
+    ]);
+
+    expect(container.querySelector("strong")).toHaveTextContent("das Buch");
+    expect(container.textContent).not.toContain("**");
+  });
+
+  it("shows a numbered list as a list rather than one run-on line", async () => {
+    const { container } = renderConversation([
+      { id: "a", role: "assistant", content: "Heute:\n1. der\n2. die\n3. das" },
+    ]);
+
+    // Scoped to the reply: the transcript itself is a list of messages.
+    expect(
+      container.querySelectorAll("[data-role='assistant'] ol > li"),
+    ).toHaveLength(3);
+  });
+
   it("marks the tutor's German so a screen reader switches voice", () => {
     renderConversation([
       { id: "a", role: "assistant", content: "Wie geht es dir?" },

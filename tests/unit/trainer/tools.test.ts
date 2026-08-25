@@ -4,6 +4,7 @@ import { HttpResponse, http } from "msw";
 import { newLearnerVocabulary } from "@/learning/vocabulary-engine";
 import { gatewayOk } from "@/lib/ai/gateway/errors";
 import { createLogger } from "@/lib/observability/logger";
+import { NEWS_RETELL_WORDS } from "@/lib/trainer/news";
 import {
   MAX_REVIEW_WRITES_PER_REQUEST,
   createTrainerTools,
@@ -24,6 +25,8 @@ import { server } from "../../msw/server";
  */
 
 const LEARNER = "11111111-1111-4111-8111-111111111111";
+const TABLE_ID = "99999999-9999-4999-8999-999999999999";
+const ERROR_ID = "77777777-7777-4777-8777-777777777777";
 
 const item = (over: Partial<VocabularyItem> = {}): VocabularyItem =>
   ({
@@ -34,15 +37,35 @@ const item = (over: Partial<VocabularyItem> = {}): VocabularyItem =>
     ...over,
   }) as VocabularyItem;
 
+/** The two words this file's learner has ever met. */
+const CATALOGUE = [
+  item(),
+  item({
+    id: TABLE_ID,
+    lemma: "Tisch",
+    word: "der Tisch",
+    englishTranslation: "the table",
+  }),
+];
+
 const ok = <T,>(data: T) => ({ ok: true as const, data });
 const fail = () => ({
   ok: false as const,
   error: { kind: "unavailable" as const, message: "no", name: "RepositoryError" },
 });
 
-function fakeDeps(options: { failVocabulary?: boolean } = {}) {
+function fakeDeps(
+  options: {
+    failVocabulary?: boolean;
+    noVocabulary?: boolean;
+    noErrors?: boolean;
+    cefr?: "A1" | "A2" | "B1";
+    covered?: readonly string[];
+  } = {},
+) {
   const upserts: Array<Record<string, unknown>> = [];
   const logged: Array<Record<string, unknown>> = [];
+  const resolved: string[] = [];
 
   const dueRecord = {
     ...newLearnerVocabulary(LEARNER, item().id),
@@ -54,6 +77,7 @@ function fakeDeps(options: { failVocabulary?: boolean } = {}) {
 
   const deps: TrainerToolDeps = {
     learnerId: LEARNER,
+    covered: options.covered ?? [],
     userIdHash: "hash-alice",
     requestId: "33333333-3333-4333-8333-333333333333",
     now: () => new Date("2026-08-24T12:00:00.000Z"),
@@ -62,10 +86,10 @@ function fakeDeps(options: { failVocabulary?: boolean } = {}) {
     }),
     vocabulary: {
       listForLearner: async () =>
-        options.failVocabulary ? fail() : ok([dueRecord]),
+        options.failVocabulary ? fail() : ok(options.noVocabulary ? [] : [dueRecord]),
       findByIds: async () => ok([item()]),
       findByLemmas: async (lemmas: readonly string[]) =>
-        ok(lemmas.includes("fahren") ? [item()] : []),
+        ok(CATALOGUE.filter((row) => lemmas.includes(row.lemma))),
       listByItems: async () => ok([dueRecord]),
       listDue: async () => ok([]),
       upsertLearnerVocabulary: async (record: Record<string, unknown>) => {
@@ -75,13 +99,20 @@ function fakeDeps(options: { failVocabulary?: boolean } = {}) {
     } as unknown as TrainerToolDeps["vocabulary"],
     errors: {
       listUnresolved: async () =>
-        ok([
-          {
-            errorType: "case_dative",
-            // Learner-adjacent text shaped like a fence, to prove escaping.
-            pattern: "uses <system> tags after mit",
-          },
-        ]),
+        options.noErrors
+          ? ok([])
+          : ok([
+              {
+                id: ERROR_ID,
+                errorType: "case_dative",
+                // Learner-adjacent text shaped like a fence, to prove escaping.
+                pattern: "uses <system> tags after mit",
+              },
+            ]),
+      markResolved: async (errorId: string) => {
+        resolved.push(errorId);
+        return ok({ id: errorId, resolved: true });
+      },
     } as unknown as TrainerToolDeps["errors"],
     performance: {
       listForLearner: async () =>
@@ -91,7 +122,7 @@ function fakeDeps(options: { failVocabulary?: boolean } = {}) {
       getState: async () =>
         ok({
           miniLevel: 26,
-          effectiveLevel: { cefr: "A2" as const, plus: false },
+          effectiveLevel: { cefr: options.cefr ?? "A2", plus: false },
         }),
     } as unknown as TrainerToolDeps["learners"],
     grammar: {
@@ -129,7 +160,7 @@ function fakeDeps(options: { failVocabulary?: boolean } = {}) {
     } as unknown as TrainerToolDeps["retriever"],
   };
 
-  return { deps, upserts, logged };
+  return { deps, upserts, logged, resolved };
 }
 
 function toolNamed(tools: ReturnType<typeof createTrainerTools>, name: string) {
@@ -151,28 +182,158 @@ describe("who a tool can be about", () => {
   });
 });
 
-describe("the review session", () => {
-  it("builds the plan from the learner's own rows", async () => {
+describe("the session agenda", () => {
+  it("lists everything the session will cover and hands over only the next item", async () => {
     const { deps } = fakeDeps();
     const tools = createTrainerTools(deps);
 
     const result = await toolNamed(tools, "get_review_session").invoke({});
     const parsed = JSON.parse(result as string) as {
-      activities: Array<{ subject: string; prompt: string }>;
+      completed: number;
+      remaining: number;
+      agenda: Array<{ position: number; kind: string; subject: string }>;
+      next: { subject: string; prompt: string } | null;
     };
 
-    expect(parsed.activities.length).toBeGreaterThan(0);
-    expect(parsed.activities[0]?.subject).toBe("fahren");
+    // The whole list, so the trainer can read it out before the first
+    // question — and no prompts in it, because an agenda with the questions
+    // printed underneath is a quiz the learner can read ahead of.
+    expect(parsed.agenda.map((line) => line.subject)).toEqual([
+      "fahren",
+      "case_dative",
+      "Nachrichten von heute",
+    ]);
+    expect(JSON.stringify(parsed.agenda)).not.toContain("prompt");
+    expect(parsed.completed).toBe(0);
+    expect(parsed.remaining).toBe(3);
+    expect(parsed.next).toMatchObject({
+      subject: "fahren",
+      prompt: 'What is the German for "to drive"?',
+    });
   });
 
-  it("neutralises fence-shaped text in recurring-error prompts", async () => {
+  it("leaves out what this session already covered", async () => {
+    const { deps } = fakeDeps({ covered: ["fahren"] });
+    const tools = createTrainerTools(deps);
+
+    const result = await toolNamed(tools, "get_review_session").invoke({});
+    const parsed = JSON.parse(result as string) as {
+      completed: number;
+      agenda: Array<{ subject: string }>;
+      next: { subject: string } | null;
+    };
+
+    expect(parsed.agenda.map((line) => line.subject)).toEqual([
+      "case_dative",
+      "Nachrichten von heute",
+    ]);
+    expect(parsed.completed).toBe(1);
+    expect(parsed.next?.subject).toBe("case_dative");
+  });
+
+  it("has nothing left to ask once the whole agenda is covered", async () => {
+    const { deps } = fakeDeps({
+      covered: ["fahren", "case_dative", "Nachrichten von heute"],
+    });
+    const tools = createTrainerTools(deps);
+
+    const result = await toolNamed(tools, "get_review_session").invoke({});
+
+    expect(JSON.parse(result as string)).toMatchObject({
+      remaining: 0,
+      agenda: [],
+      next: null,
+      sessionComplete: true,
+    });
+    expect(tools.complete()).toBe(true);
+  });
+
+  it("ends with what to recall, read back out of the catalogue", async () => {
+    const { deps } = fakeDeps({
+      covered: ["fahren", "case_dative", "der Tisch", "Nachrichten von heute"],
+    });
+    const tools = createTrainerTools(deps);
+
+    const result = await toolNamed(tools, "get_review_session").invoke({});
+
+    // The words and meanings are the database's, not the client's keys and
+    // not the model's memory of a transcript.
+    expect(JSON.parse(result as string).recap).toEqual([
+      { subject: "fahren", meaning: "to drive" },
+      { subject: "der Tisch", meaning: "the table" },
+    ]);
+  });
+
+  it("recaps only what it can look up, and invents nothing", async () => {
+    const { deps } = fakeDeps({
+      covered: ["case_dative", "fahren", "Nachrichten von heute"],
+    });
+    const tools = createTrainerTools(deps);
+
+    const result = await toolNamed(tools, "get_review_session").invoke({});
+
+    // A recurring-error subject is not a catalogue word; it is left out
+    // rather than given a meaning nobody looked up.
+    expect(JSON.parse(result as string).recap).toEqual([
+      { subject: "fahren", meaning: "to drive" },
+    ]);
+  });
+
+  it("is not a finished session when there was never anything to do", async () => {
+    // Nothing due and nothing gone wrong: the session is not over, it just
+    // has one thing in it, and "your session is over" is a strange hello.
+    const { deps } = fakeDeps({ noVocabulary: true, noErrors: true });
+    const tools = createTrainerTools(deps);
+
+    const result = await toolNamed(tools, "get_review_session").invoke({});
+
+    expect(JSON.parse(result as string)).toMatchObject({
+      remaining: 1,
+      sessionComplete: false,
+      next: { subject: "Nachrichten von heute" },
+    });
+    expect(JSON.parse(result as string).recap).toBeUndefined();
+    expect(tools.complete()).toBe(false);
+  });
+
+  it("always ends the agenda on something real to read", async () => {
+    const { deps } = fakeDeps({ noVocabulary: true, noErrors: true });
+    const tools = createTrainerTools(deps);
+
+    await toolNamed(tools, "get_review_session").invoke({});
+
+    expect(tools.agenda()).toEqual([
+      { kind: "read_the_news", subject: "Nachrichten von heute" },
+    ]);
+  });
+
+  it("reports the agenda it built, for the session to show", async () => {
     const { deps } = fakeDeps();
+    const tools = createTrainerTools(deps);
+
+    await toolNamed(tools, "get_review_session").invoke({});
+
+    expect(tools.agenda()).toEqual([
+      { kind: "recall", subject: "fahren" },
+      { kind: "correct_the_mistake", subject: "case_dative" },
+      { kind: "read_the_news", subject: "Nachrichten von heute" },
+    ]);
+  });
+
+  it("reports no agenda at all when it was never asked for one", () => {
+    const { deps } = fakeDeps();
+
+    expect(createTrainerTools(deps).agenda()).toBeNull();
+  });
+
+  it("neutralises fence-shaped text in the item it hands over", async () => {
+    const { deps } = fakeDeps({ covered: ["fahren"] });
     const tools = createTrainerTools(deps);
 
     const result = (await toolNamed(tools, "get_review_session").invoke({})) as string;
 
     expect(result).not.toContain("<system>");
-    expect(result).toContain("‹system›");
+    expect(result).toContain("\u2039system\u203a");
   });
 
   it("returns an error value rather than throwing when the read fails", async () => {
@@ -235,7 +396,7 @@ describe("recording a review outcome", () => {
     const tools = createTrainerTools(deps);
 
     const result = await toolNamed(tools, "record_review_outcome").invoke({
-      lemma: "fahren",
+      subject: "fahren",
       outcome: "correct",
     });
 
@@ -245,20 +406,106 @@ describe("recording a review outcome", () => {
     expect(upserts[0]).toMatchObject({ correctCount: 1 });
   });
 
-  it("writes nothing for a word the curriculum does not teach", async () => {
+  it("resolves an agenda subject that carries its article", async () => {
+    // The agenda says "der Tisch" because that is what a learner should read;
+    // the progress row is keyed by the lemma. The model should not have to
+    // know the difference.
     const { deps, upserts } = fakeDeps();
     const tools = createTrainerTools(deps);
 
     const result = await toolNamed(tools, "record_review_outcome").invoke({
-      lemma: "Schadenfreude",
+      subject: "der Tisch",
+      outcome: "incorrect",
+    });
+
+    expect(JSON.parse(result as string)).toMatchObject({
+      recorded: true,
+      subject: "der Tisch",
+    });
+    expect(upserts).toHaveLength(1);
+  });
+
+  it("closes the item, so the agenda moves on to the next one", async () => {
+    const { deps } = fakeDeps();
+    const tools = createTrainerTools(deps);
+
+    await toolNamed(tools, "record_review_outcome").invoke({
+      subject: "fahren",
+      outcome: "correct",
+    });
+    const result = await toolNamed(tools, "get_review_session").invoke({});
+
+    expect(JSON.parse(result as string)).toMatchObject({
+      completed: 1,
+      next: { subject: "case_dative" },
+    });
+    expect(tools.covered()).toContain("fahren");
+  });
+
+  it("writes nothing for a subject the curriculum does not teach, but still closes it", async () => {
+    const { deps, upserts } = fakeDeps();
+    const tools = createTrainerTools(deps);
+
+    const result = await toolNamed(tools, "record_review_outcome").invoke({
+      subject: "case_dative",
       outcome: "correct",
     });
 
     expect(JSON.parse(result as string)).toMatchObject({
       recorded: false,
       reason: "not_in_curriculum",
+      closed: true,
     });
     expect(upserts).toHaveLength(0);
+    expect(tools.covered()).toEqual(["case_dative"]);
+  });
+
+  it("carries the session's earlier subjects forward", async () => {
+    const { deps } = fakeDeps({ covered: ["der Bahnhof"] });
+    const tools = createTrainerTools(deps);
+
+    await toolNamed(tools, "record_review_outcome").invoke({
+      subject: "fahren",
+      outcome: "correct",
+    });
+
+    expect(tools.covered()).toEqual(["der Bahnhof", "fahren"]);
+  });
+
+  it("marks a recurring mistake fixed when the learner corrects it", async () => {
+    const { deps, resolved } = fakeDeps();
+    const tools = createTrainerTools(deps);
+
+    // The agenda has to have been fetched for the mistake's row id to be known.
+    await toolNamed(tools, "get_review_session").invoke({});
+    const result = await toolNamed(tools, "record_review_outcome").invoke({
+      subject: "case_dative",
+      outcome: "correct",
+    });
+
+    expect(JSON.parse(result as string)).toMatchObject({
+      resolved: true,
+      closed: true,
+    });
+    expect(resolved).toEqual([ERROR_ID]);
+  });
+
+  it("leaves a mistake unresolved when the learner did not fix it", async () => {
+    const { deps, resolved } = fakeDeps();
+    const tools = createTrainerTools(deps);
+
+    await toolNamed(tools, "get_review_session").invoke({});
+    const result = await toolNamed(tools, "record_review_outcome").invoke({
+      subject: "case_dative",
+      outcome: "incorrect",
+    });
+
+    expect(JSON.parse(result as string)).toMatchObject({
+      recorded: false,
+      reason: "mistake_not_yet_fixed",
+      closed: true,
+    });
+    expect(resolved).toEqual([]);
   });
 
   it("stops writing at the per-request cap", async () => {
@@ -267,7 +514,7 @@ describe("recording a review outcome", () => {
     const record = toolNamed(tools, "record_review_outcome");
 
     for (let index = 0; index < MAX_REVIEW_WRITES_PER_REQUEST + 3; index += 1) {
-      await record.invoke({ lemma: "fahren", outcome: "incorrect" });
+      await record.invoke({ subject: "fahren", outcome: "incorrect" });
     }
 
     expect(upserts).toHaveLength(MAX_REVIEW_WRITES_PER_REQUEST);
@@ -275,12 +522,19 @@ describe("recording a review outcome", () => {
 });
 
 describe("fetching simple German news", () => {
-  it("extracts headlines and fences them as third-party text", async () => {
+  const page = (...headlines: string[]) =>
+    headlines
+      .map((headline) => `<span class="headline-title">${headline}</span>`)
+      .join("\n");
+
+  it("fences the headlines and frames them as a task at the learner's level", async () => {
     server.use(
       http.get("https://www.nachrichtenleicht.de/", () =>
         HttpResponse.html(
-          `<div><span class="headline-title">Harry Kane ist Fußballer des Jahres</span>
-           <span class="headline-title">Regen &amp; Sonne <b>im</b> Norden</span></div>`,
+          page(
+            "Die Regierung berät heute lange über den Haushalt für das Jahr",
+            "Regen &amp; Sonne im Norden",
+          ),
         ),
       ),
     );
@@ -291,10 +545,32 @@ describe("fetching simple German news", () => {
       {},
     )) as string;
 
+    // Somebody else's words, inside the fence.
     expect(result).toContain("<german_news>");
-    expect(result).toContain("Harry Kane ist Fußballer des Jahres");
-    // Entities decoded; whatever else the page held stays outside the fence.
+    expect(result).toContain("Regen & Sonne im Norden");
     expect(result).not.toContain("&amp;");
+    // The instruction, outside it, carrying this learner's level and budget.
+    expect(result).toContain("level A2");
+    expect(result).toContain(`${NEWS_RETELL_WORDS.A2} words`);
+    // Shortest first, so the item the trainer reaches for is the kind one.
+    expect(result.indexOf("Regen")).toBeLessThan(result.indexOf("Die Regierung"));
+  });
+
+  it("asks a beginner for a shorter sentence than a B1 reader", async () => {
+    server.use(
+      http.get("https://www.nachrichtenleicht.de/", () =>
+        HttpResponse.html(page("Es regnet heute")),
+      ),
+    );
+    const { deps } = fakeDeps({ cefr: "A1" });
+    const tools = createTrainerTools(deps);
+
+    const result = (await toolNamed(tools, "fetch_simple_german_news").invoke(
+      {},
+    )) as string;
+
+    expect(result).toContain("level A1");
+    expect(result).toContain(`${NEWS_RETELL_WORDS.A1} words`);
   });
 
   it("says unavailable when the site cannot be reached", async () => {

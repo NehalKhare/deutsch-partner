@@ -9,7 +9,7 @@ import type {
   SpeechCapture,
   SpeechPlayback,
   SpeechVoice,
-} from "@/components/chat/speech";
+} from "@/components/voice/speech";
 import { SPEECH_RATES } from "@/lib/ai/voice/providers";
 import { server } from "../../msw/server";
 
@@ -799,6 +799,72 @@ describe("one voice at a time", () => {
       ).toBeInTheDocument();
     });
     expect(screen.queryByText(/could not be read aloud/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("the learner's reply preference", () => {
+  it("reads aloud from the first reply when they asked for spoken replies", async () => {
+    // They said "replies should arrive as: read aloud". Making them press a
+    // toggle on every thread is that setting not meaning anything.
+    const voice = fakeVoice();
+    server.use(
+      http.post(SPEAK, () => HttpResponse.json({ error: "none" }, { status: 503 })),
+    );
+    render(
+      <Conversation
+        threadId="1e2f0a4c-6b7d-4e8f-9a0b-1c2d3e4f5a6b"
+        initialMessages={[REPLY]}
+        miniLevel={1}
+        cefr="A1"
+        outputPreference="voice"
+        capture={fakeCapture()}
+        playback={fakePlayback()}
+        voice={voice}
+      />,
+    );
+
+    await waitFor(() => expect(voice.spoken).toHaveLength(1));
+    expect(
+      screen.getByRole("button", { name: /read replies aloud/i }),
+    ).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("stays quiet when they asked for replies as text", async () => {
+    const voice = fakeVoice();
+    render(
+      <Conversation
+        threadId="1e2f0a4c-6b7d-4e8f-9a0b-1c2d3e4f5a6b"
+        initialMessages={[REPLY]}
+        miniLevel={1}
+        cefr="A1"
+        outputPreference="text"
+        capture={fakeCapture()}
+        playback={fakePlayback()}
+        voice={voice}
+      />,
+    );
+
+    expect(voice.spoken).toHaveLength(0);
+    expect(
+      screen.getByRole("button", { name: /read replies aloud/i }),
+    ).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("reads nothing when the preference says voice and the device has none", async () => {
+    render(
+      <Conversation
+        threadId="1e2f0a4c-6b7d-4e8f-9a0b-1c2d3e4f5a6b"
+        initialMessages={[REPLY]}
+        miniLevel={1}
+        cefr="A1"
+        outputPreference="voice"
+        capture={fakeCapture()}
+        playback={fakePlayback({ supported: () => false })}
+        voice={fakeVoice({ supported: () => false })}
+      />,
+    );
+
+    expect(screen.queryByText(/could not be read aloud/i)).toBeNull();
   });
 });
 

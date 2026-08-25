@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { LearnerVocabulary } from "@/domain/vocabulary";
 import {
+  JUST_PRACTISED_HOURS,
   MAX_REVIEW_ITEMS,
   WEAK_MASTERY_THRESHOLD,
   WEAK_MIN_EXPOSURES,
@@ -94,35 +95,66 @@ describe("what is due", () => {
 
 describe("what is weak", () => {
   it("returns words seen often and still not known", () => {
-    const weak = weakVocabulary([
-      word({ vocabularyItemId: "known", masteryScore: 0.9 }),
-      word({ vocabularyItemId: "tricky", masteryScore: 0.2, exposureCount: 8 }),
-    ]);
+    const weak = weakVocabulary(
+      [
+        word({ vocabularyItemId: "known", masteryScore: 0.9 }),
+        word({ vocabularyItemId: "tricky", masteryScore: 0.2, exposureCount: 8 }),
+      ],
+      NOW,
+    );
 
     expect(weak.map((record) => record.vocabularyItemId)).toEqual(["tricky"]);
   });
 
   it("ignores a word barely met, which is new rather than weak", () => {
     expect(
-      weakVocabulary([
-        word({ masteryScore: 0.1, exposureCount: WEAK_MIN_EXPOSURES - 1 }),
-      ]),
+      weakVocabulary(
+        [word({ masteryScore: 0.1, exposureCount: WEAK_MIN_EXPOSURES - 1 })],
+        NOW,
+      ),
     ).toEqual([]);
   });
 
   it("puts the weakest first", () => {
-    const weak = weakVocabulary([
-      word({ vocabularyItemId: "a", masteryScore: 0.45 }),
-      word({ vocabularyItemId: "b", masteryScore: 0.05 }),
-    ]);
+    const weak = weakVocabulary(
+      [
+        word({ vocabularyItemId: "a", masteryScore: 0.45 }),
+        word({ vocabularyItemId: "b", masteryScore: 0.05 }),
+      ],
+      NOW,
+    );
 
     expect(weak[0].vocabularyItemId).toBe("b");
   });
 
-  it("draws the line where the threshold says", () => {
-    expect(weakVocabulary([word({ masteryScore: WEAK_MASTERY_THRESHOLD })])).toEqual([]);
+  it("leaves out a word the learner has just practised", () => {
+    // Answered ten minutes ago in the trainer. Still weak, but offering it
+    // straight back reads as though the work did not count.
+    const hoursAgo = (count: number) => new Date(NOW.getTime() - count * 3_600_000);
+
     expect(
-      weakVocabulary([word({ masteryScore: WEAK_MASTERY_THRESHOLD - 0.01 })]),
+      weakVocabulary([word({ masteryScore: 0.2, lastSeenAt: hoursAgo(0.2) })], NOW),
+    ).toEqual([]);
+    expect(
+      weakVocabulary(
+        [word({ masteryScore: 0.2, lastSeenAt: hoursAgo(JUST_PRACTISED_HOURS + 1) })],
+        NOW,
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("keeps a weak word never seen, which is not the same as practised", () => {
+    expect(
+      weakVocabulary([word({ masteryScore: 0.2, lastSeenAt: null })], NOW),
+    ).toHaveLength(1);
+  });
+
+  it("draws the line where the threshold says", () => {
+    expect(
+      weakVocabulary([word({ masteryScore: WEAK_MASTERY_THRESHOLD })], NOW),
+    ).toEqual([]);
+    expect(
+      weakVocabulary([word({ masteryScore: WEAK_MASTERY_THRESHOLD - 0.01 })], NOW),
     ).toHaveLength(1);
   });
 });
@@ -210,6 +242,27 @@ describe("the session", () => {
     });
 
     expect(plan.activities).toHaveLength(5);
+  });
+
+  it("keeps a just-practised word out of the session entirely", () => {
+    // The review page reads this plan, so a word answered correctly in the
+    // trainer a minute ago must not still be listed as something to go over.
+    const practised = word({
+      vocabularyItemId: "just-done",
+      masteryScore: 0.2,
+      lastSeenAt: new Date(NOW.getTime() - 60_000),
+      nextReviewAt: days(2),
+    });
+
+    const plan = buildReviewPlan({
+      vocabulary: [practised],
+      items: itemsFor([practised]),
+      recurringErrors: [],
+      now: NOW,
+    });
+
+    expect(plan.weak).toEqual([]);
+    expect(plan.activities).toEqual([]);
   });
 
   it("produces nothing when there is nothing to review", () => {

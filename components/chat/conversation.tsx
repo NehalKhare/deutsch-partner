@@ -4,21 +4,18 @@ import { useEffect, useRef, useState } from "react";
 
 import { Companion } from "@/components/companion/companion";
 import { MasteryProgress } from "@/components/chat/mastery-progress";
+import { RichText } from "@/components/ui/rich-text";
 import {
   createBrowserCapture,
-  createBrowserPlayback,
-  createBrowserSpeech,
   type SpeechCapture,
   type SpeechPlayback,
   type SpeechVoice,
-} from "@/components/chat/speech";
-import { SPEECH_RATES, speechRateFor } from "@/lib/ai/voice/providers";
+} from "@/components/voice/speech";
+import { useReadAloud } from "@/components/voice/read-aloud";
+import { SpeakerIcon } from "@/components/voice/speaker-icon";
 import { splitChatStream } from "@/lib/api/chat-trailer";
-import {
-  masteryStripStore,
-  useDevicePreference,
-  voiceEngineStore,
-} from "@/lib/settings/device";
+import { masteryStripStore, useDevicePreference } from "@/lib/settings/device";
+import type { CEFRLevel } from "@/domain/cefr";
 import { HISTORY_WINDOW } from "@/domain/conversation";
 import { buttonPrimary, buttonQuiet, field, focusRing } from "@/components/ui/styles";
 import { cn } from "@/lib/utils";
@@ -65,31 +62,6 @@ function MicIcon() {
       <rect x="9" y="3" width="6" height="11" rx="3" />
       <path d="M5 11a7 7 0 0 0 14 0" />
       <path d="M12 18v3" />
-    </svg>
-  );
-}
-
-function SpeakerIcon({ speaking }: { speaking: boolean }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      aria-hidden
-      className="size-4"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M4 9.5h3.5L12 5.5v13L7.5 14.5H4z" />
-      {speaking ? (
-        <>
-          <path d="M15.5 9a4 4 0 0 1 0 6" />
-          <path d="M18 6.5a7.5 7.5 0 0 1 0 11" />
-        </>
-      ) : (
-        <path d="M15.5 9a4 4 0 0 1 0 6" />
-      )}
     </svg>
   );
 }
@@ -166,6 +138,7 @@ export function Conversation({
   theme,
   cefr = "A1",
   voiceGender = "male",
+  outputPreference = "text",
   masteryThreshold = 80,
   initialTally,
   capture,
@@ -190,6 +163,13 @@ export function Conversation({
   /** The learner's chosen voice, from settings. Steers both speech paths. */
   voiceGender?: "male" | "female";
   /**
+   * How the learner said replies should arrive, from their profile. "voice"
+   * starts the session reading aloud, because a learner who asked to be read
+   * to should not have to ask again on every page — and the toggle is still
+   * there, so this is a starting position rather than a lock.
+   */
+  outputPreference?: "text" | "voice";
+  /**
    * The learner's pass mark from settings: the share of evaluated turns that
    * must be error-free before the level counts as cleared. The server holds
    * the same value and applies it to the move's bookkeeping; this one only
@@ -197,7 +177,7 @@ export function Conversation({
    */
   masteryThreshold?: number;
   /** Decides how fast the tutor speaks. A1 is read more slowly than B1. */
-  cefr?: string;
+  cefr?: CEFRLevel;
   capture?: SpeechCapture;
   playback?: SpeechPlayback;
   /** The browser's own voice, used when the server has none configured. */
@@ -238,10 +218,15 @@ export function Conversation({
   function toggleMastery() {
     masteryStripStore.write(showMastery ? "hidden" : "shown");
   }
-  // Which voice reads replies aloud: the speech model (device voice as its
-  // fallback), or the device's own voice alone. Chosen on the settings page,
-  // remembered per device.
-  const voiceEngine = useDevicePreference(voiceEngineStore);
+  // Reading a reply out is the same job here and in the trainer, so the
+  // fallback chain lives in one hook rather than in two copies of it.
+  const {
+    canSpeak,
+    speakingId,
+    notice: voiceNotice,
+    speak,
+  } = useReadAloud({ cefr, voiceGender, playback, voice });
+
   const [draft, setDraft] = useState("");
   const [streaming, setStreaming] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -253,42 +238,32 @@ export function Conversation({
 
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
-  const [speakingId, setSpeakingId] = useState<string | null>(null);
-  const [readAloud, setReadAloud] = useState(false);
-  const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
+  const [readAloud, setReadAloud] = useState(outputPreference === "voice");
+  // The microphone's own quiet line. Separate from the read-aloud notice
+  // because they fail for unrelated reasons and each is cleared by trying
+  // again at the thing that raised it.
+  const [micNotice, setMicNotice] = useState<string | null>(null);
 
   // Constructed once, and lazily: reaching for MediaRecorder at module load
   // would break every environment that does not have one, including the
   // server render of this very component.
   const captureRef = useRef<SpeechCapture | null>(capture ?? null);
-  const playbackRef = useRef<SpeechPlayback | null>(playback ?? null);
-  const voiceRef = useRef<SpeechVoice | null>(voice ?? null);
   captureRef.current ??= createBrowserCapture();
-  playbackRef.current ??= createBrowserPlayback();
-  voiceRef.current ??= createBrowserSpeech();
   const recorder = captureRef.current;
-  const player = playbackRef.current;
-  const browserVoice = voiceRef.current;
 
   const [canRecord, setCanRecord] = useState(false);
-  const [canSpeak, setCanSpeak] = useState(false);
   // Asked after mount: on the server there is no navigator to ask, and a mic
   // button rendered on the server and withdrawn on the client is a flicker.
   useEffect(() => {
     setCanRecord(recorder.supported());
-    // Either way of being heard counts. A browser with no audio element but a
-    // speech synthesiser can still read a reply out.
-    setCanSpeak(player.supported() || browserVoice.supported());
-  }, [recorder, player, browserVoice]);
+  }, [recorder]);
 
   // The microphone must not stay open because somebody navigated away.
   useEffect(() => {
     return () => {
       recorder.cancel();
-      player.stop();
-      browserVoice.stop();
     };
-  }, [recorder, player, browserVoice]);
+  }, [recorder]);
 
   /**
    * Sends the turn and streams the reply back.
@@ -426,83 +401,14 @@ export function Conversation({
     }
   }
 
-  /**
-   * Which read-aloud is current. Starting a new one, or stopping, bumps it —
-   * and a superseded read checks it before touching shared state, so reply
-   * A's cancellation can neither clear reply B's highlight nor raise a
-   * "could not be read" notice about audio nobody wanted any more.
-   */
-  const speakSession = useRef(0);
-
-  /**
-   * Speaks a line aloud and reports it as the companion speaking.
-   *
-   * One voice at a time, across both channels: starting B stops A whether A
-   * was the model's audio or the browser's synthesiser, because the two ports
-   * cannot hear each other and two tutors talking at once is worse than
-   * silence.
-   *
-   * Failure is quiet on purpose: a learner who cannot hear the reply can still
-   * read it, and a red banner over a working conversation because the audio
-   * did not play is a worse outcome than silence.
-   */
-  async function speak(message: ChatMessage) {
-    if (speakingId === message.id) {
-      speakSession.current += 1;
-      player.stop();
-      browserVoice.stop();
-      setSpeakingId(null);
-      return;
-    }
-
-    const session = ++speakSession.current;
-    player.stop();
-    browserVoice.stop();
-    setSpeakingId(message.id);
-
-    const speakWithDevice = () =>
-      browserVoice.speak(
-        message.content,
-        speechRateFor(cefr as keyof typeof SPEECH_RATES),
-        voiceGender,
-      );
-
-    try {
-      if (voiceEngine === "browser") {
-        // The learner chose the device's own voice, so the model is never
-        // asked: instant, free, and exactly as good as this device's speech.
-        await speakWithDevice();
-      } else {
-        // The speech model first, because it is the one that sounds like a
-        // person. The browser's own voice is the fallback, and it is a real
-        // one: it needs no key, costs nothing, and every desktop ships German.
-        try {
-          const response = await fetch("/api/speak", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ text: message.content, cefr, voice: voiceGender }),
-          });
-          if (!response.ok) throw new Error("the server has no voice");
-          await player.play(await response.blob());
-        } catch {
-          // Deliberately cancelled reads do not fall back and do not complain.
-          if (session !== speakSession.current) return;
-          await speakWithDevice();
-        }
-      }
-    } catch {
-      if (session !== speakSession.current) return;
-      setVoiceNotice("That reply could not be read aloud.");
-    } finally {
-      if (session === speakSession.current) setSpeakingId(null);
-    }
-  }
-
   // Reads the newest reply when the learner has asked for that. Keyed on the
   // message id so a re-render cannot make it read the same line twice.
   const lastSpoken = useRef<string | null>(null);
   useEffect(() => {
-    if (!readAloud || streaming.length > 0) return;
+    // canSpeak, not just readAloud: the preference can arrive switched on for
+    // a device with no voice at all, and reading nothing aloud while saying so
+    // once per reply is worse than silence.
+    if (!readAloud || !canSpeak || streaming.length > 0) return;
 
     const newest = messages[messages.length - 1];
     if (!newest || newest.role !== "assistant") return;
@@ -543,7 +449,7 @@ export function Conversation({
         );
         inputRef.current?.focus();
       } catch (failure) {
-        setVoiceNotice(
+        setMicNotice(
           failure instanceof Error ? failure.message : "We could not make that out.",
         );
       } finally {
@@ -552,13 +458,13 @@ export function Conversation({
       return;
     }
 
-    setVoiceNotice(null);
+    setMicNotice(null);
     try {
       await recorder.start();
       setRecording(true);
     } catch {
       // Overwhelmingly this is the learner declining the permission prompt.
-      setVoiceNotice("We could not reach your microphone.");
+      setMicNotice("We could not reach your microphone.");
     }
   }
 
@@ -735,7 +641,7 @@ export function Conversation({
                   lang="de"
                   className="rounded-2xl rounded-bl-md border border-haze/70 bg-dusk px-4 py-2.5 leading-relaxed text-chalk"
                 >
-                  {message.content}
+                  <RichText content={message.content} />
                 </span>
                 <button
                   type="button"
@@ -765,7 +671,10 @@ export function Conversation({
               lang="de"
               className="max-w-[85%] self-start rounded-2xl rounded-bl-md border border-apricot/40 bg-dusk px-4 py-2.5 leading-relaxed text-chalk"
             >
-              {streaming}
+              {/* Formatted as it arrives, so the reply does not visibly
+                  reflow the moment it finishes. A marker whose closer has not
+                  landed yet is still just the characters it is. */}
+              <RichText content={streaming} />
             </li>
           ) : null}
         </ol>
@@ -820,9 +729,9 @@ export function Conversation({
       {/* Voice is an addition to the conversation, not the conversation. Its
           failures are said quietly, beside the control that caused them, and
           never as the red banner that means "your turn did not happen". */}
-      {voiceNotice ? (
+      {micNotice ?? voiceNotice ? (
         <p role="status" className="px-1 text-xs text-chalk/55">
-          {voiceNotice}
+          {micNotice ?? voiceNotice}
         </p>
       ) : null}
 

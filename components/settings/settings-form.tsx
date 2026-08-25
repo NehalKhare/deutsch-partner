@@ -26,13 +26,38 @@ import {
  *
  * The same discipline as onboarding, for the same reason: React resets the
  * DOM form when its action completes, and a controlled checkbox does not
- * survive that. Every answer is tracked in state and written back as a
- * *default*, so the reset restores exactly what the learner chose — on a
- * refusal as much as on a save.
+ * survive that — the reset empties it and no state changed, so nothing
+ * re-renders to put it back. Every answer is tracked in state and written
+ * back as a *default*, so the reset restores exactly what the learner chose.
  *
  * The tracked state starts from the saved profile rather than from blank,
  * because a settings form that opens empty reads as data loss.
+ *
+ * Which leaves one thing that cost a bug report: a default is read when an
+ * input mounts, and state initialised from a prop ignores every later value
+ * of it. So a save that stored "explicit" and refreshed the page put the
+ * stored profile in the props and changed nothing on screen — the form went
+ * on showing what it was built with, and looked for all the world as though
+ * saving did nothing. The fields therefore live in their own component,
+ * keyed by the stored profile: when the stored values change, they are built
+ * again from the new ones. The key is deliberately not on the form itself,
+ * which holds the action's "Saved." message and must survive.
  */
+
+/** The saved profile, as the form holds it while it is being edited. */
+function draftFrom(profile: LearnerProfile) {
+  return {
+    nativeLanguage: profile.nativeLanguage,
+    learningGoal: profile.learningGoal,
+    targetTopics: profile.targetTopics,
+    interests: profile.interests,
+    inputPreference: profile.inputPreference,
+    outputPreference: profile.outputPreference,
+    correctionPreference: profile.correctionPreference,
+    voicePreference: profile.voicePreference,
+    masteryThreshold: profile.masteryThreshold,
+  };
+}
 
 const legendClass = "font-display text-sm font-medium text-chalk/80";
 const hintText = "text-xs text-chalk/45";
@@ -118,17 +143,38 @@ export function SettingsForm({
   readonly initialState: SettingsFormState;
 }) {
   const [state, formAction, pending] = useActionState(action, initialState);
-  const [draft, setDraft] = useState({
-    nativeLanguage: profile.nativeLanguage,
-    learningGoal: profile.learningGoal,
-    targetTopics: profile.targetTopics,
-    interests: profile.interests,
-    inputPreference: profile.inputPreference,
-    outputPreference: profile.outputPreference,
-    correctionPreference: profile.correctionPreference,
-    voicePreference: profile.voicePreference,
-    masteryThreshold: profile.masteryThreshold,
-  });
+
+  // The stored values, not the object holding them: every server render sends
+  // a new object, and remounting the fields on each one would throw away an
+  // edit in progress. Rebuilt only when what is stored actually differs.
+  const stored = JSON.stringify(draftFrom(profile));
+
+  return (
+    <form action={formAction} className="flex w-full flex-col gap-8">
+      <SettingsFields key={stored} profile={profile} />
+
+      <div className="flex items-center gap-4">
+        <button type="submit" disabled={pending} className={buttonPrimary}>
+          {pending ? "Saving…" : "Save settings"}
+        </button>
+        <p
+          role="status"
+          aria-live="polite"
+          className={cn(
+            "text-sm empty:sr-only",
+            state.status === "error" ? "text-ember" : "text-sprout",
+          )}
+        >
+          {state.message}
+        </p>
+      </div>
+    </form>
+  );
+}
+
+/** Everything the learner edits, built from the profile it is keyed by. */
+function SettingsFields({ profile }: { readonly profile: LearnerProfile }) {
+  const [draft, setDraft] = useState(() => draftFrom(profile));
 
   const toggle =
     (key: "targetTopics" | "interests", max: number) =>
@@ -143,7 +189,7 @@ export function SettingsForm({
       });
 
   return (
-    <form action={formAction} className="flex w-full flex-col gap-8">
+    <>
       <div className="flex flex-col gap-1.5">
         <label htmlFor="learningGoal" className={legendClass}>
           What do you want to be able to do?
@@ -366,21 +412,6 @@ export function SettingsForm({
         </select>
       </div>
 
-      <div className="flex items-center gap-4">
-        <button type="submit" disabled={pending} className={buttonPrimary}>
-          {pending ? "Saving…" : "Save settings"}
-        </button>
-        <p
-          role="status"
-          aria-live="polite"
-          className={cn(
-            "text-sm empty:sr-only",
-            state.status === "error" ? "text-ember" : "text-sprout",
-          )}
-        >
-          {state.message}
-        </p>
-      </div>
-    </form>
+    </>
   );
 }

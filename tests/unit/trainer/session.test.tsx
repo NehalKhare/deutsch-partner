@@ -24,6 +24,11 @@ const REPLY = {
     { tool: "record_review_outcome", summary: '{"recorded":true}' },
   ],
   sources: [{ documentId: 7, contentType: "grammar", score: 0.8 }],
+  agenda: [
+    { kind: "recall", subject: "fahren" },
+    { kind: "correct_the_mistake", subject: "case_dative" },
+  ],
+  covered: ["der Bahnhof"],
   costEur: 0.004,
 };
 
@@ -100,6 +105,199 @@ describe("a working trainer", () => {
     expect(
       await screen.findByText(/asked a connected tool \(ask_question\)/i),
     ).toBeInTheDocument();
+  });
+});
+
+describe("how a reply is formatted", () => {
+  it("shows an emphasised word as emphasis, not as asterisks", async () => {
+    server.use(
+      http.post(TRAINER_ENDPOINT, () =>
+        HttpResponse.json({
+          ...REPLY,
+          reply: 'Ja, super: **das Buch**. Noch eins: ___ Tasche?',
+        }),
+      ),
+    );
+    const { container } = render(<TrainerSession />);
+
+    await sendMessage();
+
+    const strong = await waitFor(() => {
+      const found = container.querySelector("strong");
+      if (!found) throw new Error("nothing emphasised yet");
+      return found;
+    });
+    expect(strong).toHaveTextContent("das Buch");
+    expect(container.textContent).not.toContain("**");
+  });
+
+  it("shows an agenda as a list rather than one run-on line", async () => {
+    server.use(
+      http.post(TRAINER_ENDPOINT, () =>
+        HttpResponse.json({
+          ...REPLY,
+          reply: "Heute üben wir:\n1. spelling\n2. article\n3. word_order",
+        }),
+      ),
+    );
+    const { container } = render(<TrainerSession />);
+
+    await sendMessage();
+
+    // Scoped to the reply: the agenda panel has a list of its own.
+    const reply = "[data-role='assistant'] ol";
+    await waitFor(() => {
+      expect(container.querySelector(reply)).toBeInTheDocument();
+    });
+    expect(container.querySelectorAll(`${reply} > li`)).toHaveLength(3);
+  });
+
+  it("cannot be talked into markup by a reply that contains some", async () => {
+    server.use(
+      http.post(TRAINER_ENDPOINT, () =>
+        HttpResponse.json({
+          ...REPLY,
+          reply: "Sag mal: <img src=x onerror=alert(1)> und **jetzt**",
+        }),
+      ),
+    );
+    const { container } = render(<TrainerSession />);
+
+    await sendMessage();
+
+    await waitFor(() => expect(container.querySelector("strong")).toBeInTheDocument());
+    // The angle brackets are text, because nothing here ever builds HTML.
+    expect(container.querySelector("img")).toBeNull();
+    expect(container.textContent).toContain("<img src=x onerror=alert(1)>");
+  });
+});
+
+describe("the session's agenda", () => {
+  it("shows what the session will cover, and what is already done", async () => {
+    server.use(http.post(TRAINER_ENDPOINT, () => HttpResponse.json(REPLY)));
+    const { container } = render(<TrainerSession />);
+
+    await sendMessage();
+
+    const agenda = await waitFor(() => {
+      const found = container.querySelector("[data-role='agenda']");
+      if (!found) throw new Error("no agenda yet");
+      return found;
+    });
+    expect(agenda).toHaveTextContent("der Bahnhof");
+    expect(agenda).toHaveTextContent("fahren");
+    expect(agenda).toHaveTextContent(/fix the mistake/i);
+    expect(agenda.querySelectorAll("[data-done='true']")).toHaveLength(1);
+  });
+
+  it("shows nothing before the trainer has planned anything", () => {
+    const { container } = render(<TrainerSession />);
+
+    expect(container.querySelector("[data-role='agenda']")).toBeNull();
+  });
+
+  it("sends the covered subjects back, so nothing is asked twice", async () => {
+    const captured: Array<Record<string, unknown>> = [];
+    server.use(
+      http.post(TRAINER_ENDPOINT, async ({ request }) => {
+        captured.push((await request.json()) as Record<string, unknown>);
+        return HttpResponse.json({ ...REPLY, covered: ["der Bahnhof", "fahren"] });
+      }),
+    );
+    render(<TrainerSession />);
+
+    const user = await sendMessage();
+    await waitFor(() => expect(captured).toHaveLength(1));
+
+    await user.type(screen.getByLabelText(/your message to the trainer/i), "fahren");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(captured).toHaveLength(2));
+
+    expect(captured[0]?.covered).toEqual([]);
+    expect(captured[1]?.covered).toEqual(["der Bahnhof", "fahren"]);
+  });
+
+  it("keeps the agenda through a turn that did not touch it", async () => {
+    let turn = 0;
+    server.use(
+      http.post(TRAINER_ENDPOINT, () => {
+        turn += 1;
+        return HttpResponse.json(
+          turn === 1 ? REPLY : { ...REPLY, agenda: null, covered: ["der Bahnhof"] },
+        );
+      }),
+    );
+    const { container } = render(<TrainerSession />);
+
+    const user = await sendMessage();
+    await waitFor(() =>
+      expect(container.querySelector("[data-role='agenda']")).toBeInTheDocument(),
+    );
+
+    await user.type(
+      screen.getByLabelText(/your message to the trainer/i),
+      "Was ist der Dativ?",
+    );
+    await user.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => expect(turn).toBe(2));
+    expect(container.querySelector("[data-role='agenda']")).toHaveTextContent("fahren");
+  });
+});
+
+describe("a session that has run out of things to review", () => {
+  const FINAL = {
+    ...REPLY,
+    reply: "Das war alles. Behalte: fahren — to drive.",
+    agenda: [],
+    covered: ["der Bahnhof", "fahren"],
+    complete: true,
+  };
+
+  it("closes the chat and offers a fresh session instead", async () => {
+    server.use(http.post(TRAINER_ENDPOINT, () => HttpResponse.json(FINAL)));
+    const { container } = render(<TrainerSession />);
+
+    await sendMessage();
+
+    await waitFor(() => {
+      expect(container.querySelector("[data-role='session-end']")).toBeInTheDocument();
+    });
+    // No box to type in: the trainer has been told not to answer another
+    // question, so the page must not invite one.
+    expect(screen.queryByLabelText(/your message to the trainer/i)).toBeNull();
+    expect(screen.getByText(/das war alles/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /start a new session/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("starts the next session from scratch", async () => {
+    const captured: Array<Record<string, unknown>> = [];
+    server.use(
+      http.post(TRAINER_ENDPOINT, async ({ request }) => {
+        captured.push((await request.json()) as Record<string, unknown>);
+        return HttpResponse.json(FINAL);
+      }),
+    );
+    render(<TrainerSession />);
+
+    const user = await sendMessage();
+    await waitFor(() => expect(captured).toHaveLength(1));
+
+    await user.click(screen.getByRole("button", { name: /start a new session/i }));
+
+    // A clean sheet: the finished session's subjects are not carried into the
+    // new one, so the agenda is planned again from whatever is still due.
+    expect(screen.queryByText(/das war alles/i)).toBeNull();
+    await user.type(
+      screen.getByLabelText(/your message to the trainer/i),
+      "Nochmal!",
+    );
+    await user.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(captured).toHaveLength(2));
+
+    expect(captured[1]).toMatchObject({ covered: [], history: [] });
   });
 });
 

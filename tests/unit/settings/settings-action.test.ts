@@ -15,9 +15,13 @@ const requireAuthenticatedUserId = vi.fn();
 const getProfile = vi.fn();
 const upsertProfile = vi.fn();
 const revalidatePath = vi.fn();
+const refresh = vi.fn();
 const info = vi.fn();
 
-vi.mock("next/cache", () => ({ revalidatePath: (p: string) => revalidatePath(p) }));
+vi.mock("next/cache", () => ({
+  revalidatePath: (p: string) => revalidatePath(p),
+  refresh: () => refresh(),
+}));
 vi.mock("@/lib/supabase/server-client", () => ({
   createServerSupabaseClient: async () => ({}),
 }));
@@ -78,6 +82,7 @@ beforeEach(() => {
     data: profile,
   }));
   revalidatePath.mockClear();
+  refresh.mockClear();
   info.mockClear();
   upsertProfile.mockClear();
 });
@@ -142,11 +147,18 @@ describe("saving settings", () => {
     expect(state.status).toBe("error");
   });
 
+  it("refreshes the page the learner is looking at, so it shows what was saved", async () => {
+    // The settings page holds no cached data, so invalidating it achieved
+    // nothing: the form kept rendering the profile from before the save.
+    await updateSettingsAction(IDLE, form());
+
+    expect(refresh).toHaveBeenCalled();
+  });
+
   it("refreshes the pages that render these values", async () => {
     await updateSettingsAction(IDLE, form());
 
     expect(revalidatePath).toHaveBeenCalledWith("/dashboard");
-    expect(revalidatePath).toHaveBeenCalledWith("/settings");
   });
 
   it("logs counts and choices, never the goal's words", async () => {

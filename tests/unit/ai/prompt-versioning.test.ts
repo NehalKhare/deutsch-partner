@@ -180,7 +180,13 @@ describe("the trainer's prompt", () => {
    * hash update (no behavioural effect) or a version bump, never unnoticed.
    */
   const RECORDED_TRAINER: Readonly<Record<string, string>> = {
-    "trainer.session@1": "f87108c1",
+    // Version 4: the agenda ends on a reading item. The news stopped being
+    // something offered if the learner asked and became the last thing every
+    // session does — retold at their level, then judged on what they
+    // understood. (Version 3 ended the session with a recall list; version 2
+    // introduced the agenda: open by listing what the sitting covers, quiz
+    // only the item the tool hands over, never ask the same question twice.)
+    "trainer.session@4": "8188106b",
   };
 
   it("matches its recorded fingerprint", () => {

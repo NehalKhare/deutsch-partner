@@ -15,6 +15,14 @@ import { requireOnboarded } from "@/lib/onboarding/gate";
  *
  * Visually it is the landing page's header with one thing swapped out, so
  * signing in changes what you can do and not what room you are standing in.
+ *
+ * The shell is exactly one viewport tall and scrolls nothing itself. That is
+ * what lets a page own its own scrolling: the conversation and the trainer
+ * both put a fixed head above a scrolling transcript, and an inner
+ * overflow-y-auto only clips when something above it has a real height to
+ * clip against. Left to grow (min-h-dvh), the document scrolled instead and
+ * took the tutor's face up and off the screen with it. Ordinary pages scroll
+ * in the region below the nav, which is why it carries the overflow.
  */
 export default async function AuthenticatedLayout({
   children,
@@ -25,7 +33,7 @@ export default async function AuthenticatedLayout({
   await requireOnboarded(learnerId);
 
   return (
-    <div className="flex min-h-dvh flex-col bg-ink font-body text-chalk">
+    <div className="flex h-dvh flex-col bg-ink font-body text-chalk">
       <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-haze/60 px-6 py-4 md:px-10">
         <Wordmark href="/dashboard" />
         <AppNav />
@@ -38,7 +46,7 @@ export default async function AuthenticatedLayout({
           </button>
         </form>
       </header>
-      <div className="flex flex-1 flex-col">{children}</div>
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">{children}</div>
     </div>
   );
 }

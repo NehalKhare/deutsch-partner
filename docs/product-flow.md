@@ -76,7 +76,7 @@ outcome worse than no button at all.
 The companion is doing what is actually happening throughout: listening while
 the microphone is open, speaking while a reply is being read out.
 
-> `components/chat/speech.ts`, `app/api/transcribe/`, `app/api/speak/`
+> `components/voice/speech.ts`, `app/api/transcribe/`, `app/api/speak/`
 
 A conversation can also be deleted, from the recent list on the dashboard. It
 asks first, because there is no undo and there should not be: an undo would
@@ -254,17 +254,87 @@ never appears from nowhere. The whole pipeline is drawn in
 
 The Trainer (`/trainer`) is a workout where the chat is a conversation: a
 **LangChain agent** that runs the review session the review page only lists.
-Say *"Lass uns üben!"* and it looks up what is due, quizzes one item at a
-time, judges the answer itself, and records the outcome — through the same
-deterministic vocabulary engine a chat turn uses, so the model judges and the
-arithmetic schedules. It can also open the grammar catalogue, search the
-corpus (with the sources cited in the reply), fetch today's headlines from
-nachrichtenleicht.de as simple-German reading, and borrow tools from a
-configured remote MCP server, whose output is always fenced as untrusted.
+Say *"Lass uns üben!"* and it opens with the **agenda** — the list of what
+this sitting will cover, said out loud before the first question and shown
+beside the transcript as a checklist that ticks off as the session goes. Then
+it quizzes one item at a time, judges the answer itself, and records the
+outcome — through the same deterministic vocabulary engine a chat turn uses,
+so the model judges and the arithmetic schedules. It can also open the grammar
+catalogue, search the corpus (with the sources cited in the reply), fetch
+today's headlines from nachrichtenleicht.de as simple-German reading, and
+borrow tools from a configured remote MCP server, whose output is always
+fenced as untrusted.
+
+**Nothing is asked twice.** Recording an outcome closes the item, and a closed
+item is never offered again: the agenda tool hands the model the single next
+subject rather than a list of questions, so a repeat is not something the
+prompt asks it to avoid but something it is never given the chance to do. The
+session's progress rides with the request the way the transcript does — the
+client sends back the subjects already closed, as keys the server uses to
+narrow the next agenda and never to build a prompt, so a tampered list can
+only shorten someone's own practice.
+
+**Every session ends on real German.** The last agenda item is not a drill:
+the trainer fetches today's headlines from nachrichtenleicht.de, **retells one
+at the learner's own level**, and asks — in German — what they think it is
+about. They answer in their own words; the trainer says which parts they got
+right, fills in what they missed, and gives the gist in one sentence. A learner
+with nothing due still gets this, so a session is never empty.
+
+Levelling it is arithmetic, not a model's judgement (`lib/trainer/news.ts`):
+headlines are ordered shortest first, so the item the trainer reaches for is
+the kind one, and each CEFR band carries a word budget for the retelling — six
+words a sentence at A1, nine at A2, fourteen at B1. "Simple German" is still
+one level, and it is not necessarily the learner's; an A1 reader three weeks in
+meeting a B1 sentence is an A1 reader who stops reading. The instruction that
+says so is trusted text wrapped *around* the fence; the headlines stay inside
+it, reading material and never instructions.
+
+**And it ends.** Work through the agenda and the tool answers
+`sessionComplete` with a **recap** — every word covered and what it means,
+read back out of the catalogue rather than out of the model's memory of the
+conversation. That recap is the trainer's last reply: it says what to
+remember and stops, the composer is replaced by *Start a new session*, and
+the next sitting plans a fresh agenda from whatever is still due.
+
+What was just practised is gone from `/review` as well. A correct answer
+schedules the word a day or more out, which the due list already respects, and
+the weak list — the one judgement that is allowed to run ahead of the schedule
+— now leaves alone anything worked on in the last few hours
+(`JUST_PRACTISED_HOURS`). A recurring mistake the learner fixes in the trainer
+is marked resolved, so it stops being listed too, and comes back only if the
+mistake itself does.
 
 Every answer arrives with its receipts: the list of tools the agent used and
 the sources it read, because an agent that shows its work is the difference
-between an answer and an assertion. The loop is bounded three ways — a hard
+between an answer and an assertion. Replies can be **read aloud** here exactly
+as they can in the chat — a speaker on each one, a toggle that reads each new
+reply as it lands, the speech model first and this device's own voice as a
+real fallback, at the learner's pace and in their chosen voice. A drill is no
+less worth hearing than a conversation, and hearing *der Bahnhof* said is most
+of what learning to say it is. The chain lives in one hook
+(`components/voice/read-aloud.ts`) rather than in two copies of itself, because
+the copy that drifted would be the one that quietly stopped falling back.
+
+Two settings steer it and both are the learner's. *Replies should arrive as*
+decides whether a session starts already reading aloud — a learner who asked
+to be read to should not have to ask again on every page, and the toggle
+remains as an override for the sitting. *Where the read-aloud voice comes
+from* decides the chain: the device's own voice alone, or the speech model
+first with the device as its fallback. A chosen device voice is never quietly
+swapped for the model when it fails; that would be the setting lying about
+what it does.
+
+Replies are **formatted** rather than printed raw
+(`lib/markdown/parse.ts`, `components/ui/rich-text.tsx`). Models emphasise the
+word under discussion and number what they are about to cover whatever the
+prompt asks of them, and unrendered that arrives as `**das Buch**` with a
+six-item agenda flattened into one unskimmable paragraph. The subset is small
+— emphasis, code, bullets, numbers — it is parsed into React elements rather
+than into a string of HTML, so markup is not expressible rather than merely
+escaped, and anything it does not recognise stays visible as the characters
+the model typed. The same parser strips the notation before a voice reads the
+line: asterisks are for the eye and have no business being pronounced. The loop is bounded three ways — a hard
 step cap, a per-request euro ceiling enforced from inside the model's ledger
 callback, and a fail-closed budget check before the first call — and each
 model invocation writes its own ledger row under the `trainer.session` task,

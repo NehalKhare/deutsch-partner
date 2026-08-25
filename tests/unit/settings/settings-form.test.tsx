@@ -186,6 +186,87 @@ describe("saving", () => {
     expect(seen[0]?.get("correctionPreference")).toBe("explicit");
   });
 
+  it("keeps the chosen correction style on screen after a save", async () => {
+    // The reported bug: change a radio, save, and the form shows the old
+    // choice again — so the setting looks as though it never saved.
+    const action: SettingsAction = async () => SETTINGS_SAVED;
+    const user = userEvent.setup();
+    renderForm(action);
+
+    await user.click(screen.getByRole("radio", { name: /gently/i }));
+    await user.click(screen.getByRole("button", { name: /save settings/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("status")).toHaveTextContent(/saved/i);
+    });
+    expect(screen.getByRole("radio", { name: /gently/i })).toBeChecked();
+    expect(screen.getByRole("radio", { name: /clearly/i })).not.toBeChecked();
+  });
+
+  it("keeps the chosen pass mark on screen after a save", async () => {
+    const action: SettingsAction = async () => SETTINGS_SAVED;
+    const user = userEvent.setup();
+    const { container } = renderForm(action);
+
+    fireEvent.change(screen.getByLabelText(/pass mark for moving up/i), {
+      target: { value: "0" },
+    });
+    await user.click(screen.getByRole("button", { name: /save settings/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("status")).toHaveTextContent(/saved/i);
+    });
+    expect(
+      container.querySelector("input[name='masteryThreshold']"),
+    ).toHaveValue("33");
+  });
+
+  it("submits the same pass mark again when saved twice", async () => {
+    // The second save must carry the choice too: a form reset that blanks a
+    // hidden field turns the next submit into a refusal nobody asked for.
+    const seen: FormData[] = [];
+    const action: SettingsAction = async (_state, formData) => {
+      seen.push(formData);
+      return SETTINGS_SAVED;
+    };
+    const user = userEvent.setup();
+    renderForm(action);
+
+    fireEvent.change(screen.getByLabelText(/pass mark for moving up/i), {
+      target: { value: "1" },
+    });
+    await user.click(screen.getByRole("button", { name: /save settings/i }));
+    await waitFor(() => expect(seen).toHaveLength(1));
+
+    await user.click(screen.getByRole("button", { name: /save settings/i }));
+    await waitFor(() => expect(seen).toHaveLength(2));
+
+    expect(seen[0]?.get("masteryThreshold")).toBe("50");
+    expect(seen[1]?.get("masteryThreshold")).toBe("50");
+  });
+
+  it("shows the freshly saved profile when the refresh delivers it", async () => {
+    // What the save-then-refresh cycle looks like from here: the same form,
+    // re-rendered with the stored profile. It must adopt it rather than keep
+    // rendering the one it was mounted with.
+    const action: SettingsAction = async () => SETTINGS_SAVED;
+    const { rerender } = renderForm(action);
+
+    expect(screen.getByRole("radio", { name: /clearly/i })).toBeChecked();
+
+    rerender(
+      <SettingsForm
+        profile={{ ...PROFILE, correctionPreference: "minimal", masteryThreshold: 33 }}
+        action={action}
+        initialState={INITIAL_SETTINGS_STATE}
+      />,
+    );
+
+    expect(screen.getByRole("radio", { name: /rarely/i })).toBeChecked();
+    expect(screen.getByRole("radio", { name: /clearly/i })).not.toBeChecked();
+    expect(screen.getByText(/relaxed 33%/i)).toBeInTheDocument();
+  });
+
   it("keeps the learner's choices on screen after a refusal", async () => {
     // React resets the DOM form when the action settles. The defaults are
     // bound to tracked state, so the reset restores the choices instead of

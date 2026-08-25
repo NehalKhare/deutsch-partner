@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { refresh, revalidatePath } from "next/cache";
 
 import { actionLogger, pseudonymOrUnavailable } from "@/lib/api/composition";
 import { requireAuthenticatedUserId } from "@/lib/auth/current-user";
@@ -58,9 +58,18 @@ export async function updateSettingsAction(
     interests: parsed.data.interests.length,
   });
 
-  // The dashboard greets the goal and the chat renders the preferences.
+  // Two different jobs, and using one for both was the bug behind "my
+  // settings never save": they did save, and the form kept showing the old
+  // values afterwards.
+  //
+  // refresh() re-renders the route the learner is looking at, which is the
+  // only thing that puts the saved values back on their screen. This page is
+  // fully dynamic — it holds no cached data — so revalidatePath had nothing
+  // to invalidate here and left the client router's copy of the page in place.
+  refresh();
+  // The dashboard greets the goal, and it is a different path: invalidating it
+  // is what makes the next visit re-render rather than replay what was cached.
   revalidatePath("/dashboard");
-  revalidatePath("/settings");
 
   return SETTINGS_SAVED;
 }

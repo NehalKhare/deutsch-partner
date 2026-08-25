@@ -186,7 +186,7 @@ learner-scoped wrapper over code that already existed:
 | `get_grammar_pattern` | the 86-pattern grammar catalogue | read |
 | `search_knowledge` | the RAG retriever, sources collected for citation | read |
 | `record_review_outcome` | the deterministic vocabulary engine | **write** |
-| `fetch_simple_german_news` | nachrichtenleicht.de headlines, fenced | read |
+| `fetch_simple_german_news` | nachrichtenleicht.de headlines, levelled and fenced | read |
 
 plus whatever a configured remote MCP server offers (section 2b). The rules
 they run under are the guardrails' (S11): the learner id is bound from the
@@ -196,6 +196,25 @@ before the model reads it; and the one write tool keeps the split the whole
 product lives by — the model judges whether an answer was right, the
 spaced-repetition arithmetic decides what that does to the schedule, with a
 hard per-request write cap.
+
+One of those tools carries the session itself. `get_review_session` returns the
+whole **agenda** as subjects — the list the trainer reads out before the first
+question — but only ever one item with a prompt attached, the next one the
+session has not closed. `record_review_outcome` closes an item as well as
+writing it, so "never ask the same question twice" is a property of what the
+model is handed rather than a line in the prompt hoping to be obeyed. The
+closed set travels with the request like the transcript does, as keys the
+server matches against and never renders into a prompt (`domain/trainer-session.ts`).
+
+The same tool ends the session: an agenda with nothing left comes back as
+`sessionComplete` plus a recap the tool *looks up* — the covered subjects are
+keys into the catalogue, so the closing "here is what to remember" is the
+database's words rather than the model's recollection of a truncated
+transcript. The write tool closes the loop on the review page in turn: a word
+answered correctly is scheduled forward, a mistake answered correctly is
+marked resolved, and `weakVocabulary` — the one list allowed to ignore the
+schedule — leaves alone anything practised in the last few hours, so nothing
+the learner just got right is still sitting on `/review` afterwards.
 
 > `lib/trainer/tools.ts`, `lib/trainer/agent.ts`, `lib/api/trainer.ts`
 

@@ -17,6 +17,18 @@ export const WEAK_MASTERY_THRESHOLD = 0.5;
 /** Seen at least this often, and still weak: that is a word to work on. */
 export const WEAK_MIN_EXPOSURES = 3;
 
+/**
+ * How long a word counts as just practised.
+ *
+ * A sitting, generously measured. The due list already respects the schedule,
+ * but the weak list is a judgement about the word rather than about the clock,
+ * and without this it would offer back a word the learner answered correctly
+ * ten minutes ago — which is not practice, and reads as though the work did
+ * not count. Shorter than the shortest review interval by design: a day later
+ * the word is fair game again if it is still weak.
+ */
+export const JUST_PRACTISED_HOURS = 4;
+
 /** A review session that never ends is a review session nobody finishes. */
 export const MAX_REVIEW_ITEMS = 20;
 
@@ -66,12 +78,19 @@ export function dueForReview(
  *
  * Distinct from "due": a word can be due simply because time passed. A weak
  * word has been seen enough times that low mastery is a fact about the word
- * rather than about the schedule.
+ * rather than about the schedule — which is why this list is allowed to offer
+ * a word before its review date, and why it needs the clock for one thing
+ * only: a word worked on in this sitting is left alone until the next one.
  */
 export function weakVocabulary(
   records: readonly LearnerVocabulary[],
+  now: Date,
   limit = MAX_REVIEW_ITEMS,
 ): readonly LearnerVocabulary[] {
+  const justPractised = (record: LearnerVocabulary) =>
+    record.lastSeenAt !== null &&
+    now.getTime() - record.lastSeenAt.getTime() < JUST_PRACTISED_HOURS * 3_600_000;
+
   return records
     .filter(
       (record) =>
@@ -81,7 +100,9 @@ export function weakVocabulary(
         // bug in the engine rather than a word to drill.
         record.status !== "mastered" &&
         record.exposureCount >= WEAK_MIN_EXPOSURES &&
-        record.masteryScore < WEAK_MASTERY_THRESHOLD,
+        record.masteryScore < WEAK_MASTERY_THRESHOLD &&
+        // Answered a moment ago, in the session the learner is still in.
+        !justPractised(record),
     )
     .sort(
       (a, b) =>
@@ -155,7 +176,7 @@ export function buildReviewPlan(inputs: ReviewInputs): ReviewPlan {
   const due = dueForReview(inputs.vocabulary, inputs.now, limit);
   const covered = new Set(due.map((item) => item.record.vocabularyItemId));
 
-  const weak = weakVocabulary(inputs.vocabulary, limit).filter(
+  const weak = weakVocabulary(inputs.vocabulary, inputs.now, limit).filter(
     (record) => !covered.has(record.vocabularyItemId),
   );
 

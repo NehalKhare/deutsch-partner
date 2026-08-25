@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createBrowserSpeech, pickGermanVoice } from "@/components/chat/speech";
+import { createBrowserSpeech, pickGermanVoice } from "@/components/voice/speech";
 
 /**
  * The browser's own voice.

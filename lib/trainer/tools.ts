@@ -1,16 +1,32 @@
 import { tool, type StructuredToolInterface } from "@langchain/core/tools";
 import { z } from "zod";
 
-import { buildReviewPlan } from "@/learning/review";
+import {
+  MAX_REVIEW_ITEMS,
+  buildReviewPlan,
+  type ReviewActivityKind,
+} from "@/learning/review";
 import { getMiniLevel } from "@/learning/mini-levels";
 import {
   newLearnerVocabulary,
   recordCorrectUse,
   recordIncorrectUse,
 } from "@/learning/vocabulary-engine";
+import { GENDERS } from "@/domain/vocabulary";
+import { MAX_AGENDA_ITEMS, MAX_COVERED_SUBJECTS } from "@/domain/trainer-session";
 import { escapeUntrusted, wrapUntrusted } from "@/lib/ai/prompts/delimiters";
 import { truncateToTokens } from "@/lib/ai/prompts/tokens";
-import { TRAINER_TOOL_HELP, type TrainerToolName } from "@/lib/ai/prompts/trainer";
+import {
+  TRAINER_TOOL_HELP,
+  newsRetellFraming,
+  type TrainerToolName,
+} from "@/lib/ai/prompts/trainer";
+import {
+  NEWS_CHOICES,
+  NEWS_RETELL_WORDS,
+  parseHeadlines,
+  simplestFirst,
+} from "@/lib/trainer/news";
 import { DEFAULT_INTENT, classifyIntent } from "@/lib/graph/intent";
 import type { GermanLearningRetriever } from "@/lib/retrieval/retriever";
 import { nullLogger, type Logger } from "@/lib/observability/logger";
@@ -44,6 +60,12 @@ import type { VocabularyRepository } from "@/repositories/vocabulary-repository"
 export interface TrainerToolDeps {
   /** From the verified session. Bound in the closure, never a tool argument. */
   readonly learnerId: string;
+  /**
+   * What this session has already worked through, as the client sent it back.
+   * Exclusion keys and nothing else: they narrow the agenda, they never reach
+   * a prompt, and the model is only ever handed words the database just gave.
+   */
+  readonly covered?: readonly string[];
   readonly userIdHash: string;
   readonly requestId: string;
   readonly vocabulary: VocabularyRepository;
@@ -62,10 +84,39 @@ export interface TrainerSource {
   readonly score: number;
 }
 
+/**
+ * What one agenda line asks for.
+ *
+ * The review engine's activities, plus the one the engine knows nothing
+ * about: reading a real news item. That is not spaced repetition — there is
+ * no schedule behind it and nothing to be due — so it is the trainer's own
+ * addition to the session rather than a row in the review plan, and the
+ * review page stays a list of words and mistakes.
+ */
+export type TrainerAgendaKind = ReviewActivityKind | "read_the_news";
+
+/** One line of the agenda, as the session shows it to the learner. */
+export interface TrainerAgendaItem {
+  readonly kind: TrainerAgendaKind;
+  readonly subject: string;
+}
+
 export interface TrainerTools {
   readonly tools: StructuredToolInterface[];
   /** What search_knowledge cited this request, for the response to show. */
   readonly sources: () => readonly TrainerSource[];
+  /**
+   * The agenda this request planned, or null if it never asked for one.
+   *
+   * The distinction matters to the client: an empty agenda means the session
+   * is finished, while no agenda at all means this turn was about something
+   * else and the plan already on screen still stands.
+   */
+  readonly agenda: () => readonly TrainerAgendaItem[] | null;
+  /** Every subject this session has finished, for the client to send back. */
+  readonly covered: () => readonly string[];
+  /** True once an agenda has been worked all the way through. */
+  readonly complete: () => boolean;
 }
 
 /** One request may not grind the review table however chatty the model is. */
@@ -76,23 +127,35 @@ const MAX_FENCED_TOKENS = 1200;
 
 const NEWS_URL = "https://www.nachrichtenleicht.de/";
 const NEWS_TIMEOUT_MS = 8_000;
-const MAX_HEADLINES = 12;
 
 const UNAVAILABLE = JSON.stringify({ error: "unavailable" });
+
+/**
+ * The reading item every session ends on.
+ *
+ * German, because it sits in a list of German words on the learner's screen,
+ * and deliberately not a dictionary form: it is closed by name like any other
+ * agenda item, and a subject that collided with a catalogue lemma would write
+ * a vocabulary outcome for a word nobody was quizzed on.
+ */
+const NEWS_SUBJECT = "Nachrichten von heute";
+
+const NEWS_ACTIVITY = {
+  kind: "read_the_news" as const,
+  subject: NEWS_SUBJECT,
+  prompt:
+    "Call fetch_simple_german_news and follow the level instruction it returns: retell one item at the learner's level, then ask what they understood.",
+};
 
 const grammarKeySchema = z
   .string()
   .regex(/^[a-z][a-z0-9_]*$/)
   .max(64);
 
-/** The handful of entities the headlines actually use. */
-function decodeEntities(text: string): string {
-  return text
-    .replaceAll("&amp;", "&")
-    .replaceAll("&quot;", '"')
-    .replaceAll("&#39;", "'")
-    .replaceAll("&#039;", "'")
-    .replaceAll("&nbsp;", " ");
+/** The article a learner reads with a noun; not part of its dictionary form. */
+function withoutArticle(subject: string): string | null {
+  const article = GENDERS.find((gender) => subject.startsWith(`${gender} `));
+  return article ? subject.slice(article.length + 1) : null;
 }
 
 export function createTrainerTools(deps: TrainerToolDeps): TrainerTools {
@@ -100,6 +163,59 @@ export function createTrainerTools(deps: TrainerToolDeps): TrainerTools {
   const now = deps.now ?? (() => new Date());
   const cited: TrainerSource[] = [];
   let reviewWrites = 0;
+
+  // The session, as far as one request can see it: what is already done, the
+  // agenda this request planned, and the mapping from what a learner reads
+  // ("der Tisch") to what a progress row is keyed by ("Tisch").
+  const covered = new Set(deps.covered ?? []);
+  const lemmaFor = new Map<string, string>();
+  const errorIdFor = new Map<string, string>();
+  let agenda: TrainerAgendaItem[] | null = null;
+  let complete = false;
+
+  /**
+   * The session's words, looked up again for the closing summary.
+   *
+   * Keyed by what was closed, worded by what the database holds: the model is
+   * handed the catalogue's own word and translation, never the client's keys.
+   */
+  const recapFor = async (
+    subjects: readonly string[],
+  ): Promise<ReadonlyArray<{ subject: string; meaning: string }>> => {
+    const candidates = [
+      ...new Set(
+        subjects.flatMap((key) => [
+          lemmaFor.get(key) ?? key,
+          withoutArticle(key) ?? key,
+        ]),
+      ),
+    ];
+    if (candidates.length === 0) return [];
+
+    const found = await deps.vocabulary.findByLemmas(candidates);
+    if (!found.ok) return [];
+
+    const byLemma = new Map(found.data.map((item) => [item.lemma, item]));
+    const recap: Array<{ subject: string; meaning: string }> = [];
+    const seen = new Set<string>();
+    // In the order the session ran, and each word once however many keys
+    // point at it.
+    for (const candidate of candidates) {
+      const item = byLemma.get(candidate);
+      if (item === undefined || seen.has(item.id)) continue;
+
+      seen.add(item.id);
+      recap.push({ subject: item.word, meaning: item.englishTranslation });
+    }
+
+    return recap;
+  };
+
+  /** Closing an item is what stops it being asked again. Bounded, like a body. */
+  const close = (subject: string) => {
+    const key = subject.trim();
+    if (key.length > 0 && covered.size < MAX_COVERED_SUBJECTS) covered.add(key);
+  };
 
   // Which tools ran is audited; what was said in them never is (S24).
   const audited = (name: TrainerToolName, run: () => Promise<string>) => {
@@ -130,6 +246,18 @@ export function createTrainerTools(deps: TrainerToolDeps): TrainerTools {
         const items = await deps.vocabulary.findByIds(
           vocabulary.data.map((record) => record.vocabularyItemId),
         );
+        const byWord = new Map(
+          (items.ok ? items.data : []).map((item) => [item.word, item.lemma]),
+        );
+
+        // A mistake drilled correctly can be marked resolved, and resolving
+        // needs the row's id — which the plan itself does not carry, because
+        // an activity is only ever a subject and a prompt.
+        for (const error of errors.ok ? errors.data : []) {
+          if (!errorIdFor.has(error.errorType)) {
+            errorIdFor.set(error.errorType, error.id);
+          }
+        }
 
         const plan = buildReviewPlan({
           vocabulary: vocabulary.data,
@@ -141,26 +269,75 @@ export function createTrainerTools(deps: TrainerToolDeps): TrainerTools {
               }))
             : [],
           now: now(),
-          limit: limit ?? 8,
+          // Built wide, then narrowed by what this session has done. Slicing
+          // first would keep offering the finished items' places to nothing:
+          // a learner who works through an agenda would be told they are out
+          // of practice while words sat waiting behind the cut.
+          limit: MAX_REVIEW_ITEMS,
         });
 
+        const size = Math.min(limit ?? MAX_AGENDA_ITEMS, MAX_AGENDA_ITEMS);
+        // The news goes last, and it goes in whatever the review rows say:
+        // a learner with nothing due still has something real to read, and a
+        // learner with a full agenda ends on it rather than on a drill.
+        const remaining = [...plan.activities, NEWS_ACTIVITY]
+          .filter((activity) => !covered.has(activity.subject))
+          .slice(0, size);
+
+        agenda = remaining.map((activity) => ({
+          kind: activity.kind,
+          subject: activity.subject,
+        }));
+        for (const activity of remaining) {
+          const lemma = byWord.get(activity.subject);
+          if (lemma !== undefined) lemmaFor.set(activity.subject, lemma);
+        }
+
+        // Finished, rather than never started: a learner with nothing due has
+        // an empty agenda too, and telling them the session is over would be
+        // a strange way to say hello.
+        complete = remaining.length === 0 && covered.size > 0;
+
+        const next = remaining[0];
         return JSON.stringify({
           dueCount: plan.due.length,
           weakCount: plan.weak.length,
-          activities: plan.activities.slice(0, limit ?? 8).map((activity) => ({
-            kind: activity.kind,
-            subject: activity.subject,
-            // Recurring-error prompts carry model-authored wording; neutralise
-            // anything fence-shaped before it re-enters a prompt.
-            prompt: escapeUntrusted(activity.prompt),
+          completed: covered.size,
+          remaining: remaining.length,
+          // The list to read out: subjects only. An agenda that carried its
+          // prompts would be a quiz the learner can read ahead of, and a
+          // model handed eight questions asks all eight.
+          agenda: agenda.map((line, index) => ({
+            position: index + 1,
+            kind: line.kind,
+            subject: line.subject,
           })),
+          // One question, and only the next one. The model cannot ask an item
+          // twice because it is never handed one the session has closed.
+          next: next
+            ? {
+                position: 1,
+                kind: next.kind,
+                subject: next.subject,
+                // Recurring-error prompts carry model-authored wording;
+                // neutralise anything fence-shaped before it re-enters a prompt.
+                prompt: escapeUntrusted(next.prompt),
+              }
+            : null,
+          sessionComplete: complete,
+          // What the learner should take away, and the reason the closing
+          // summary is not the model remembering: every word and meaning here
+          // was read back out of the catalogue just now. The covered subjects
+          // are lookup keys, so a session whose keys resolve to nothing gets a
+          // short recap rather than an invented one.
+          recap: complete ? await recapFor([...covered]) : undefined,
         });
       })(),
     {
       name: "get_review_session",
       description: TRAINER_TOOL_HELP.get_review_session,
       schema: z.strictObject({
-        limit: z.number().int().min(1).max(10).optional(),
+        limit: z.number().int().min(1).max(MAX_AGENDA_ITEMS).optional(),
       }),
     },
   );
@@ -275,20 +452,78 @@ export function createTrainerTools(deps: TrainerToolDeps): TrainerTools {
   );
 
   const recordReviewOutcome = tool(
-    async ({ lemma, outcome }: { lemma: string; outcome: "correct" | "incorrect" }) =>
+    async ({ subject, outcome }: { subject: string; outcome: "correct" | "incorrect" }) =>
       audited("record_review_outcome", async () => {
+        const key = subject.trim();
+
+        // Closing happens on every path out of here, including the ones that
+        // write nothing. Whether the word turns out to be in the catalogue,
+        // or the read failed, has nothing to do with whether the session has
+        // now dealt with the item — and an item that cannot close is one the
+        // trainer offers again next turn, to a learner who just answered it.
         if (reviewWrites >= MAX_REVIEW_WRITES_PER_REQUEST) {
-          return JSON.stringify({ recorded: false, reason: "write_limit_reached" });
+          close(key);
+          return JSON.stringify({
+            recorded: false,
+            reason: "write_limit_reached",
+            closed: true,
+          });
         }
 
-        const found = await deps.vocabulary.findByLemmas([lemma]);
-        if (!found.ok) return UNAVAILABLE;
-        const item = found.data[0];
-        // A word the curriculum does not teach gets no progress row: the model
-        // may quiz freestyle, but the record only ever holds catalogue words.
-        if (!item) {
-          return JSON.stringify({ recorded: false, reason: "not_in_curriculum" });
+        // A recurring mistake the learner has just fixed stops being an
+        // unresolved mistake, so the review page stops listing it. Reversible
+        // by the only thing that should reverse it: making it again, which
+        // sets the row back to unresolved when the next turn is evaluated.
+        const errorId = errorIdFor.get(key);
+        if (errorId !== undefined) {
+          if (outcome === "correct") {
+            const resolved = await deps.errors.markResolved(errorId);
+            return JSON.stringify({
+              recorded: resolved.ok,
+              subject: key,
+              outcome,
+              resolved: resolved.ok,
+              closed: true,
+            });
+          }
+          return JSON.stringify({
+            recorded: false,
+            reason: "mistake_not_yet_fixed",
+            closed: true,
+          });
         }
+
+        // The agenda says "der Tisch" because that is what a learner should
+        // read; a progress row is keyed by the lemma. Either spelling of the
+        // same word resolves, so the model never has to know the difference.
+        const candidates = [
+          ...new Set([lemmaFor.get(key) ?? key, withoutArticle(key) ?? key]),
+        ];
+
+        const found = await deps.vocabulary.findByLemmas(candidates);
+        if (!found.ok) {
+          close(key);
+          return UNAVAILABLE;
+        }
+        const item =
+          candidates
+            .map((candidate) => found.data.find((row) => row.lemma === candidate))
+            .find((row) => row !== undefined) ?? null;
+        // A word the curriculum does not teach gets no progress row: the model
+        // may quiz freestyle, and a recurring-error drill has no word at all,
+        // but the record only ever holds catalogue words.
+        if (!item) {
+          close(key);
+          return JSON.stringify({
+            recorded: false,
+            reason: "not_in_curriculum",
+            closed: true,
+          });
+        }
+
+        // Closed under the name the agenda uses, which is the name the
+        // exclusion is checked against — and the only one worth showing back.
+        close(item.word);
 
         const existing = await deps.vocabulary.listByItems(deps.learnerId, [item.id]);
         if (!existing.ok) return UNAVAILABLE;
@@ -304,13 +539,18 @@ export function createTrainerTools(deps: TrainerToolDeps): TrainerTools {
         if (!saved.ok) return UNAVAILABLE;
 
         reviewWrites += 1;
-        return JSON.stringify({ recorded: true, lemma: item.lemma, outcome });
+        return JSON.stringify({
+          recorded: true,
+          subject: item.word,
+          outcome,
+          closed: true,
+        });
       })(),
     {
       name: "record_review_outcome",
       description: TRAINER_TOOL_HELP.record_review_outcome,
       schema: z.strictObject({
-        lemma: z.string().trim().min(1).max(64),
+        subject: z.string().trim().min(1).max(96),
         outcome: z.enum(["correct", "incorrect"]),
       }),
     },
@@ -319,28 +559,35 @@ export function createTrainerTools(deps: TrainerToolDeps): TrainerTools {
   const fetchNews = tool(
     async () =>
       audited("fetch_simple_german_news", async () => {
+        // The learner's level decides how the item may be retold, so it is
+        // read before the fetch is worth making.
+        const state = await deps.learners.getState(deps.learnerId);
+        if (!state.ok) return UNAVAILABLE;
+
         const response = await fetch(NEWS_URL, {
           signal: AbortSignal.timeout(NEWS_TIMEOUT_MS),
           headers: { accept: "text/html" },
         });
         if (!response.ok) return UNAVAILABLE;
 
-        const page = await response.text();
-        const headlines = [
-          ...page.matchAll(/<span class="headline-title">([^<]{4,200})<\/span>/g),
-        ]
-          .map((match) => decodeEntities(match[1]!.trim()))
-          .filter((headline, index, all) => all.indexOf(headline) === index)
-          .slice(0, MAX_HEADLINES);
-
+        const headlines = simplestFirst(
+          parseHeadlines(await response.text()),
+          NEWS_CHOICES,
+        );
         if (headlines.length === 0) return UNAVAILABLE;
 
+        const cefr = state.data.effectiveLevel.cefr;
         const text = [
           "Schlagzeilen von nachrichtenleicht.de (Nachrichten in einfacher Sprache):",
           ...headlines.map((headline) => `- ${headline}`),
         ].join("\n");
 
-        return wrapUntrusted("german_news", truncateToTokens(text, MAX_FENCED_TOKENS));
+        // The framing is trusted and stays outside the fence; the headlines
+        // are somebody else's words and stay inside it.
+        return [
+          newsRetellFraming(cefr, NEWS_RETELL_WORDS[cefr]),
+          wrapUntrusted("german_news", truncateToTokens(text, MAX_FENCED_TOKENS)),
+        ].join("\n\n");
       })(),
     {
       name: "fetch_simple_german_news",
@@ -359,5 +606,8 @@ export function createTrainerTools(deps: TrainerToolDeps): TrainerTools {
       fetchNews,
     ],
     sources: () => [...cited],
+    agenda: () => (agenda === null ? null : [...agenda]),
+    covered: () => [...covered],
+    complete: () => complete,
   };
 }

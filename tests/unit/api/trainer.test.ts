@@ -10,6 +10,7 @@ import {
   trainerRequestSchema,
   type TrainerDeps,
 } from "@/lib/api/trainer";
+import { MAX_COVERED_SUBJECTS } from "@/domain/trainer-session";
 import { NO_MCP } from "@/lib/trainer/mcp";
 import {
   FakeToolCallingModel,
@@ -52,6 +53,7 @@ const ITEM = {
 function fakeDeps(options: {
   script?: readonly AIMessage[];
   budgetsNull?: boolean;
+  noVocabulary?: boolean;
   overLimit?: boolean;
   /** Replaces the single scripted model with a ladder of candidates. */
   ladder?: readonly BaseChatModel[];
@@ -74,9 +76,10 @@ function fakeDeps(options: {
     } as unknown as TrainerDeps["learners"],
     errors: {
       listUnresolved: async () => ok([]),
+      markResolved: async (errorId: string) => ok({ id: errorId, resolved: true }),
     } as unknown as TrainerDeps["errors"],
     vocabulary: {
-      listForLearner: async () => ok([record]),
+      listForLearner: async () => ok(options.noVocabulary ? [] : [record]),
       findByIds: async () => ok([ITEM]),
       findByLemmas: async () => ok([ITEM]),
       listByItems: async () => ok([record]),
@@ -151,6 +154,14 @@ describe("the request body", () => {
     expect(parsed.success).toBe(true);
   });
 
+  it("accepts the session's covered subjects, and defaults them to none", () => {
+    expect(
+      trainerRequestSchema.safeParse(body({ covered: ["fahren", "case_dative"] }))
+        .success,
+    ).toBe(true);
+    expect(trainerRequestSchema.parse(body()).covered).toEqual([]);
+  });
+
   it.each([
     ["an empty message", { message: "" }],
     ["an unexpected field", { learnerId: "someone-else" }],
@@ -162,6 +173,16 @@ describe("the request body", () => {
       "history past the window",
       { history: Array.from({ length: 9 }, () => ({ role: "user", content: "Hi" })) },
     ],
+    [
+      "more covered subjects than a session can hold",
+      {
+        covered: Array.from(
+          { length: MAX_COVERED_SUBJECTS + 1 },
+          (_unused, index) => `wort-${index}`,
+        ),
+      },
+    ],
+    ["an empty covered subject", { covered: [""] }],
   ])("rejects %s", (_label, over) => {
     expect(trainerRequestSchema.safeParse(body(over)).success).toBe(false);
   });
@@ -193,7 +214,10 @@ describe("a turn that uses tools", () => {
       script: [
         toolCallMessage("get_review_session", {}),
         toolCallMessage("search_knowledge", { query: "Dativ" }),
-        toolCallMessage("record_review_outcome", { lemma: "fahren", outcome: "correct" }),
+        toolCallMessage("record_review_outcome", {
+          subject: "fahren",
+          outcome: "correct",
+        }),
         new AIMessage('Richtig! "fahren" sitzt. Nächstes Wort?'),
       ],
     });
@@ -235,6 +259,108 @@ describe("a turn that uses tools", () => {
     const result = await handleTrainerTurn(body(), IDENTITY, deps);
 
     expect(result.ok).toBe(true);
+  });
+
+  it("returns the agenda and the session's covered subjects", async () => {
+    const { deps } = fakeDeps({
+      script: [
+        toolCallMessage("get_review_session", {}),
+        toolCallMessage("record_review_outcome", {
+          subject: "fahren",
+          outcome: "correct",
+        }),
+        new AIMessage("Heute: fahren. Los!"),
+      ],
+    });
+
+    const result = await handleTrainerTurn(
+      body({ covered: ["der Bahnhof"] }),
+      IDENTITY,
+      deps,
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.payload.agenda).toEqual([
+      { kind: "recall", subject: "fahren" },
+      // Every session ends on something real to read.
+      { kind: "read_the_news", subject: "Nachrichten von heute" },
+    ]);
+    // What the client sends back next turn, so the same word is not asked twice.
+    expect(result.payload.covered).toEqual(["der Bahnhof", "fahren"]);
+  });
+
+  it("leaves the agenda alone on a turn that never asked for one", async () => {
+    const { deps } = fakeDeps({
+      script: [toolCallMessage("get_progress", {}), new AIMessage("Du machst das gut.")],
+    });
+
+    const result = await handleTrainerTurn(body({ covered: ["fahren"] }), IDENTITY, deps);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // Null, not empty: an empty agenda means "nothing left", and the client
+    // must not mistake a grammar question for a finished session.
+    expect(result.payload.agenda).toBeNull();
+    expect(result.payload.covered).toEqual(["fahren"]);
+  });
+
+  it("says the session is over once the agenda is worked through", async () => {
+    const { deps } = fakeDeps({
+      script: [
+        toolCallMessage("record_review_outcome", {
+          subject: "fahren",
+          outcome: "correct",
+        }),
+        toolCallMessage("get_review_session", {}),
+        new AIMessage("Das war alles! Behalte: fahren — to drive."),
+      ],
+    });
+
+    // The reading item was done earlier in the sitting, so this turn closes
+    // the last word and finds the agenda empty.
+    const result = await handleTrainerTurn(
+      body({ covered: ["Nachrichten von heute"] }),
+      IDENTITY,
+      deps,
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.payload.complete).toBe(true);
+    expect(result.payload.agenda).toEqual([]);
+    // What to recall reached the model from the catalogue, not from memory.
+    expect(result.payload.steps[1]?.summary).toContain('"recap":[{"subject":"fahren"');
+  });
+
+  it("is not over when there was nothing to practise in the first place", async () => {
+    const { deps } = fakeDeps({
+      script: [toolCallMessage("get_review_session", {}), new AIMessage("Nichts fällig.")],
+      noVocabulary: true,
+    });
+
+    const result = await handleTrainerTurn(body(), IDENTITY, deps);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.payload.complete).toBe(false);
+  });
+
+  it("does not quiz a subject the session already covered", async () => {
+    const { deps } = fakeDeps({
+      script: [toolCallMessage("get_review_session", {}), new AIMessage("Fertig!")],
+    });
+
+    const result = await handleTrainerTurn(
+      body({ covered: ["fahren", "Nachrichten von heute"] }),
+      IDENTITY,
+      deps,
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.payload.agenda).toEqual([]);
+    expect(result.payload.steps[0]?.summary).toContain('"next":null');
   });
 
   it("carries no learner id anywhere in the payload", async () => {

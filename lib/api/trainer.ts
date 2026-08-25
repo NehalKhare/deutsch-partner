@@ -6,6 +6,7 @@ import {
   transcriptMessageSchema,
 } from "@/domain/conversation";
 import { nonEmptyTextSchema } from "@/domain/primitives";
+import { coveredSubjectsSchema } from "@/domain/trainer-session";
 import { createTurnBudget } from "@/lib/ai/gateway/budgeter";
 import { evaluateBudgets, type BudgetSource } from "@/lib/ai/gateway/budget-gate";
 import type {
@@ -20,7 +21,11 @@ import {
 } from "@/lib/ai/prompts/trainer";
 import { runTrainerTurn } from "@/lib/trainer/agent";
 import type { McpToolset } from "@/lib/trainer/mcp";
-import { createTrainerTools, type TrainerSource } from "@/lib/trainer/tools";
+import {
+  createTrainerTools,
+  type TrainerAgendaItem,
+  type TrainerSource,
+} from "@/lib/trainer/tools";
 import type { GermanLearningRetriever } from "@/lib/retrieval/retriever";
 import { nullLogger, type Logger } from "@/lib/observability/logger";
 import type { GrammarRepository } from "@/repositories/grammar-repository";
@@ -47,6 +52,9 @@ export const trainerRequestSchema = z.strictObject({
   message: nonEmptyTextSchema(MAX_MESSAGE_LENGTH),
   // The transcript lives in the learner's browser, exactly like the chat's.
   history: z.array(transcriptMessageSchema).max(HISTORY_WINDOW).default([]),
+  // And so does the session's progress: the subjects already worked through,
+  // sent back so the agenda never offers the same item twice.
+  covered: coveredSubjectsSchema,
 });
 
 export type TrainerRequest = z.infer<typeof trainerRequestSchema>;
@@ -107,6 +115,12 @@ export interface TrainerTurnPayload {
   readonly reply: string;
   readonly steps: readonly { readonly tool: string; readonly summary: string }[];
   readonly sources: readonly TrainerSource[];
+  /** What the session covers, or null when this turn did not plan one. */
+  readonly agenda: readonly TrainerAgendaItem[] | null;
+  /** What is done, for the client to hold and send back next turn. */
+  readonly covered: readonly string[];
+  /** The agenda was worked through: this session is over. */
+  readonly complete: boolean;
   readonly costEur: number;
 }
 
@@ -166,6 +180,7 @@ export async function handleTrainerTurn(
 
   const local = createTrainerTools({
     learnerId: identity.learnerId,
+    covered: parsed.data.covered,
     userIdHash: identity.userIdHash,
     requestId: identity.requestId,
     vocabulary: deps.vocabulary,
@@ -203,6 +218,8 @@ export async function handleTrainerTurn(
       requestId: identity.requestId,
       userIdHash: identity.userIdHash,
       steps: outcome.data.steps.length,
+      covered: local.covered().length,
+      complete: local.complete(),
       costEur: Number(turn.spentEur().toFixed(8)),
     });
 
@@ -212,6 +229,9 @@ export async function handleTrainerTurn(
         reply: outcome.data.reply,
         steps: outcome.data.steps,
         sources: local.sources(),
+        agenda: local.agenda(),
+        covered: local.covered(),
+        complete: local.complete(),
         costEur: turn.spentEur(),
       },
     };

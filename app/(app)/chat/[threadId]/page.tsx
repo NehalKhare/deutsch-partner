@@ -82,7 +82,7 @@ export default async function ThreadPage({
   const seed = scenario?.ok ? roleplaySeed(scenario.data) : null;
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-6 pt-6 md:px-10">
+    <main className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col px-6 pt-6 md:px-10">
       {/* The header lives inside the conversation: the companion and the
           position label are live state, and a server-rendered banner above
           them would go stale the moment the learner levels up. */}
@@ -101,6 +101,9 @@ export default async function ThreadPage({
         // learner is being taught at rather than at a default.
         cefr={thread.data.cefr}
         voiceGender={profile.ok ? profile.data.voicePreference : "male"}
+        // And how they said replies should arrive: a learner who chose
+        // spoken replies gets them without pressing anything.
+        outputPreference={profile.ok ? profile.data.outputPreference : "text"}
         // The learner's own pass mark. The server applies the same value to
         // the move's bookkeeping; this copy draws the strip and the offer.
         masteryThreshold={profile.ok ? profile.data.masteryThreshold : 80}
