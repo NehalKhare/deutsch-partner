@@ -207,8 +207,49 @@ describe("the session", () => {
     expect(plan.activities.map((activity) => activity.subject)).toEqual([
       "overdue",
       "weak",
-      "case_dative",
+      // The label a learner reads, never the type key: this subject is said
+      // aloud in the trainer's agenda and printed on the review page.
+      "The dative case",
     ]);
+  });
+
+  it("keeps the recorded note as the prompt, not a fake exercise", () => {
+    // The note describes what keeps going wrong; it is not a sentence to fix.
+    // The old text put "Fix the sentence:" in front of it, and the trainer
+    // read that out to a learner with nothing to fix.
+    const plan = buildReviewPlan({
+      vocabulary: [],
+      items: [],
+      recurringErrors: [
+        { errorType: "case_dative", pattern: "uses the accusative after mit" },
+      ],
+      now: NOW,
+    });
+
+    expect(plan.activities[0]?.prompt).toBe("uses the accusative after mit");
+    expect(plan.activities[0]?.prompt).not.toContain("Fix the sentence");
+  });
+
+  it("offers each mistake category once per session, however often it was recorded", () => {
+    // Two spelling errors are one weakness. A session that lists "Spelling"
+    // twice reads as a stutter; the second instance waits for a later sitting.
+    const plan = buildReviewPlan({
+      vocabulary: [],
+      items: [],
+      recurringErrors: [
+        { errorType: "spelling", pattern: "lowercase ich" },
+        { errorType: "spelling", pattern: "Straße with ss" },
+        { errorType: "article", pattern: "der before Haus" },
+      ],
+      now: NOW,
+    });
+
+    expect(plan.activities.map((activity) => activity.subject)).toEqual([
+      "Spelling",
+      "Articles",
+    ]);
+    // The first recorded instance is the one taught.
+    expect(plan.activities[0]?.prompt).toBe("lowercase ich");
   });
 
   it("does not offer the same word twice", () => {

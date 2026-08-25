@@ -57,7 +57,7 @@ applied an earlier version gets the update from `db:seed`.
 
 | Command | What it does |
 | --- | --- |
-| `pnpm verify` | Typecheck, lint, 2850 tests, then a production build |
+| `pnpm verify` | Typecheck, lint, 2905 tests, then a production build |
 | `pnpm test:unit` | Unit and component tests |
 | `pnpm test:db` | Migrations, constraints and RLS against real Postgres via PGlite |
 | `pnpm test:e2e` | Playwright against a production build on port 3100 |

@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import { createTurnBudget } from "@/lib/ai/gateway/budgeter";
 import {
+  TRAINER_TASK,
   TrainerBudgetExhausted,
   createTrainerChatModel,
   createTrainerModelLadder,
   isModelUnavailableError,
 } from "@/lib/ai/gateway/langchain-model";
+import { routeFor } from "@/lib/ai/tasks";
 import { parseEnv } from "@/lib/env/schema";
 import type {
   BudgetIncrement,
@@ -61,6 +63,14 @@ function fakeAccounting(options: { rateUsdPerToken?: number } = {}) {
 
   return { accounting, rows, increments };
 }
+
+/**
+ * Read from the task table rather than written down: which tier the Trainer
+ * runs on is a routing decision, and a test that pins it here would fail for
+ * the routing table's change rather than for this file's.
+ */
+const TRAINER_TIER = routeFor(TRAINER_TASK).tier;
+const TIER_OVERRIDE = `OPENROUTER_MODEL_${TRAINER_TIER.toUpperCase()}` as const;
 
 const IDENTITY = {
   name: "trainer.session",
@@ -125,7 +135,7 @@ describe("what the factory resolves", () => {
     const { accounting } = fakeAccounting();
     const created = modelWith(accounting);
 
-    expect(created.tier).toBe("mid");
+    expect(created.tier).toBe(TRAINER_TIER);
     // The registry's mid-tier default; this file itself names no model.
     expect(created.modelId).toContain("/");
   });
@@ -134,7 +144,7 @@ describe("what the factory resolves", () => {
     const { accounting } = fakeAccounting();
     const env = parseEnv({
       OPENROUTER_API_KEY: "openrouter-key-long-enough",
-      OPENROUTER_MODEL_MID: "vendor/custom-model",
+      [TIER_OVERRIDE]: "vendor/custom-model",
     });
 
     expect(modelWith(accounting, createTurnBudget(0.05), env).modelId).toBe(
@@ -168,14 +178,14 @@ describe("the ladder", () => {
 
     expect(ladder.length).toBeGreaterThan(1);
     expect(new Set(ladder.map((entry) => entry.modelId)).size).toBe(ladder.length);
-    for (const entry of ladder) expect(entry.tier).toBe("mid");
+    for (const entry of ladder) expect(entry.tier).toBe(TRAINER_TIER);
   });
 
   it("puts an overridden primary at the top without losing the fallbacks", () => {
     const { accounting } = fakeAccounting();
     const env = parseEnv({
       OPENROUTER_API_KEY: "openrouter-key-long-enough",
-      OPENROUTER_MODEL_MID: "vendor/custom-model",
+      [TIER_OVERRIDE]: "vendor/custom-model",
     });
     const ladder = createTrainerModelLadder(
       { env, accounting },
@@ -225,7 +235,7 @@ describe("the ledger seam", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
       task: "trainer.session",
-      tier: "mid",
+      tier: TRAINER_TIER,
       promptName: "trainer.session",
       promptVersion: 1,
       promptFingerprint: "abcd1234",

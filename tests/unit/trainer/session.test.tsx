@@ -20,8 +20,8 @@ const TRAINER_ENDPOINT = "http://localhost:3000/api/trainer";
 const REPLY = {
   reply: 'Richtig! "fahren" sitzt. Nächstes Wort?',
   steps: [
-    { tool: "get_review_session", summary: '{"dueCount":3}' },
-    { tool: "record_review_outcome", summary: '{"recorded":true}' },
+    { tool: "get_review_session", summary: "3 items to go" },
+    { tool: "record_review_outcome", summary: "\u201cfahren\u201d — correct" },
   ],
   sources: [{ documentId: 7, contentType: "grammar", score: 0.8 }],
   agenda: [
@@ -188,6 +188,48 @@ describe("the session's agenda", () => {
     expect(agenda).toHaveTextContent("fahren");
     expect(agenda).toHaveTextContent(/fix the mistake/i);
     expect(agenda.querySelectorAll("[data-done='true']")).toHaveLength(1);
+  });
+
+  it("keeps the plan beside the transcript, not inside it", async () => {
+    // It used to sit at the top of the conversation, where it pushed the
+    // replies down and scrolled away with them. A plan you cannot see while
+    // you work through it is a plan you have to remember instead.
+    server.use(http.post(TRAINER_ENDPOINT, () => HttpResponse.json(REPLY)));
+    const { container } = render(<TrainerSession />);
+
+    await sendMessage();
+
+    const agenda = await waitFor(() => {
+      const found = container.querySelector("[data-role='agenda']");
+      if (!found) throw new Error("no agenda yet");
+      return found;
+    });
+
+    expect(agenda.closest("aside")).not.toBeNull();
+    // And the transcript is not inside that column either way round.
+    const transcript = container.querySelector("ol[aria-live]");
+    expect(transcript).not.toBeNull();
+    expect(agenda.contains(transcript)).toBe(false);
+    expect(transcript?.contains(agenda)).toBe(false);
+  });
+
+  it("drops the column on a small screen rather than stacking it", async () => {
+    // The stacked arrangement is the one this replaced. The trainer opens
+    // every session by saying what it will cover, so a phone still gets the
+    // plan — in the transcript, where there is room for it.
+    server.use(http.post(TRAINER_ENDPOINT, () => HttpResponse.json(REPLY)));
+    const { container } = render(<TrainerSession />);
+
+    await sendMessage();
+
+    const column = await waitFor(() => {
+      const found = container.querySelector("[data-role='agenda']")?.closest("aside");
+      if (!found) throw new Error("no agenda yet");
+      return found;
+    });
+
+    expect(column.className).toContain("hidden");
+    expect(column.className).toContain("lg:block");
   });
 
   it("shows nothing before the trainer has planned anything", () => {

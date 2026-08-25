@@ -17,6 +17,11 @@ export const metadata = { title: "Trainer — Deutsch Partner" };
  * fetch simple-German news, and borrow tools from a configured remote MCP
  * server. Auth and onboarding are enforced by the (app) layout.
  *
+ * Wider than the other pages because the session has two columns on a large
+ * screen: the plan on the left, the conversation beside it. Below that width
+ * the plan is dropped rather than stacked — it was above the transcript
+ * before, which is the arrangement this replaced.
+ *
  * Two facts are read here rather than through a tool, because they are not
  * facts about the practice: how fast a reply should be read out, and in whose
  * voice. Both are the learner's settings, both are needed on the first paint
@@ -35,7 +40,7 @@ export default async function TrainerPage() {
   ]);
 
   return (
-    <main className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col gap-6 px-6 pt-6 md:px-10">
+    <main className="mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col gap-6 px-6 pt-6 md:px-10">
       <header className="flex flex-col gap-2 border-b border-haze/60 pb-4">
         <p className={eyebrow}>Practice, with receipts</p>
         <h1 className={pageTitle}>Trainer</h1>

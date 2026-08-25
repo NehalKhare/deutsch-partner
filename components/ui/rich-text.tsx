@@ -19,8 +19,12 @@ function Spans({ spans }: { readonly spans: readonly Span[] }) {
       {spans.map((span, index) => {
         const key = `${span.kind}-${index}`;
         if (span.kind === "strong") {
+          // The accent, not merely a heavier weight: bold is what the tutor
+          // and the trainer use for the thing the learner must act on — the
+          // corrected form, the sentence to fix, the question — and on this
+          // dark ground weight alone barely registers at reading size.
           return (
-            <strong key={key} className="font-semibold text-chalk">
+            <strong key={key} className="font-semibold text-apricot">
               {span.text}
             </strong>
           );

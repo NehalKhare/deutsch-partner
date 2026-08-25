@@ -28,17 +28,35 @@ describe("the signed-in navigation", () => {
       "Scenarios",
       "Curriculum",
       "Review",
-      "Settings",
     ]) {
       expect(screen.getByRole("link", { name: label })).toBeInTheDocument();
     }
   });
 
-  it("marks the current page for a screen reader", () => {
-    pathname.current = "/settings";
+  it("holds only rooms, not the account", () => {
+    // Settings and the way out are about who is signed in rather than about
+    // German. They live in the account menu on the right.
+    pathname.current = "/dashboard";
     render(<AppNav />);
 
-    expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute(
+    expect(screen.queryByRole("link", { name: "Settings" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /sign out/i })).not.toBeInTheDocument();
+  });
+
+  it("does not offer the Trainer, which is reached from Review", () => {
+    // It is not a place to go: it is what you do about what Review found, and
+    // it is opened from the screen that knows there is something to do.
+    pathname.current = "/dashboard";
+    render(<AppNav />);
+
+    expect(screen.queryByRole("link", { name: "Trainer" })).not.toBeInTheDocument();
+  });
+
+  it("marks the current page for a screen reader", () => {
+    pathname.current = "/review";
+    render(<AppNav />);
+
+    expect(screen.getByRole("link", { name: "Review" })).toHaveAttribute(
       "aria-current",
       "page",
     );
@@ -58,7 +76,7 @@ describe("the signed-in navigation", () => {
   });
 
   it("does not offer the operator room", () => {
-    // The spend dashboard is reached from settings, and only by operators. A
+    // The spend dashboard is in the account menu, and only for operators. A
     // nav entry would tell every learner there is a door worth finding.
     pathname.current = "/dashboard";
     render(<AppNav />);

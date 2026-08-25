@@ -34,7 +34,11 @@ const EXPECTED: Readonly<Record<TaskId, { tier: Tier; input: number; output: num
   // output ceiling is zero. An embedding emits a vector, not tokens.
   "ingestion.embedding": { tier: "embedding", input: 8191, output: 0 },
   "retrieval.embedding": { tier: "embedding", input: 8191, output: 0 },
-  "trainer.session": { tier: "mid", input: 6000, output: 700 },
+  // Strong, like the tutor: the best tier a seven-invocation loop can afford
+  // under a €0.05 per-request ceiling. The tier's full output allowance, too —
+  // a reasoning model spends that budget before it writes, and a correction
+  // that names the rule and shows two sentences came back cut off at 700.
+  "trainer.session": { tier: "strong", input: 6000, output: 1000 },
 };
 
 describe("task router", () => {

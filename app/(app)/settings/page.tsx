@@ -12,7 +12,6 @@ import {
   sectionTitle,
 } from "@/components/ui/styles";
 import { TUTOR } from "@/domain/tutor";
-import { isOperator } from "@/lib/auth/operator";
 import { INITIAL_SETTINGS_STATE } from "@/lib/settings/input";
 import { getMiniLevel } from "@/learning/mini-levels";
 import { requireAuthenticatedUserId } from "@/lib/auth/current-user";
@@ -122,25 +121,6 @@ export default async function SettingsPage() {
           that decides when you move up.
         </p>
       </section>
-
-      {isOperator(learnerId) ? (
-        <section
-          aria-labelledby="operations-heading"
-          className={cn(card, "flex flex-col gap-2 border-apricot/30")}
-        >
-          <h2 id="operations-heading" className={sectionTitle}>
-            Operations
-          </h2>
-          <p className={prose}>
-            This account is on the deployment&apos;s operator list.
-          </p>
-          <p className="text-sm">
-            <Link href="/operations/costs" className={linkInline}>
-              AI spend dashboard →
-            </Link>
-          </p>
-        </section>
-      ) : null}
     </main>
   );
 }

@@ -1,0 +1,90 @@
+/*
+ * The Trainer's door, lit.
+ *
+ * Everything else on this page is drawn rather than filled: bordered cards on
+ * the ink ground, one accent used sparingly. This is the exception on purpose.
+ * A learner who does not know they have a personal trainer never opens one,
+ * and a quiet link beside a heading is a thing the eye files as chrome.
+ *
+ * So it is lit like a halogen bulb: a warm-white filament core bleeding out to
+ * the product's apricot, with the bloom carried on a pseudo-element rather
+ * than on the box-shadow itself — opacity composites, a growing shadow does
+ * not, and this thing breathes for as long as the page is open.
+ */
+
+.invite {
+  --filament: #fff1dc;
+  --halogen: var(--color-apricot);
+
+  position: relative;
+  isolation: isolate;
+  background-image: linear-gradient(
+    135deg,
+    var(--filament) 0%,
+    var(--halogen) 55%,
+    color-mix(in oklab, var(--halogen) 82%, #b4622f) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, #fff 55%, transparent),
+    0 0.5rem 1.5rem -0.6rem color-mix(in oklab, var(--halogen) 75%, transparent);
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+/*
+ * The bloom. Behind the button and larger than it, blurred, so what shows is
+ * light spilling onto the dark room rather than a second border.
+ */
+.invite::before {
+  content: "";
+  position: absolute;
+  inset: -35%;
+  z-index: -1;
+  border-radius: inherit;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in oklab, var(--halogen) 62%, transparent),
+    transparent 100%
+  );
+  filter: blur(0.75rem);
+  opacity: 0.55;
+  animation: filament 4.2s ease-in-out infinite;
+}
+
+.invite:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, #fff 65%, transparent),
+    0 0.75rem 2rem -0.6rem color-mix(in oklab, var(--halogen) 90%, transparent);
+}
+
+.invite:hover::before {
+  opacity: 0.85;
+}
+
+/*
+ * A filament settling, not a notification blinking. Slow and shallow: anything
+ * faster reads as an alert, and an alert that never resolves is one people
+ * learn to stop seeing.
+ */
+@keyframes filament {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .invite {
+    transition: none;
+  }
+
+  /* The light stays on. It is the glow that carries the meaning here, so it
+     is held at its brightest rather than removed with the movement. */
+  .invite::before {
+    animation: none;
+    opacity: 0.7;
+  }
+}

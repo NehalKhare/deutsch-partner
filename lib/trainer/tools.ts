@@ -6,6 +6,7 @@ import {
   buildReviewPlan,
   type ReviewActivityKind,
 } from "@/learning/review";
+import { ERROR_TYPE_LABELS } from "@/learning/error-labels";
 import { getMiniLevel } from "@/learning/mini-levels";
 import {
   newLearnerVocabulary,
@@ -254,9 +255,10 @@ export function createTrainerTools(deps: TrainerToolDeps): TrainerTools {
         // needs the row's id — which the plan itself does not carry, because
         // an activity is only ever a subject and a prompt.
         for (const error of errors.ok ? errors.data : []) {
-          if (!errorIdFor.has(error.errorType)) {
-            errorIdFor.set(error.errorType, error.id);
-          }
+          // Keyed by the label the agenda uses, because that label is the
+          // subject the model will hand back to record_review_outcome.
+          const label = ERROR_TYPE_LABELS[error.errorType];
+          if (!errorIdFor.has(label)) errorIdFor.set(label, error.id);
         }
 
         const plan = buildReviewPlan({
@@ -314,14 +316,23 @@ export function createTrainerTools(deps: TrainerToolDeps): TrainerTools {
           })),
           // One question, and only the next one. The model cannot ask an item
           // twice because it is never handed one the session has closed.
+          // One question, and only the next one — under a field name that
+          // says what it is. A ready question arrives as "prompt" and is
+          // asked as written. A recurring mistake arrives as "struggles":
+          // the note recorded about what keeps going wrong, background for
+          // the trainer to teach from, never an exercise to read out — the
+          // session protocol tells the model to write its own.
           next: next
             ? {
                 position: 1,
                 kind: next.kind,
                 subject: next.subject,
-                // Recurring-error prompts carry model-authored wording;
-                // neutralise anything fence-shaped before it re-enters a prompt.
-                prompt: escapeUntrusted(next.prompt),
+                // Either field carries model-authored wording from an earlier
+                // evaluation; neutralise anything fence-shaped before it
+                // re-enters a prompt.
+                ...(next.kind === "correct_the_mistake"
+                  ? { struggles: escapeUntrusted(next.prompt) }
+                  : { prompt: escapeUntrusted(next.prompt) }),
               }
             : null,
           sessionComplete: complete,
@@ -474,7 +485,20 @@ export function createTrainerTools(deps: TrainerToolDeps): TrainerTools {
         // unresolved mistake, so the review page stops listing it. Reversible
         // by the only thing that should reverse it: making it again, which
         // sets the row back to unresolved when the next turn is evaluated.
-        const errorId = errorIdFor.get(key);
+        //
+        // The id map is per-request, and the answer usually arrives a turn
+        // after the question — a turn that may record before it plans. So a
+        // miss falls back to reading the unresolved errors again: whether a
+        // mistake gets resolved must not depend on tool-call order.
+        let errorId = errorIdFor.get(key);
+        if (errorId === undefined) {
+          const unresolved = await deps.errors.listUnresolved(deps.learnerId, 5);
+          if (unresolved.ok) {
+            errorId = unresolved.data.find(
+              (error) => ERROR_TYPE_LABELS[error.errorType] === key,
+            )?.id;
+          }
+        }
         if (errorId !== undefined) {
           if (outcome === "correct") {
             const resolved = await deps.errors.markResolved(errorId);

@@ -51,12 +51,56 @@ export type TrainerRunOutcome =
   | { readonly ok: true; readonly data: TrainerReply }
   | { readonly ok: false; readonly failure: TrainerRunFailure };
 
-/** What the UI shows about a tool result: which tool, and a glimpse — never
- * the raw fenced content, which belongs to the model's context alone. */
-function summarize(content: unknown): string {
+/**
+ * What the UI shows about a tool result: which tool, and one human phrase.
+ *
+ * These receipts sit under the trainer's replies, and for a while they were
+ * raw JSON — `{"dueCount":0,"weakCount":0,...` truncated mid-key — which
+ * reads as a stack trace in a teaching product. A receipt is for the learner,
+ * so it is written from the parsed result in words; anything unparseable or
+ * fenced (retrieved chunks, fetched news) gets no glimpse at all, because the
+ * raw text belongs to the model's context alone.
+ */
+function summarize(tool: string | undefined, content: unknown): string {
   const text =
     typeof content === "string" ? content : JSON.stringify(content ?? "");
-  return text.replace(/\s+/gu, " ").slice(0, 140);
+
+  let parsed: Record<string, unknown>;
+  try {
+    const value: unknown = JSON.parse(text);
+    if (value === null || typeof value !== "object" || Array.isArray(value)) return "";
+    parsed = value as Record<string, unknown>;
+  } catch {
+    return "";
+  }
+
+  if (parsed.error !== undefined) return "unavailable just now";
+
+  switch (tool) {
+    case "get_review_session": {
+      if (parsed.sessionComplete === true) return "session complete";
+      const remaining = Number(parsed.remaining ?? 0);
+      const completed = Number(parsed.completed ?? 0);
+      const left = `${remaining} item${remaining === 1 ? "" : "s"} to go`;
+      return completed > 0 ? `${left}, ${completed} done` : left;
+    }
+    case "record_review_outcome": {
+      if (parsed.recorded === true && typeof parsed.subject === "string") {
+        return `“${parsed.subject}” — ${parsed.outcome === "correct" ? "correct" : "not yet"}`;
+      }
+      if (parsed.reason === "mistake_not_yet_fixed") return "kept for a later session";
+      if (parsed.reason === "not_in_curriculum") return "noted — not a course word";
+      return "noted";
+    }
+    case "get_progress":
+      return typeof parsed.cefr === "string" && parsed.miniLevel !== undefined
+        ? `level ${parsed.cefr}, mini-level ${String(parsed.miniLevel)}`
+        : "";
+    case "get_grammar_pattern":
+      return typeof parsed.name === "string" ? parsed.name : "";
+    default:
+      return "";
+  }
 }
 
 function toLangChainHistory(history: readonly TranscriptMessage[]): BaseMessage[] {
@@ -132,7 +176,10 @@ export async function runTrainerTurn(
   const steps: TrainerStep[] = [];
   for (const message of newMessages) {
     if (message instanceof ToolMessage) {
-      steps.push({ tool: message.name ?? "tool", summary: summarize(message.content) });
+      steps.push({
+        tool: message.name ?? "tool",
+        summary: summarize(message.name, message.content),
+      });
     }
   }
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { TrainerAgenda, type AgendaItem } from "@/components/trainer/agenda";
 import { useReadAloud } from "@/components/voice/read-aloud";
 import { SpeakerIcon } from "@/components/voice/speaker-icon";
 import type { SpeechPlayback, SpeechVoice } from "@/components/voice/speech";
@@ -26,12 +27,6 @@ interface TrainerSource {
   readonly score: number;
 }
 
-/** One line of the session's agenda, as the server planned it. */
-interface AgendaItem {
-  readonly kind: string;
-  readonly subject: string;
-}
-
 interface SessionEntry {
   readonly id: string;
   readonly role: "user" | "assistant";
@@ -54,16 +49,7 @@ const TOOL_LABELS: Readonly<Record<string, string>> = {
 const toolLabel = (tool: string) =>
   TOOL_LABELS[tool] ?? `Asked a connected tool (${tool})`;
 
-/** What each kind of practice asks of the learner, in a word or three. */
-const KIND_LABELS: Readonly<Record<string, string>> = {
-  recognise: "meaning",
-  recall: "recall",
-  use_in_sentence: "use in a sentence",
-  correct_the_mistake: "fix the mistake",
-  read_the_news: "read today's news",
-};
-
-/** The same control the chat header carries, in the trainer's agenda panel. */
+/** The same control the chat header carries, above the trainer's transcript. */
 function ReadAloudToggle({
   on,
   onToggle,
@@ -258,232 +244,206 @@ export function TrainerSession({
     : [];
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-5">
-      {/* Above the agenda rather than inside it: a learner who wants to be
-          read to wants that from the first reply, and the agenda does not
-          exist until the trainer has planned one. */}
-      {canSpeak ? (
-        <div className="flex shrink-0 justify-end">
-          <ReadAloudToggle on={readAloud} onToggle={setReadAloud} />
+    <div className="flex min-h-0 flex-1 gap-6">
+      {/* The plan, in a column of its own so it neither scrolls away with the
+          transcript nor pushes it down. Sticky rather than tall: an agenda is
+          a glance, and it should not stretch to whatever height the session
+          happens to have. */}
+      <aside className="hidden w-56 shrink-0 overflow-y-auto lg:block">
+        <div className="sticky top-0">
+          <TrainerAgenda plan={plan} finished={agenda?.length === 0} />
         </div>
-      ) : null}
+      </aside>
 
-      {plan.length > 0 ? (
-        <section
-          data-role="agenda"
-          aria-label="What this session covers"
-          className="shrink-0 rounded-2xl border border-haze/70 bg-dusk/70 px-4 py-3"
-        >
-          <p className="text-xs uppercase tracking-[0.14em] text-chalk/45">
-            This session
-            {agenda?.length === 0 ? " — done" : null}
-          </p>
-          <ol className="mt-2 flex flex-col gap-1">
-            {plan.map((item) => (
-              <li
-                key={`${item.subject}-${String(item.done)}`}
-                data-done={String(item.done)}
-                className="flex items-baseline gap-2 text-sm"
-              >
-                <span aria-hidden className="text-apricot/70">
-                  {item.done ? "✓" : "•"}
-                </span>
-                <span
-                  lang="de"
-                  className={item.done ? "text-chalk/40 line-through" : "text-chalk/80"}
-                >
-                  {item.subject}
-                </span>
-                {item.kind ? (
-                  <span className="text-xs text-chalk/40">
-                    {KIND_LABELS[item.kind] ?? item.kind}
-                  </span>
-                ) : null}
-              </li>
-            ))}
-          </ol>
-        </section>
-      ) : null}
-
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-        {entries.length === 0 ? (
-          <div className="m-auto flex max-w-sm flex-col gap-2 text-center">
-            <p className="text-chalk/45">
-              Your trainer runs the drills the tutor does not: say{" "}
-              <span lang="de" className="text-chalk/70">
-                „Lass uns üben!“
-              </span>{" "}
-              to review your due words, or ask anything about your progress.
-            </p>
-            <p className="text-xs text-chalk/55">
-              The trainer shows which tools it used to answer.
-            </p>
+      <div className="flex min-h-0 flex-1 flex-col gap-5">
+        {/* A learner who wants to be read to wants that from the first reply,
+            so this is here from the start rather than with the agenda. */}
+        {canSpeak ? (
+          <div className="flex shrink-0 justify-end">
+            <ReadAloudToggle on={readAloud} onToggle={setReadAloud} />
           </div>
         ) : null}
 
-        <ol className="mt-auto flex flex-col gap-3" aria-live="polite">
-          {entries.map((entry) =>
-            entry.role === "user" ? (
-              <li
-                key={entry.id}
-                data-role="user"
-                className="max-w-[85%] self-end rounded-2xl rounded-br-md bg-apricot px-4 py-2.5 leading-relaxed text-ink"
-              >
-                {entry.content}
-              </li>
-            ) : (
-              <li
-                key={entry.id}
-                data-role="assistant"
-                className="flex max-w-[85%] flex-col gap-2 self-start"
-              >
-                <div className="flex items-start gap-1.5">
-                  <span
-                    lang="de"
-                    className="rounded-2xl rounded-bl-md border border-haze/70 bg-dusk px-4 py-2.5 leading-relaxed text-chalk"
-                  >
-                    <RichText content={entry.content} />
-                  </span>
-                  {canSpeak ? (
-                    <button
-                      type="button"
-                      onClick={() => void speak(entry)}
-                      aria-label={
-                        speakingId === entry.id
-                          ? "Stop reading this reply"
-                          : "Read this reply aloud"
-                      }
-                      aria-pressed={speakingId === entry.id}
-                      className={cn(
-                        "mt-1.5 shrink-0 rounded-full p-1.5 text-chalk/50 transition-colors hover:text-apricot",
-                        speakingId === entry.id && "text-apricot",
-                        focusRing,
-                      )}
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+          {entries.length === 0 ? (
+            <div className="m-auto flex max-w-sm flex-col gap-2 text-center">
+              <p className="text-chalk/45">
+                Your trainer runs the drills the tutor does not: say{" "}
+                <span lang="de" className="text-chalk/70">
+                  „Lass uns üben!“
+                </span>{" "}
+                to review your due words, or ask anything about your progress.
+              </p>
+              <p className="text-xs text-chalk/55">
+                The trainer shows which tools it used to answer.
+              </p>
+            </div>
+          ) : null}
+
+          <ol className="mt-auto flex flex-col gap-3" aria-live="polite">
+            {entries.map((entry) =>
+              entry.role === "user" ? (
+                <li
+                  key={entry.id}
+                  data-role="user"
+                  className="max-w-[85%] self-end rounded-2xl rounded-br-md bg-apricot px-4 py-2.5 leading-relaxed text-ink"
+                >
+                  {entry.content}
+                </li>
+              ) : (
+                <li
+                  key={entry.id}
+                  data-role="assistant"
+                  className="flex max-w-[85%] flex-col gap-2 self-start"
+                >
+                  <div className="flex items-start gap-1.5">
+                    <span
+                      lang="de"
+                      className="rounded-2xl rounded-bl-md border border-haze/70 bg-dusk px-4 py-2.5 leading-relaxed text-chalk"
                     >
-                      <SpeakerIcon speaking={speakingId === entry.id} />
-                    </button>
-                  ) : null}
-                </div>
-
-                {entry.steps && entry.steps.length > 0 ? (
-                  <ul
-                    data-role="steps"
-                    aria-label="What the trainer did"
-                    className="flex flex-col gap-1 px-1"
-                  >
-                    {entry.steps.map((step, index) => (
-                      <li
-                        key={`${entry.id}-step-${index}`}
-                        className="flex items-baseline gap-2 text-xs text-chalk/55"
+                      <RichText content={entry.content} />
+                    </span>
+                    {canSpeak ? (
+                      <button
+                        type="button"
+                        onClick={() => void speak(entry)}
+                        aria-label={
+                          speakingId === entry.id
+                            ? "Stop reading this reply"
+                            : "Read this reply aloud"
+                        }
+                        aria-pressed={speakingId === entry.id}
+                        className={cn(
+                          "mt-1.5 shrink-0 rounded-full p-1.5 text-chalk/50 transition-colors hover:text-apricot",
+                          speakingId === entry.id && "text-apricot",
+                          focusRing,
+                        )}
                       >
-                        <span aria-hidden className="text-apricot/70">
-                          ⚙
-                        </span>
-                        <span>
-                          <span className="text-chalk/75">{toolLabel(step.tool)}</span>
-                          {step.summary ? (
-                            <span className="text-chalk/40"> — {step.summary}</span>
-                          ) : null}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
+                        <SpeakerIcon speaking={speakingId === entry.id} />
+                      </button>
+                    ) : null}
+                  </div>
 
-                {entry.sources && entry.sources.length > 0 ? (
-                  <p data-role="sources" className="px-1 text-xs text-chalk/45">
-                    Sources:{" "}
-                    {entry.sources
-                      .map((source) => `${source.contentType} #${source.documentId}`)
-                      .join(", ")}
-                  </p>
-                ) : null}
-              </li>
-            ),
-          )}
-        </ol>
-      </div>
+                  {entry.steps && entry.steps.length > 0 ? (
+                    <ul
+                      data-role="steps"
+                      aria-label="What the trainer did"
+                      className="flex flex-col gap-1 px-1"
+                    >
+                      {entry.steps.map((step, index) => (
+                        <li
+                          key={`${entry.id}-step-${index}`}
+                          className="flex items-baseline gap-2 text-xs text-chalk/55"
+                        >
+                          <span aria-hidden className="text-apricot/70">
+                            ⚙
+                          </span>
+                          <span>
+                            <span className="text-chalk/75">{toolLabel(step.tool)}</span>
+                            {step.summary ? (
+                              <span className="text-chalk/40"> — {step.summary}</span>
+                            ) : null}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
 
-      {/* One request is a whole agent loop, so the wait deserves an honest
-          working indicator rather than a frozen page. */}
-      {pending ? (
-        <p role="status" className="flex items-center gap-2 px-1 text-sm text-chalk/55">
-          <span
-            aria-hidden
-            className="size-2 animate-pulse rounded-full bg-apricot"
-          />
-          Your trainer is working — checking tools and thinking…
-        </p>
-      ) : (
-        <p role="status" className="sr-only" />
-      )}
+                  {entry.sources && entry.sources.length > 0 ? (
+                    <p data-role="sources" className="px-1 text-xs text-chalk/45">
+                      Sources:{" "}
+                      {entry.sources
+                        .map((source) => `${source.contentType} #${source.documentId}`)
+                        .join(", ")}
+                    </p>
+                  ) : null}
+                </li>
+              ),
+            )}
+          </ol>
+        </div>
 
-      {/* Voice is an addition to the session, not the session. Its failures
-          are said quietly, and never as the red banner that means "your turn
-          did not happen". */}
-      {voiceNotice ? (
-        <p role="status" className="px-1 text-xs text-chalk/55">
-          {voiceNotice}
-        </p>
-      ) : null}
-
-      {error ? (
-        <p
-          role="alert"
-          className="rounded-xl border border-ember/40 bg-ember/10 px-4 py-2.5 text-sm text-ember"
-        >
-          {error}
-        </p>
-      ) : null}
-
-      {complete ? (
-        <section
-          data-role="session-end"
-          className="sticky bottom-0 flex flex-col gap-3 border-t border-haze/60 bg-ink/95 py-4 backdrop-blur"
-        >
-          <p className="text-sm text-chalk/70">
-            Session complete — that is everything that was due. Your trainer&apos;s
-            last message is what to take away.
+        {/* One request is a whole agent loop, so the wait deserves an honest
+            working indicator rather than a frozen page. */}
+        {pending ? (
+          <p role="status" className="flex items-center gap-2 px-1 text-sm text-chalk/55">
+            <span
+              aria-hidden
+              className="size-2 animate-pulse rounded-full bg-apricot"
+            />
+            Your trainer is working — checking tools and thinking…
           </p>
-          <button
-            type="button"
-            onClick={startNewSession}
-            className={cn(buttonPrimary, "self-start px-5 py-2.5")}
-          >
-            Start a new session
-          </button>
-        </section>
-      ) : (
-        <form
-          className="sticky bottom-0 flex items-center gap-3 border-t border-haze/60 bg-ink/95 py-4 backdrop-blur"
-          onSubmit={(event) => {
-            event.preventDefault();
-            const message = draft.trim();
-            if (message.length === 0 || pending) return;
+        ) : (
+          <p role="status" className="sr-only" />
+        )}
 
-            setDraft("");
-            void send(message);
-          }}
-        >
-          <input
-            ref={inputRef}
-            name="message"
-            aria-label="Your message to the trainer"
-            placeholder="Lass uns üben…"
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            lang="de"
-            className={cn(field, "flex-1")}
-          />
-          <button
-            type="submit"
-            disabled={pending || draft.trim().length === 0}
-            className={cn(buttonPrimary, "px-5 py-2.5")}
+        {/* Voice is an addition to the session, not the session. Its failures
+            are said quietly, and never as the red banner that means "your turn
+            did not happen". */}
+        {voiceNotice ? (
+          <p role="status" className="px-1 text-xs text-chalk/55">
+            {voiceNotice}
+          </p>
+        ) : null}
+
+        {error ? (
+          <p
+            role="alert"
+            className="rounded-xl border border-ember/40 bg-ember/10 px-4 py-2.5 text-sm text-ember"
           >
-            {pending ? "Working…" : "Send"}
-          </button>
-        </form>
-      )}
+            {error}
+          </p>
+        ) : null}
+
+        {complete ? (
+          <section
+            data-role="session-end"
+            className="sticky bottom-0 flex flex-col gap-3 border-t border-haze/60 bg-ink/95 py-4 backdrop-blur"
+          >
+            <p className="text-sm text-chalk/70">
+              Session complete — that is everything that was due. Your trainer&apos;s
+              last message is what to take away.
+            </p>
+            <button
+              type="button"
+              onClick={startNewSession}
+              className={cn(buttonPrimary, "self-start px-5 py-2.5")}
+            >
+              Start a new session
+            </button>
+          </section>
+        ) : (
+          <form
+            className="sticky bottom-0 flex items-center gap-3 border-t border-haze/60 bg-ink/95 py-4 backdrop-blur"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const message = draft.trim();
+              if (message.length === 0 || pending) return;
+
+              setDraft("");
+              void send(message);
+            }}
+          >
+            <input
+              ref={inputRef}
+              name="message"
+              aria-label="Your message to the trainer"
+              placeholder="Lass uns üben…"
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              lang="de"
+              className={cn(field, "flex-1")}
+            />
+            <button
+              type="submit"
+              disabled={pending || draft.trim().length === 0}
+              className={cn(buttonPrimary, "px-5 py-2.5")}
+            >
+              {pending ? "Working…" : "Send"}
+            </button>
+          </form>
+        )}
+      </div>
     </div>
   );
 }

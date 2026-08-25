@@ -10,9 +10,8 @@ vi.mock("@/lib/supabase/server-client", () => ({
   createServerSupabaseClient: async () => ({ auth: { getClaims } }),
 }));
 
-const { getAuthenticatedUserId, requireAuthenticatedUserId } = await import(
-  "@/lib/auth/current-user"
-);
+const { getAuthenticatedAccount, getAuthenticatedUserId, requireAuthenticatedUserId } =
+  await import("@/lib/auth/current-user");
 
 const LEARNER = "11111111-1111-4111-8111-111111111111";
 
@@ -82,5 +81,58 @@ describe("requireAuthenticatedUserId", () => {
     getClaims.mockResolvedValue({ data: null, error: null });
 
     await expect(requireAuthenticatedUserId()).rejects.toThrow();
+  });
+});
+
+
+describe("getAuthenticatedAccount", () => {
+  it("returns the address alongside the id", async () => {
+    // The shell shows it back, and reading both from the same verified claim
+    // is what stops the name in the header disagreeing with whose rows are
+    // being read underneath it.
+    getClaims.mockResolvedValue({
+      data: { claims: { sub: LEARNER, email: "learner@example.com" } },
+      error: null,
+    });
+
+    expect(await getAuthenticatedAccount()).toEqual({
+      id: LEARNER,
+      email: "learner@example.com",
+    });
+  });
+
+  it("returns a null address when the token carries none", async () => {
+    // Not every sign-in method has one, and the shell still has to render.
+    getClaims.mockResolvedValue({ data: { claims: { sub: LEARNER } }, error: null });
+
+    expect(await getAuthenticatedAccount()).toEqual({ id: LEARNER, email: null });
+  });
+
+  it("ignores an address that is not one, rather than showing it", async () => {
+    getClaims.mockResolvedValue({
+      data: { claims: { sub: LEARNER, email: 42 } },
+      error: null,
+    });
+
+    expect(await getAuthenticatedAccount()).toEqual({ id: LEARNER, email: null });
+  });
+
+  it("returns null when the token has no usable subject", async () => {
+    // An address without a verified subject is not a session.
+    getClaims.mockResolvedValue({
+      data: { claims: { email: "learner@example.com" } },
+      error: null,
+    });
+
+    expect(await getAuthenticatedAccount()).toBeNull();
+  });
+
+  it("returns null when verification fails, whatever the claims said", async () => {
+    getClaims.mockResolvedValue({
+      data: { claims: { sub: LEARNER, email: "learner@example.com" } },
+      error: { message: "bad signature" },
+    });
+
+    expect(await getAuthenticatedAccount()).toBeNull();
   });
 });

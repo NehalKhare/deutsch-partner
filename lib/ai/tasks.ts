@@ -106,13 +106,29 @@ const ROUTES: Readonly<Record<TaskId, TaskRoute>> = {
   "ingestion.embedding": { tier: "embedding", maxInputTokens: 8191, maxOutputTokens: 0 },
   "retrieval.embedding": { tier: "embedding", maxInputTokens: 8191, maxOutputTokens: 0 },
   /**
-   * The Trainer's agent loop. Mid tier on purpose: one request is up to
-   * seven model invocations (the step cap plus the final answer), so the
-   * strong tier's price would multiply where a coach's judgement does not
-   * need it. Each iteration is its own call under these ceilings, and each
-   * writes its own ledger row.
+   * The Trainer's agent loop, on the same tier as the tutor it trains for.
+   *
+   * The best tier this loop can actually afford, which is not the same as the
+   * best tier. One request is up to seven model invocations under a €0.05
+   * per-request ceiling, so the price of a call is multiplied by seven before
+   * it is compared to that bound. Measured on one correction with this prompt:
+   * the reasoning tier ran about $0.014 a call, which three or four
+   * invocations into a session exhausts the turn budget — and a Trainer turn
+   * that dies halfway is the worst failure this feature has. The strong tier
+   * ran about $0.005, leaving the full seven-step loop inside the ceiling.
+   *
+   * It is a real upgrade over the mid tier it moved from, and not only in
+   * judgement: the mid model spent 590 to 706 tokens thinking before writing
+   * a correction, where this one spends none.
+   *
+   * The output ceiling is the tier's full allowance rather than the 700 the
+   * other conversational tasks get, because a reasoning model spends this
+   * budget before it writes anything. A live correction — the rule, the
+   * corrected sentence, two model sentences and a word to use instead — came
+   * back cut off mid-word at 700, two thirds of it spent thinking. Nothing is
+   * billed for room it does not use; a ceiling is a limit, not a purchase.
    */
-  "trainer.session": { tier: "mid", maxInputTokens: 6000, maxOutputTokens: 700 },
+  "trainer.session": { tier: "strong", maxInputTokens: 6000, maxOutputTokens: 1000 },
 };
 
 export function routeFor(task: TaskId): TaskRoute {

@@ -14,15 +14,21 @@ import { cn } from "@/lib/utils";
  *
  * Chat is deliberately the entry point rather than a thread: threads are
  * places to practise, and which one is today's is a choice, not a route.
+ *
+ * The Trainer is not here either, and that is the same argument one step
+ * further: it is not a place to go, it is what you do about what Review found.
+ * It is reached from Review, where the reason to open it is on the screen.
+ *
+ * Settings is not here, and neither is the spend dashboard. Neither is a room
+ * to practise in; both are about the account, and they live in the menu on the
+ * right with the way out.
  */
 const DESTINATIONS = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/chat", label: "Chat" },
-  { href: "/trainer", label: "Trainer" },
   { href: "/scenarios", label: "Scenarios" },
   { href: "/curriculum", label: "Curriculum" },
   { href: "/review", label: "Review" },
-  { href: "/settings", label: "Settings" },
 ] as const;
 
 export function AppNav() {

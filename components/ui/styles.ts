@@ -16,15 +16,21 @@ export const focusRing =
   "focus-visible:outline-apricot";
 
 /**
+ * The ring for anything filled with the accent. Apricot on apricot is a focus
+ * ring nobody can see, however correctly it is drawn.
+ */
+export const focusRingOnAccent =
+  "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 " +
+  "focus-visible:outline-chalk";
+
+/**
  * The one call to action. Filled apricot with ink text, because the accent is
  * the light source in this palette and the primary action should be it.
  */
 export const buttonPrimary =
   "inline-flex items-center justify-center rounded-full bg-apricot px-6 py-3 " +
   "font-display font-semibold text-ink transition-transform hover:scale-[1.03] " +
-  "disabled:pointer-events-none disabled:opacity-55 " +
-  "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 " +
-  "focus-visible:outline-chalk";
+  `disabled:pointer-events-none disabled:opacity-55 ${focusRingOnAccent}`;
 
 /** Secondary: the same pill, drawn rather than filled. */
 export const buttonQuiet =

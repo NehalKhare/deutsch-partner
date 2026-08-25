@@ -200,7 +200,8 @@ describe("the session agenda", () => {
     // printed underneath is a quiz the learner can read ahead of.
     expect(parsed.agenda.map((line) => line.subject)).toEqual([
       "fahren",
-      "case_dative",
+      // The label a learner hears, never the error-type key.
+      "The dative case",
       "Nachrichten von heute",
     ]);
     expect(JSON.stringify(parsed.agenda)).not.toContain("prompt");
@@ -210,6 +211,24 @@ describe("the session agenda", () => {
       subject: "fahren",
       prompt: 'What is the German for "to drive"?',
     });
+  });
+
+  it("hands a mistake over as background, never as a ready question", async () => {
+    const { deps } = fakeDeps({ covered: ["fahren"] });
+    const tools = createTrainerTools(deps);
+
+    const result = await toolNamed(tools, "get_review_session").invoke({});
+    const parsed = JSON.parse(result as string) as {
+      next: { subject: string; prompt?: string; struggles?: string } | null;
+    };
+
+    // The note describes what keeps going wrong; a field called "prompt"
+    // would be read out as the exercise, which is exactly what happened.
+    expect(parsed.next?.subject).toBe("The dative case");
+    expect(parsed.next?.prompt).toBeUndefined();
+    expect(parsed.next?.struggles).toContain("after mit");
+    // And the fence shape inside it arrives defused.
+    expect(parsed.next?.struggles).not.toContain("<system>");
   });
 
   it("leaves out what this session already covered", async () => {
@@ -224,16 +243,16 @@ describe("the session agenda", () => {
     };
 
     expect(parsed.agenda.map((line) => line.subject)).toEqual([
-      "case_dative",
+      "The dative case",
       "Nachrichten von heute",
     ]);
     expect(parsed.completed).toBe(1);
-    expect(parsed.next?.subject).toBe("case_dative");
+    expect(parsed.next?.subject).toBe("The dative case");
   });
 
   it("has nothing left to ask once the whole agenda is covered", async () => {
     const { deps } = fakeDeps({
-      covered: ["fahren", "case_dative", "Nachrichten von heute"],
+      covered: ["fahren", "The dative case", "Nachrichten von heute"],
     });
     const tools = createTrainerTools(deps);
 
@@ -250,7 +269,7 @@ describe("the session agenda", () => {
 
   it("ends with what to recall, read back out of the catalogue", async () => {
     const { deps } = fakeDeps({
-      covered: ["fahren", "case_dative", "der Tisch", "Nachrichten von heute"],
+      covered: ["fahren", "The dative case", "der Tisch", "Nachrichten von heute"],
     });
     const tools = createTrainerTools(deps);
 
@@ -266,7 +285,7 @@ describe("the session agenda", () => {
 
   it("recaps only what it can look up, and invents nothing", async () => {
     const { deps } = fakeDeps({
-      covered: ["case_dative", "fahren", "Nachrichten von heute"],
+      covered: ["The dative case", "fahren", "Nachrichten von heute"],
     });
     const tools = createTrainerTools(deps);
 
@@ -315,7 +334,7 @@ describe("the session agenda", () => {
 
     expect(tools.agenda()).toEqual([
       { kind: "recall", subject: "fahren" },
-      { kind: "correct_the_mistake", subject: "case_dative" },
+      { kind: "correct_the_mistake", subject: "The dative case" },
       { kind: "read_the_news", subject: "Nachrichten von heute" },
     ]);
   });
@@ -437,7 +456,7 @@ describe("recording a review outcome", () => {
 
     expect(JSON.parse(result as string)).toMatchObject({
       completed: 1,
-      next: { subject: "case_dative" },
+      next: { subject: "The dative case" },
     });
     expect(tools.covered()).toContain("fahren");
   });
@@ -476,10 +495,9 @@ describe("recording a review outcome", () => {
     const { deps, resolved } = fakeDeps();
     const tools = createTrainerTools(deps);
 
-    // The agenda has to have been fetched for the mistake's row id to be known.
     await toolNamed(tools, "get_review_session").invoke({});
     const result = await toolNamed(tools, "record_review_outcome").invoke({
-      subject: "case_dative",
+      subject: "The dative case",
       outcome: "correct",
     });
 
@@ -496,7 +514,7 @@ describe("recording a review outcome", () => {
 
     await toolNamed(tools, "get_review_session").invoke({});
     const result = await toolNamed(tools, "record_review_outcome").invoke({
-      subject: "case_dative",
+      subject: "The dative case",
       outcome: "incorrect",
     });
 
@@ -506,6 +524,22 @@ describe("recording a review outcome", () => {
       closed: true,
     });
     expect(resolved).toEqual([]);
+  });
+
+  it("resolves a fixed mistake even when this turn never planned an agenda", async () => {
+    // The answer usually lands a turn after the question, and that turn may
+    // record before it plans. Whether a mistake gets resolved must not depend
+    // on tool-call order inside one request.
+    const { deps, resolved } = fakeDeps();
+    const tools = createTrainerTools(deps);
+
+    const result = await toolNamed(tools, "record_review_outcome").invoke({
+      subject: "The dative case",
+      outcome: "correct",
+    });
+
+    expect(JSON.parse(result as string)).toMatchObject({ resolved: true, closed: true });
+    expect(resolved).toEqual([ERROR_ID]);
   });
 
   it("stops writing at the per-request cap", async () => {

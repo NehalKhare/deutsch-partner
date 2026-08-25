@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { TrainerInvite } from "@/components/review/trainer-invite";
 import {
   buttonQuiet,
   card,
@@ -58,13 +59,19 @@ export default async function ReviewPage() {
 
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-6 py-10 md:px-10 md:py-14">
-      <header className="flex flex-col gap-2">
-        <h1 className={pageTitle}>Review</h1>
-        <p className={prose}>
-          {plan.activities.length === 0
-            ? "Nothing is due. Come back after your next conversation."
-            : `${plan.activities.length} thing${plan.activities.length === 1 ? "" : "s"} to go over.`}
-        </p>
+      {/* Title and trainer on one line. The Trainer is what this page is for
+          — the list below is what it works through — so it stands beside the
+          heading rather than queueing behind it. */}
+      <header className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex flex-col gap-2">
+          <h1 className={pageTitle}>Review</h1>
+          <p className={prose}>
+            {plan.activities.length === 0
+              ? "Nothing is due. Come back after your next conversation."
+              : `${plan.activities.length} thing${plan.activities.length === 1 ? "" : "s"} to go over.`}
+          </p>
+        </div>
+        <TrainerInvite />
       </header>
 
       {plan.activities.length === 0 ? (

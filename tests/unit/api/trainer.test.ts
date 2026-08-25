@@ -329,8 +329,9 @@ describe("a turn that uses tools", () => {
     if (!result.ok) return;
     expect(result.payload.complete).toBe(true);
     expect(result.payload.agenda).toEqual([]);
-    // What to recall reached the model from the catalogue, not from memory.
-    expect(result.payload.steps[1]?.summary).toContain('"recap":[{"subject":"fahren"');
+    // The receipt under the reply is a phrase, never a JSON dump. The recap's
+    // catalogue-sourced content is proven in the tools suite.
+    expect(result.payload.steps[1]?.summary).toBe("session complete");
   });
 
   it("is not over when there was nothing to practise in the first place", async () => {
@@ -360,7 +361,7 @@ describe("a turn that uses tools", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.payload.agenda).toEqual([]);
-    expect(result.payload.steps[0]?.summary).toContain('"next":null');
+    expect(result.payload.steps[0]?.summary).toBe("session complete");
   });
 
   it("carries no learner id anywhere in the payload", async () => {

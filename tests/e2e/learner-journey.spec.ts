@@ -126,6 +126,18 @@ test.describe("the learner journey", () => {
     await expect(page.getByRole("heading", { name: /overdue/i })).toBeVisible();
   });
 
+  test("8a. opens the Trainer from Review, which is the only door to it", async ({
+    page,
+  }) => {
+    await signIn(page);
+    await page.goto("/review");
+
+    await page.getByRole("link", { name: /perfect your mistakes/i }).click();
+
+    await expect(page).toHaveURL(/\/trainer/);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Trainer");
+  });
+
   // The conversation list this journey used to end on is gone from the
   // dashboard, and with it the only route to the delete control. The action
   // and its component are still tested in tests/unit; there is no longer a

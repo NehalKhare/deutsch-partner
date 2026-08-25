@@ -1,5 +1,6 @@
 import type { ErrorType } from "@/domain/learner-error";
 import type { LearnerVocabulary, VocabularyItem } from "@/domain/vocabulary";
+import { ERROR_TYPE_LABELS } from "@/learning/error-labels";
 import { EXPOSURE_MASTERY_CEILING } from "@/learning/vocabulary-engine";
 
 /**
@@ -176,6 +177,16 @@ export function buildReviewPlan(inputs: ReviewInputs): ReviewPlan {
   const due = dueForReview(inputs.vocabulary, inputs.now, limit);
   const covered = new Set(due.map((item) => item.record.vocabularyItemId));
 
+  // One mistake per category per session. Two recorded spelling errors are
+  // one weakness, and a session that lists "Spelling" twice reads as a
+  // stutter — the second recorded instance waits for a later sitting.
+  const seenTypes = new Set<ErrorType>();
+  const mistakes = inputs.recurringErrors.filter((error) => {
+    if (seenTypes.has(error.errorType)) return false;
+    seenTypes.add(error.errorType);
+    return true;
+  });
+
   const weak = weakVocabulary(inputs.vocabulary, inputs.now, limit).filter(
     (record) => !covered.has(record.vocabularyItemId),
   );
@@ -197,10 +208,17 @@ export function buildReviewPlan(inputs: ReviewInputs): ReviewPlan {
   const activities: ReviewActivity[] = [
     ...due.map((item) => activityFor(item.record)),
     ...weak.map(activityFor),
-    ...inputs.recurringErrors.map((error) => ({
+    ...mistakes.map((error) => ({
       kind: "correct_the_mistake" as const,
-      subject: error.errorType,
-      prompt: `Fix the sentence: ${error.pattern}`,
+      // The label, not the type key: this subject is read aloud in the
+      // trainer's agenda and printed on the review page, and "case_dative"
+      // is a log line where "The dative case" is teaching.
+      subject: ERROR_TYPE_LABELS[error.errorType],
+      // The note the evaluator recorded about what keeps going wrong. It is
+      // a description, not an exercise — the old text prefixed it with "Fix
+      // the sentence:" and there was never a sentence, which the trainer
+      // then read out verbatim to a learner with nothing to fix.
+      prompt: error.pattern,
     })),
   ]
     .filter((activity): activity is ReviewActivity => activity !== null)
@@ -227,6 +245,8 @@ function promptFor(kind: ReviewActivityKind, item: VocabularyItem): string {
     case "use_in_sentence":
       return `Use "${item.word}" in a sentence about your day.`;
     case "correct_the_mistake":
-      return `Fix the sentence: ${item.word}`;
+      // Unreachable for a vocabulary item — mistakes are built from recorded
+      // errors above — but the switch must be total.
+      return item.word;
   }
 }
