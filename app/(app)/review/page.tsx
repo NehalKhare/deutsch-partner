@@ -10,14 +10,14 @@ import {
   sectionTitle,
 } from "@/components/ui/styles";
 import { cn } from "@/lib/utils";
-import { buildReviewPlan } from "@/learning/review";
+import { buildReviewPlan, dueForReview } from "@/learning/review";
 import { requireAuthenticatedUserId } from "@/lib/auth/current-user";
 import { createLearnerErrorRepository } from "@/repositories/learner-error-repository";
 import { createVocabularyRepository } from "@/repositories/vocabulary-repository";
 import { createServerSupabaseClient } from "@/lib/supabase/server-client";
 import type { DatabaseClient } from "@/repositories/types";
 
-export const metadata = { title: "Review — Deutsch Partner" };
+export const metadata = { title: "Catch up — Deutsch Partner" };
 
 /**
  * The review session.
@@ -57,6 +57,15 @@ export default async function ReviewPage() {
     now,
   });
 
+  // The overdue total, uncapped.
+  //
+  // plan.due is the session's list and is capped at MAX_REVIEW_ITEMS, which is
+  // the right bound for a sitting and the wrong number for a sentence about
+  // how far behind somebody is: at twenty-one overdue words the capped list
+  // would have this page say twenty while the nav badge — counted in the
+  // database — said the truth.
+  const overdue = dueForReview(records, now, records.length).length;
+
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-6 py-10 md:px-10 md:py-14">
       {/* Title and trainer on one line. The Trainer is what this page is for
@@ -64,7 +73,7 @@ export default async function ReviewPage() {
           heading rather than queueing behind it. */}
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-col gap-2">
-          <h1 className={pageTitle}>Review</h1>
+          <h1 className={pageTitle}>Catch up</h1>
           <p className={prose}>
             {plan.activities.length === 0
               ? "Nothing is due. Come back after your next conversation."
@@ -102,8 +111,7 @@ export default async function ReviewPage() {
           Overdue
         </h2>
         <p className="text-sm text-chalk/55">
-          {plan.due.length} word{plan.due.length === 1 ? "" : "s"} past their
-          review date
+          {overdue} word{overdue === 1 ? "" : "s"} past their review date
           {plan.due[0] ? `, the oldest by ${plan.due[0].overdueDays} day${plan.due[0].overdueDays === 1 ? "" : "s"}` : ""}
           .
         </p>

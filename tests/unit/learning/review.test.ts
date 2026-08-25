@@ -81,6 +81,16 @@ describe("what is due", () => {
     expect(dueForReview(many, NOW)).toHaveLength(MAX_REVIEW_ITEMS);
   });
 
+  it("counts them all when asked for a total rather than a session", () => {
+    // The bound is right for a sitting and wrong for a sentence about how far
+    // behind somebody is. The Catch up page states the total and lists the
+    // session; the nav badge counts the same total in the database, and the
+    // two must not contradict each other at the twenty-first overdue word.
+    const many = Array.from({ length: 60 }, () => word());
+
+    expect(dueForReview(many, NOW, many.length)).toHaveLength(60);
+  });
+
   it("gives the same session twice for the same state", () => {
     const records = [
       word({ vocabularyItemId: "b", nextReviewAt: days(-2) }),

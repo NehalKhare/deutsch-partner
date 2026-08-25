@@ -164,15 +164,33 @@ export interface ReviewInputs {
   readonly limit?: number;
 }
 
+/** What a session is made of, before any of it is worded. */
+interface SessionParts {
+  readonly limit: number;
+  readonly due: readonly DueItem[];
+  readonly weak: readonly LearnerVocabulary[];
+  readonly mistakes: readonly { errorType: ErrorType; pattern: string }[];
+}
+
 /**
- * The session.
+ * What goes into a sitting, in order.
  *
  * Overdue words come first because a review that is late is losing value by
  * the day, then persistently weak words, then the mistakes that keep coming
  * back. A word already covered as overdue is not offered again as weak: the
  * same word twice in one session is padding, not practice.
+ *
+ * Separated from the wording because two callers need the selection and only
+ * one needs the words: the Catch up page builds the whole plan, and the nav
+ * badge needs nothing but how many. Counting it a second way is how a badge
+ * comes to say one over a page that says four.
  */
-export function buildReviewPlan(inputs: ReviewInputs): ReviewPlan {
+function sessionParts(inputs: {
+  readonly vocabulary: readonly LearnerVocabulary[];
+  readonly recurringErrors: readonly { errorType: ErrorType; pattern: string }[];
+  readonly now: Date;
+  readonly limit?: number;
+}): SessionParts {
   const limit = inputs.limit ?? MAX_REVIEW_ITEMS;
   const due = dueForReview(inputs.vocabulary, inputs.now, limit);
   const covered = new Set(due.map((item) => item.record.vocabularyItemId));
@@ -190,6 +208,42 @@ export function buildReviewPlan(inputs: ReviewInputs): ReviewPlan {
   const weak = weakVocabulary(inputs.vocabulary, inputs.now, limit).filter(
     (record) => !covered.has(record.vocabularyItemId),
   );
+
+  return { limit, due, weak, mistakes };
+}
+
+/**
+ * How many things a sitting would hold.
+ *
+ * The same selection the plan is built from, counted without resolving a
+ * single word — which is what lets the nav badge state it on every page for
+ * two small reads rather than three, and guarantees it is the number the Catch
+ * up page's own headline prints.
+ *
+ * It needs no vocabulary items, so it cannot know about the one case where the
+ * plan would drop an entry: a progress row whose word was not fetched. The
+ * foreign key makes that a query bug rather than a state, and the page fetches
+ * items by exactly these ids.
+ */
+export function catchUpCount(inputs: {
+  readonly vocabulary: readonly LearnerVocabulary[];
+  readonly recurringErrors: readonly { errorType: ErrorType; pattern: string }[];
+  readonly now: Date;
+  readonly limit?: number;
+}): number {
+  const { limit, due, weak, mistakes } = sessionParts(inputs);
+
+  return Math.min(limit, due.length + weak.length + mistakes.length);
+}
+
+/**
+ * The session.
+ *
+ * The selection above, with every word resolved and phrased into something a
+ * learner can be asked.
+ */
+export function buildReviewPlan(inputs: ReviewInputs): ReviewPlan {
+  const { limit, due, weak, mistakes } = sessionParts(inputs);
 
   // The foreign key guarantees every progress row's item exists, so a miss
   // here means the caller fetched fewer items than records — a query bug. A

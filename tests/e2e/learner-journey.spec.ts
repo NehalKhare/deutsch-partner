@@ -111,7 +111,13 @@ test.describe("the learner journey", () => {
 
     const next = page.getByRole("heading", { name: /do this next/i });
     if (await next.isVisible()) {
-      await page.getByRole("link").filter({ hasText: /review|talk about/i }).first().click();
+      // Whichever recommendation won: the four candidate titles in
+      // lib/dashboard/summary.ts all start with one of these verbs.
+      await page
+        .getByRole("link")
+        .filter({ hasText: /catch up|talk about|practise|work on/i })
+        .first()
+        .click();
       await expect(page).toHaveURL(/\/(review|chat)/);
     }
   });
@@ -120,13 +126,13 @@ test.describe("the learner journey", () => {
     await signIn(page);
     await page.goto("/review");
 
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Review");
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Catch up");
     // Either there is something due or there is not; both are correct states,
     // and both must render rather than erroring.
     await expect(page.getByRole("heading", { name: /overdue/i })).toBeVisible();
   });
 
-  test("8a. opens the Trainer from Review, which is the only door to it", async ({
+  test("8a. opens the Trainer from Catch up, which is the only door to it", async ({
     page,
   }) => {
     await signIn(page);

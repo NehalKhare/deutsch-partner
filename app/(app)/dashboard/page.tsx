@@ -15,9 +15,9 @@ import { cn } from "@/lib/utils";
 import { ERROR_TYPE_LABELS } from "@/learning/error-labels";
 import { getMiniLevel } from "@/learning/mini-levels";
 import { requireAuthenticatedUserId } from "@/lib/auth/current-user";
+import { currentSummary } from "@/lib/dashboard/current-summary";
 import {
   bandScores,
-  createDashboardRepository,
   currentLevelTally,
   levelProgress,
   recommendNext,
@@ -58,7 +58,9 @@ export default async function DashboardPage() {
   const vocabulary = createVocabularyRepository(supabase);
 
   const [summary, profile, practised] = await Promise.all([
-    createDashboardRepository(supabase).summary(),
+    // The same read the shell already made for the nav's due count, memoised
+    // per request — so this page costs one aggregate, not two.
+    currentSummary(),
     createLearnerRepository(supabase).getProfile(learnerId),
     // The learner's progress rows. The words they point at are fetched below,
     // because an id is not something to show anybody.

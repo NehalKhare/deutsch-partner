@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
  * Everything that is about *you* rather than about learning German: which
  * account you are in, your settings, the operator's spend dashboard if you are
  * one, and the way out. None of those is a room to walk into, so none of them
- * belongs in the main navigation beside Chat and Review — and a sign-out link
+ * belongs in the main navigation beside Chat and Catch up — and a sign-out link
  * sitting permanently in the open, one mis-click from ending a session, is the
  * worst of them.
  *

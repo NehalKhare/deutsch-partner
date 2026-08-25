@@ -131,7 +131,7 @@ retrieval evaluation.
 
 ## Status
 
-Every phase of the build specification is implemented: 2934 tests across 159
+Every phase of the build specification is implemented: 2942 tests across 159
 files (plus 31 Python tests), typecheck, lint and a production build clean,
 and 29 migrations for the linked project.
 

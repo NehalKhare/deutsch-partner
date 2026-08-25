@@ -8,7 +8,7 @@ import styles from "./trainer-invite.module.css";
 /**
  * The way into the Trainer, from the page that knows what needs doing.
  *
- * Review lists what is due; it cannot ask you anything. The Trainer builds a
+ * Catch up lists what is due; it cannot ask you anything. The Trainer builds a
  * session from that same plan and works through it — asking, marking the
  * answer, recording the outcome. So this is not a link to a sibling feature,
  * it is the start button this page never had.

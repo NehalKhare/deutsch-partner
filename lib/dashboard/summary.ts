@@ -225,7 +225,7 @@ export function candidatesFor(
   if (summary.vocabulary.due > 0) {
     candidates.push({
       activityType: "review",
-      title: `Review ${summary.vocabulary.due} word${summary.vocabulary.due === 1 ? "" : "s"}`,
+      title: `Catch up on ${summary.vocabulary.due} word${summary.vocabulary.due === 1 ? "" : "s"}`,
       reason: { kind: "review_due", dueCount: summary.vocabulary.due },
       inputs: {
         overdueReviewItems: summary.vocabulary.due,

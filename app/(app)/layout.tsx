@@ -7,6 +7,7 @@ import { Wordmark } from "@/components/site/wordmark";
 import { accountLabel } from "@/lib/auth/account";
 import { getAuthenticatedAccount } from "@/lib/auth/current-user";
 import { isOperator } from "@/lib/auth/operator";
+import { currentSummary } from "@/lib/dashboard/current-summary";
 import { LOGIN_PATH } from "@/lib/auth/routes";
 import { requireOnboarded } from "@/lib/onboarding/gate";
 
@@ -43,11 +44,18 @@ export default async function AuthenticatedLayout({
   // it is handed the answer rather than the means to work it out.
   const operator = isOperator(account.id);
 
+  // For the count beside Catch up. Shared with the dashboard page through a
+  // per-request memo, so a dashboard visit still runs this aggregate once.
+  // A read that fails yields nothing waiting: an unreadable database must not
+  // invent urgency in the nav bar.
+  const summary = await currentSummary();
+  const dueCount = summary.ok ? summary.data.vocabulary.due : 0;
+
   return (
     <div className="flex h-dvh flex-col bg-ink font-body text-chalk">
       <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-haze/60 px-6 py-4 md:px-10">
         <Wordmark href="/dashboard" />
-        <AppNav />
+        <AppNav dueCount={dueCount} />
         {/* Everything about the account rather than about German: which one
             you are in, its settings, and the way out. */}
         <AccountMenu
