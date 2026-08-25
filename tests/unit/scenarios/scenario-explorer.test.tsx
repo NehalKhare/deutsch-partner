@@ -81,19 +81,27 @@ describe("browsing", () => {
 });
 
 describe("the card actions", () => {
-  it("offers a dialogue exactly one action: practising in the chat", () => {
+  it("offers a dialogue the chat as its lead action, the script beside it", () => {
     renderExplorer();
 
     expect(
       screen.getByRole("button", { name: "Practice Dialogue (AI Chat)" }),
     ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Read the script" })).toHaveAttribute(
+      "href",
+      "/scenarios/dialogue-a1-im-restaurant",
+    );
   });
 
-  it("offers a comprehension exactly one action: reading and answering", () => {
+  it("offers a comprehension the chat too, where wrong answers are explained", () => {
+    // The self-check quiz stays one click away; the practice that counts —
+    // explanations, and mistakes written to the record — is the chat.
     renderExplorer();
 
-    const action = screen.getByRole("link", { name: "Read & Answer Questions" });
-    expect(action).toHaveAttribute(
+    expect(
+      screen.getByRole("button", { name: "Practice Reading (AI Chat)" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Read & self-check" })).toHaveAttribute(
       "href",
       "/scenarios/comprehension-a1-reading-ein-neuer-morgen",
     );

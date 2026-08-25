@@ -56,12 +56,15 @@ const RECORDED: Readonly<Record<string, string>> = {
   // the fingerprints — a promise about the entry's own blocks — are inherited
   // unchanged. That is exactly why the versions had to move by hand: these
   // are behaviour changes the lock cannot see.
-  "conversation.turn@4/A1": "12c321c1",
-  "conversation.turn@4/A2": "bfee4f9c",
-  "conversation.turn@4/B1": "621d4551",
-  "conversation.repair@4/A1": "12c321c1",
-  "conversation.repair@4/A2": "bfee4f9c",
-  "conversation.repair@4/B1": "621d4551",
+  // Version 5: the reply marks its teaching — the wrong form in backticks,
+  // the corrected form or one suggested line in bold — so mistakes and
+  // suggestions render in colour. (Version 4 fixed the correction's shape.)
+  "conversation.turn@5/A1": "7e503226",
+  "conversation.turn@5/A2": "61631c4b",
+  "conversation.turn@5/B1": "cb5b0716",
+  "conversation.repair@5/A1": "7e503226",
+  "conversation.repair@5/A2": "61631c4b",
+  "conversation.repair@5/B1": "cb5b0716",
   // Version 4: the contract fixes the explanation's form, not just its
   // language — English prose quoting the German and naming the correct form,
   // because that one sentence is all the dashboard shows.

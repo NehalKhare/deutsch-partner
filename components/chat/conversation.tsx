@@ -367,10 +367,21 @@ export function Conversation({
     // before this message, which travels separately. Milestones are filtered
     // out first — they are lines nobody spoke, and the server's transcript
     // schema rightly refuses any role that is not a speaking one.
-    const history = messages
-      .filter(isSpeech)
-      .slice(-HISTORY_WINDOW)
-      .map(({ role, content }) => ({ role, content }));
+    const speech = messages.filter(isSpeech);
+    let recent = speech.slice(-HISTORY_WINDOW);
+
+    // A scenario seed is the scene itself — the roles, or the whole reading
+    // passage. Everything the tutor knows about this exercise is in that one
+    // message, so it is pinned: once the conversation outgrows the window,
+    // the seed takes the oldest slot rather than falling out of it. A tutor
+    // asking comprehension questions about a passage it can no longer see
+    // grades the learner against its own invention.
+    const seed = speech[0]?.id.startsWith("scenario:") ? speech[0] : null;
+    if (seed && !recent.some((line) => line.id === seed.id)) {
+      recent = [seed, ...recent.slice(-(HISTORY_WINDOW - 1))];
+    }
+
+    const history = recent.map(({ role, content }) => ({ role, content }));
 
     setError(null);
     // A verdict about the previous turn must not sit beside a new one.

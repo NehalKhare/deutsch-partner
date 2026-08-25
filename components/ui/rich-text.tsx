@@ -37,10 +37,14 @@ function Spans({ spans }: { readonly spans: readonly Span[] }) {
           );
         }
         if (span.kind === "code") {
+          // The counterpart of the apricot bold above: the tutor and trainer
+          // are told to quote the learner's wrong form in backticks, so this
+          // is the mistake's colour — ember, same as everywhere else the
+          // product points at something that went wrong.
           return (
             <code
               key={key}
-              className="rounded bg-ink/60 px-1 py-0.5 font-mono text-[0.9em]"
+              className="rounded bg-ember/10 px-1 py-0.5 font-mono text-[0.9em] text-ember"
             >
               {span.text}
             </code>

@@ -55,7 +55,7 @@ describe("landing page", () => {
   it("shows every growth stage in the progress strip", () => {
     render(<Home />);
 
-    const strip = screen.getByRole("list");
+    const strip = screen.getByRole("list", { name: /growth stages/i });
     expect(within(strip).getAllByRole("listitem")).toHaveLength(
       MAX_GROWTH_STAGE,
     );
@@ -66,7 +66,7 @@ describe("landing page", () => {
     // level range beside each one already carries the meaning.
     render(<Home />);
 
-    const strip = screen.getByRole("list");
+    const strip = screen.getByRole("list", { name: /growth stages/i });
     expect(within(strip).queryAllByRole("img")).toHaveLength(0);
   });
 
@@ -74,6 +74,40 @@ describe("landing page", () => {
     render(<Home />);
 
     expect(screen.getByText(/do not issue certificates/i)).toBeInTheDocument();
+  });
+
+  it("names what you can do, feature by feature, without a superlative", () => {
+    render(<Home />);
+
+    const grid = screen.getByRole("list", { name: /what you can do/i });
+    for (const room of ["Talk", "Train", "Play a scene", "Speak and listen"]) {
+      expect(within(grid).getByRole("heading", { name: room })).toBeInTheDocument();
+    }
+    // The register check: this page describes, it does not shout.
+    expect(grid.textContent).not.toMatch(/best|revolutionary|amazing|effortless/i);
+  });
+
+  it("gives the timeline at both paces, computed from the same hours", () => {
+    render(<Home />);
+
+    // The A1 row: about 6 months at half an hour, about 3 at a full one.
+    const row = screen.getByRole("row", { name: /A1/ });
+    expect(within(row).getByText("about 6 months")).toBeInTheDocument();
+    expect(within(row).getByText("about 3 months")).toBeInTheDocument();
+  });
+
+  it("says what the timeline is based on, and that pace differs", () => {
+    render(<Home />);
+
+    expect(screen.getByText(/guided hours language schools plan/i)).toBeInTheDocument();
+    expect(screen.getByText(/your pace will differ/i)).toBeInTheDocument();
+  });
+
+  it("explains why it is not tiring as a mechanism, not a mood", () => {
+    render(<Home />);
+
+    expect(screen.getByText(/mostly language you\s+already handle/i)).toBeInTheDocument();
+    expect(screen.getByText(/the next mini-level\s+comes to you/i)).toBeInTheDocument();
   });
 
   it("has one first-level heading and a section heading for each claim", () => {

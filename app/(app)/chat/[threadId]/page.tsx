@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { Conversation } from "@/components/chat/conversation";
 import { getMiniLevel } from "@/learning/mini-levels";
 import { requireAuthenticatedUserId } from "@/lib/auth/current-user";
-import { roleplaySeed } from "@/lib/scenarios/roleplay";
+import { scenarioSeed } from "@/lib/scenarios/roleplay";
 import { createConversationRepository } from "@/repositories/conversation-repository";
 import { createLearnerRepository } from "@/repositories/learner-repository";
 import { createPerformanceRepository } from "@/repositories/performance-repository";
@@ -70,16 +70,16 @@ export default async function ThreadPage({
     miniLevel,
   );
 
-  // A dialogue scenario opens the scene: its opening line arrives as the
-  // partner's first message, so the roleplay needs no hidden instruction and
-  // the learner sees exactly what the tutor was given. The repository
-  // validates the slug, so a malformed or unknown one simply seeds nothing —
-  // the thread still works as a plain conversation.
+  // A scenario opens the scene: a dialogue's roles and opening line, or a
+  // comprehension's passage, arrive as the tutor's first message — no hidden
+  // instruction, and the learner sees exactly what the tutor was given. The
+  // repository validates the slug, so a malformed or unknown one simply seeds
+  // nothing and the thread still works as a plain conversation.
   const scenario =
     typeof scenarioSlug === "string" && scenarioSlug.length > 0
       ? await createScenarioRepository(supabase).getBySlug(scenarioSlug)
       : null;
-  const seed = scenario?.ok ? roleplaySeed(scenario.data) : null;
+  const seed = scenario?.ok ? scenarioSeed(scenario.data) : null;
 
   return (
     <main className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col px-6 pt-6 md:px-10">

@@ -58,21 +58,25 @@ export function ScenarioCard({
 
       <p className="text-xs text-chalk/40">Source: {scenarioCitation(scenario)}</p>
 
-      {scenario.type === "dialogue" ? (
+      <div className="flex flex-wrap items-center gap-2">
+        {/* Both kinds practise in the chat now: a dialogue as a roleplay, a
+            comprehension as a passage the tutor asks about — where wrong
+            answers are explained and mistakes count towards the record. */}
         <form action={practiceAction}>
           <input type="hidden" name="slug" value={scenario.slug} />
           <button type="submit" className={cn(buttonPrimary, "px-4 py-2 text-sm")}>
-            Practice Dialogue (AI Chat)
+            {scenario.type === "dialogue"
+              ? "Practice Dialogue (AI Chat)"
+              : "Practice Reading (AI Chat)"}
           </button>
         </form>
-      ) : (
         <Link
           href={`/scenarios/${scenario.slug}`}
-          className={cn(buttonQuiet, "self-start")}
+          className={cn(buttonQuiet, "px-4 py-2 text-sm")}
         >
-          Read &amp; Answer Questions
+          {scenario.type === "dialogue" ? "Read the script" : "Read & self-check"}
         </Link>
-      )}
+      </div>
     </article>
   );
 }

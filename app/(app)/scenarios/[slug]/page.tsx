@@ -9,7 +9,7 @@ import {
   prose,
   sectionTitle,
 } from "@/components/ui/styles";
-import { practiceDialogueAction } from "@/app/(app)/scenarios/actions";
+import { practiceScenarioAction } from "@/app/(app)/scenarios/actions";
 import type { Scenario } from "@/domain/scenario";
 import { requireAuthenticatedUserId } from "@/lib/auth/current-user";
 import { scenarioCitation } from "@/lib/scenarios/citation";
@@ -66,7 +66,7 @@ export default async function ScenarioPage({
 
       {item.type === "dialogue" ? (
         <>
-          <form action={practiceDialogueAction}>
+          <form action={practiceScenarioAction}>
             <input type="hidden" name="slug" value={item.slug} />
             <button type="submit" className={buttonPrimary}>
               Practice Dialogue (AI Chat)
@@ -96,6 +96,17 @@ export default async function ScenarioPage({
         </>
       ) : (
         <>
+          {/* The practice that counts: the tutor asks about the passage,
+              explains wrong answers in English, and every reply flows through
+              the same mistake tracking as an ordinary conversation. The quiz
+              below stays as the free self-check. */}
+          <form action={practiceScenarioAction}>
+            <input type="hidden" name="slug" value={item.slug} />
+            <button type="submit" className={buttonPrimary}>
+              Practice Reading (AI Chat)
+            </button>
+          </form>
+
           <section aria-labelledby="passage-heading" className="flex flex-col gap-3">
             <h2 id="passage-heading" className={sectionTitle}>
               Read

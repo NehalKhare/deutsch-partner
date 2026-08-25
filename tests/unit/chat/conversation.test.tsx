@@ -522,6 +522,76 @@ describe("what travels with a turn", () => {
     expect(history[7]?.content).toBe("Satz 10");
   });
 
+  it("pins a scenario seed into the window of a long conversation", async () => {
+    // The seed is the scene itself — the roles, or the whole reading passage.
+    // Once the conversation outgrows the window it takes the oldest slot
+    // rather than falling out: a tutor asking questions about a passage it
+    // can no longer see grades the learner against its own invention.
+    const captured = captureBody();
+    const user = userEvent.setup();
+    const long: ChatMessage[] = [
+      { id: "scenario:im-cafe", role: "assistant", content: "Leseverstehen: der Text." },
+      ...Array.from({ length: 10 }, (_, index) => ({
+        id: `m-${index}`,
+        role: (index % 2 === 0 ? "user" : "assistant") as "user" | "assistant",
+        content: `Satz ${index}`,
+      })),
+    ];
+    renderConversation(long);
+
+    await user.type(screen.getByLabelText(/your message in german/i), "Noch einer");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => expect(captured).toHaveLength(1));
+    const history = captured[0]?.history as Array<{ content: string }>;
+
+    // Still exactly the window the server accepts, with the seed first.
+    expect(history).toHaveLength(8);
+    expect(history[0]?.content).toBe("Leseverstehen: der Text.");
+    expect(history[7]?.content).toBe("Satz 9");
+  });
+
+  it("does not duplicate a seed that is still inside the window", async () => {
+    const captured = captureBody();
+    const user = userEvent.setup();
+    renderConversation([
+      { id: "scenario:im-cafe", role: "assistant", content: "Rollenspiel: die Szene." },
+      { id: "m-0", role: "user", content: "Hallo!" },
+    ]);
+
+    await user.type(screen.getByLabelText(/your message in german/i), "Weiter");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => expect(captured).toHaveLength(1));
+    const history = captured[0]?.history as Array<{ content: string }>;
+
+    expect(history.map((line) => line.content)).toEqual([
+      "Rollenspiel: die Szene.",
+      "Hallo!",
+    ]);
+  });
+
+  it("pins nothing in an ordinary conversation", async () => {
+    // A plain first message is not a scene; the window slides as it always
+    // did, and the server sees no difference.
+    const captured = captureBody();
+    const user = userEvent.setup();
+    const long: ChatMessage[] = Array.from({ length: 9 }, (_, index) => ({
+      id: `m-${index}`,
+      role: (index % 2 === 0 ? "user" : "assistant") as "user" | "assistant",
+      content: `Satz ${index}`,
+    }));
+    renderConversation(long);
+
+    await user.type(screen.getByLabelText(/your message in german/i), "Noch einer");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => expect(captured).toHaveLength(1));
+    const history = captured[0]?.history as Array<{ content: string }>;
+
+    expect(history[0]?.content).toBe("Satz 1");
+  });
+
   it("keeps the message being sent out of the history it sends", async () => {
     // The message travels in its own field. Doubling it into the transcript
     // would make the tutor read everything twice.

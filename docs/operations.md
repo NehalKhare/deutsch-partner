@@ -30,7 +30,7 @@ contributor can run the app and the suite without provisioning anything.
 
 ```bash
 pnpm install
-pnpm db:push          # 28 migrations: 24 tables, RLS, functions
+pnpm db:push          # 29 migrations: 24 tables, RLS, functions
 pnpm db:seed          # curriculum, vocabulary and grammar seeds
 pnpm dummy:user       # a confirmed fixture learner, credentials printed
 pnpm fx:refresh       # the euro rate — until this runs, spend is recorded unpriced
@@ -57,7 +57,7 @@ applied an earlier version gets the update from `db:seed`.
 
 | Command | What it does |
 | --- | --- |
-| `pnpm verify` | Typecheck, lint, 2905 tests, then a production build |
+| `pnpm verify` | Typecheck, lint, 2934 tests, then a production build |
 | `pnpm test:unit` | Unit and component tests |
 | `pnpm test:db` | Migrations, constraints and RLS against real Postgres via PGlite |
 | `pnpm test:e2e` | Playwright against a production build on port 3100 |

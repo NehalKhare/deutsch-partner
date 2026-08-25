@@ -1,6 +1,6 @@
 import { ScenarioExplorer } from "@/components/scenarios/scenario-explorer";
 import { page, pageTitle, prose } from "@/components/ui/styles";
-import { practiceDialogueAction } from "@/app/(app)/scenarios/actions";
+import { practiceScenarioAction } from "@/app/(app)/scenarios/actions";
 import { requireAuthenticatedUserId } from "@/lib/auth/current-user";
 import { createScenarioRepository } from "@/repositories/scenario-repository";
 import { createServerSupabaseClient } from "@/lib/supabase/server-client";
@@ -28,15 +28,16 @@ export default async function ScenariosPage() {
         <h1 className={pageTitle}>Scenarios</h1>
         <p className={cn(prose, "max-w-2xl")}>
           Say what you want to practise — a situation to talk through, or a
-          text to test your reading. Dialogues open a roleplay with your
-          tutor; comprehensions open a passage with questions.
+          text to test your reading. Both open a conversation with your
+          tutor: a dialogue as a roleplay with dealt roles, a comprehension
+          as a passage it asks you about.
         </p>
       </header>
 
       {scenarios.ok ? (
         <ScenarioExplorer
           initial={scenarios.data}
-          practiceAction={practiceDialogueAction}
+          practiceAction={practiceScenarioAction}
         />
       ) : (
         <p className={prose}>

@@ -150,7 +150,11 @@ const ENTRIES: readonly PromptCatalogEntry[] = [
   {
     name: "conversation.turn",
     register: "learner_facing",
-    version: 4,
+    // Version 5: the reply marks its teaching — the learner's wrong form in
+    // backticks, the corrected form or a suggested line in bold, at most one
+    // bolded line — so the client can render mistakes and suggestions in
+    // colour instead of leaving them buried in prose.
+    version: 5,
     task: "conversation.turn",
     tier: routeFor("conversation.turn").tier,
     purpose: "The learner-facing German conversation turn.",
@@ -163,7 +167,7 @@ const ENTRIES: readonly PromptCatalogEntry[] = [
   {
     name: "conversation.repair",
     register: "learner_facing",
-    version: 4,
+    version: 5,
     task: "conversation.repair",
     tier: routeFor("conversation.repair").tier,
     purpose:

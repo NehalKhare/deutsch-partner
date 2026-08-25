@@ -8,6 +8,7 @@ import { buttonPrimary } from "@/components/ui/styles";
 import { cn } from "@/lib/utils";
 import { companionStateFor, MAX_GROWTH_STAGE } from "@/domain/companion";
 import { MAX_MINI_LEVEL } from "@/domain/cefr";
+import { GUIDED_HOURS, timelinePhrase } from "@/lib/landing/timeline";
 
 /** One representative mini-level per growth band, for the progress strip. */
 const GROWTH_MARKERS = Array.from({ length: MAX_GROWTH_STAGE }, (_, index) => {
@@ -128,6 +129,60 @@ export default function Home() {
           </div>
         </section>
 
+        {/* What the rooms are. Each line names a real feature and stops:
+            the product is the pitch, and a claim that outruns it would be
+            found out within the first session. */}
+        <section className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-6 py-16 md:px-10 md:py-24">
+          <div className="flex flex-col gap-3">
+            <h2 className="max-w-xl font-display text-3xl font-semibold tracking-tight md:text-4xl">
+              What you actually do here
+            </h2>
+            <p className="max-w-xl text-lg leading-relaxed text-chalk/70">
+              Not exercises about German. German, used — with somebody who
+              answers.
+            </p>
+          </div>
+
+          <ul aria-label="What you can do here" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {[
+              {
+                name: "Talk",
+                what: "Conversations that talk back. Mistakes are corrected in the flow of the chat, gently, and remembered.",
+              },
+              {
+                name: "Train",
+                what: "A personal trainer runs your review: the words that are due, the mistakes you keep making, and a real news item retold at your level.",
+              },
+              {
+                name: "Play a scene",
+                what: "Roleplays with dealt roles — order the food, catch the train — and reading passages your tutor asks you about.",
+              },
+              {
+                name: "Speak and listen",
+                what: "Replies read aloud at your pace. Answer with your voice, and it understands you.",
+              },
+              {
+                name: "See the whole path",
+                what: "Seventy mini-levels, every word with its article and its English, open from day one. No locked chapters.",
+              },
+              {
+                name: "Review that finds you",
+                what: "Words come back exactly when you are about to forget them, inside conversation rather than on flashcards.",
+              },
+            ].map((room) => (
+              <li
+                key={room.name}
+                className="flex flex-col gap-2 rounded-2xl border border-haze/70 bg-dusk/50 p-5"
+              >
+                <h3 className="font-display text-lg font-semibold text-apricot">
+                  {room.name}
+                </h3>
+                <p className="text-sm leading-relaxed text-chalk/70">{room.what}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+
         {/* Growth. A genuine sequence, so the numbering earns its place. */}
         <section className="mx-auto flex w-full max-w-4xl flex-col gap-10 px-6 py-16 md:px-10 md:py-24">
           <div className="flex flex-col gap-3">
@@ -143,7 +198,7 @@ export default function Home() {
 
           {/* A five-column grid rather than a wrapping flex row: this is a
               sequence, and a strip that folds 4 + 1 stops reading as one. */}
-          <ol className="grid grid-cols-5 items-end gap-2 sm:gap-8">
+          <ol aria-label="Growth stages" className="grid grid-cols-5 items-end gap-2 sm:gap-8">
             {GROWTH_MARKERS.map((marker) => (
               <li
                 key={marker.first}
@@ -163,6 +218,94 @@ export default function Home() {
               </li>
             ))}
           </ol>
+        </section>
+
+        {/* Why it does not wear you out: the comfortable-difficulty policy,
+            described rather than praised. This is a mechanism the product
+            actually has, not a mood. */}
+        <section className="border-t border-haze/60 bg-dusk">
+          <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-6 py-16 md:px-10 md:py-24">
+            <h2 className="max-w-xl font-display text-3xl font-semibold tracking-tight md:text-4xl">
+              Easy on purpose
+            </h2>
+            <div className="flex max-w-2xl flex-col gap-4 text-lg leading-relaxed text-chalk/70">
+              <p>
+                Every reply is pitched at your level: mostly language you
+                already handle comfortably, with just enough new to stretch
+                you — never a wall of German you have to decode.
+              </p>
+              <p>
+                It is how you learned your first language. Nobody handed you a
+                grammar book; someone kept talking to you, always slightly
+                above where you were. When you are ready, the next mini-level
+                comes to you — you do not climb, it lifts.
+              </p>
+              <p className="text-chalk/55">
+                Which is why half an hour here feels like a chat, not a class.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* The timeline. Language schools' own planning figures divided by
+            daily minutes — a claim someone can check, phrased so rounding
+            never flatters. Anything faster would be a promise the product
+            cannot keep for every learner. */}
+        <section className="mx-auto flex w-full max-w-4xl flex-col gap-8 px-6 py-16 md:px-10 md:py-24">
+          <div className="flex flex-col gap-3">
+            <h2 className="max-w-xl font-display text-3xl font-semibold tracking-tight md:text-4xl">
+              How long it takes, honestly
+            </h2>
+            <p className="max-w-xl text-lg leading-relaxed text-chalk/70">
+              Based on the ~{GUIDED_HOURS.A1}, {GUIDED_HOURS.A2} and{" "}
+              {GUIDED_HOURS.B1} guided hours language schools plan for the
+              levels — just spent in conversation instead of a classroom.
+            </p>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left font-display text-sm">
+              <thead className="text-xs uppercase tracking-[0.16em] text-chalk/40">
+                <tr>
+                  <th scope="col" className="py-2 pr-4">Finish</th>
+                  <th scope="col" className="py-2 pr-4">30 min a day</th>
+                  <th scope="col" className="py-2 pr-4">60 min a day</th>
+                  <th scope="col" className="hidden py-2 sm:table-cell">
+                    And then you can
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="text-base">
+                {(
+                  [
+                    ["A1", "introduce yourself, order, ask — get through the day politely"],
+                    ["A2", "handle errands and small talk, tell someone about your week"],
+                    ["B1", "hold your own: opinions, stories, most everyday situations"],
+                  ] as const
+                ).map(([level, means]) => (
+                  <tr key={level} className="border-t border-haze/50">
+                    <th scope="row" className="py-3 pr-4 font-semibold text-apricot">
+                      {level}
+                    </th>
+                    <td className="py-3 pr-4 text-chalk/80">
+                      {timelinePhrase(level, 30)}
+                    </td>
+                    <td className="py-3 pr-4 text-chalk/80">
+                      {timelinePhrase(level, 60)}
+                    </td>
+                    <td className="hidden py-3 text-sm text-chalk/55 sm:table-cell">
+                      {means}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <p className="max-w-2xl text-sm leading-relaxed text-chalk/50">
+            Your pace will differ — everyone&apos;s does. The product tells you
+            where you actually are, not where the calendar says you should be.
+          </p>
         </section>
 
         {/* Honesty, stated plainly. Everyone else overclaims here. */}

@@ -21,6 +21,8 @@ export const CONVERSATION_MODES = [
   "vocabulary_practice",
   "review",
   "assessment",
+  /** A comprehension practised in the chat: a passage, then questions on it. */
+  "reading",
 ] as const;
 
 export const conversationModeSchema = z.enum(CONVERSATION_MODES);

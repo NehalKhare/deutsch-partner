@@ -154,6 +154,10 @@ export function buildResponsePolicy(policy: BehaviorPolicy): string {
     policy.invitesReply
       ? "- End in a way that gives the learner something easy to answer."
       : "- Do not force a question if the exchange has run its course.",
+    // The marks the client renders in colour: the mistake in ember, the line
+    // to act on in the accent. One suggestion, because two bolded lines is
+    // no highlight at all.
+    "- Mark your teaching: quote a learner's wrong form in `backticks`, and put the corrected form — or a line you suggest the learner say — in **bold**. Bold at most one line per reply.",
   ].join("\n");
 }
 
