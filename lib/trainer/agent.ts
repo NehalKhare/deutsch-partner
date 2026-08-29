@@ -89,6 +89,7 @@ function summarize(tool: string | undefined, content: unknown): string {
         return `“${parsed.subject}” — ${parsed.outcome === "correct" ? "correct" : "not yet"}`;
       }
       if (parsed.reason === "mistake_not_yet_fixed") return "kept for a later session";
+      if (parsed.reason === "grammar_practised") return "grammar practised";
       if (parsed.reason === "not_in_curriculum") return "noted — not a course word";
       return "noted";
     }

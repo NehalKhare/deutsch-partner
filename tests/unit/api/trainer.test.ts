@@ -94,6 +94,9 @@ function fakeDeps(options: {
     } as unknown as TrainerDeps["performance"],
     grammar: {
       findByKey: async () => ok(null),
+      // No drills in these fakes: the endpoint tests are about the wire, and
+      // the agenda mix has its own unit tests in trainer/tools.test.ts.
+      findByKeys: async () => ok([]),
       listUpToMiniLevel: async () => ok([]),
     } as unknown as TrainerDeps["grammar"],
     retriever: {

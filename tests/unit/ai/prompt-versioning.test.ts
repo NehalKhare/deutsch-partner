@@ -189,14 +189,15 @@ describe("the trainer's prompt", () => {
     // understood. (Version 3 ended the session with a recall list; version 2
     // introduced the agenda: open by listing what the sitting covers, quiz
     // only the item the tool hands over, never ask the same question twice.)
-    // Version 6: a recurring mistake arrives as background ("struggles"), and
-    // the trainer writes the exercise itself — a flawed sentence to fix or a
-    // sentence to produce — instead of reading the recorded note out as if it
-    // were one. Items are capped at three exchanges, then recorded incorrect
-    // and returned to a later session. The exercise line is bolded. (Version
-    // 5 taught corrections in English with model sentences; version 4 ended
-    // the agenda on a reading item.)
-    "trainer.session@6": "6116942f",
+    // Version 7: the session is a declared mix — vocabulary interleaved with
+    // grammar work and ending on the news — and a level grammar pattern can
+    // arrive as a "teach" item: the rule itself as background, introduced in
+    // English and practised through an exercise the trainer writes, exactly
+    // like a recurring mistake but with nothing having gone wrong. (Version 6
+    // introduced "struggles" background and the three-exchange cap; version 5
+    // taught corrections in English with model sentences; version 4 ended the
+    // agenda on a reading item.)
+    "trainer.session@7": "8742ba8a",
   };
 
   it("matches its recorded fingerprint", () => {

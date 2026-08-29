@@ -1,11 +1,7 @@
 import { tool, type StructuredToolInterface } from "@langchain/core/tools";
 import { z } from "zod";
 
-import {
-  MAX_REVIEW_ITEMS,
-  buildReviewPlan,
-  type ReviewActivityKind,
-} from "@/learning/review";
+import { MAX_REVIEW_ITEMS, buildReviewPlan } from "@/learning/review";
 import { ERROR_TYPE_LABELS } from "@/learning/error-labels";
 import { getMiniLevel } from "@/learning/mini-levels";
 import {
@@ -22,6 +18,11 @@ import {
   newsRetellFraming,
   type TrainerToolName,
 } from "@/lib/ai/prompts/trainer";
+import {
+  composeMixedAgenda,
+  type AgendaActivity,
+  type TrainerAgendaItem,
+} from "@/lib/trainer/agenda";
 import {
   NEWS_CHOICES,
   NEWS_RETELL_WORDS,
@@ -85,23 +86,6 @@ export interface TrainerSource {
   readonly score: number;
 }
 
-/**
- * What one agenda line asks for.
- *
- * The review engine's activities, plus the one the engine knows nothing
- * about: reading a real news item. That is not spaced repetition — there is
- * no schedule behind it and nothing to be due — so it is the trainer's own
- * addition to the session rather than a row in the review plan, and the
- * review page stays a list of words and mistakes.
- */
-export type TrainerAgendaKind = ReviewActivityKind | "read_the_news";
-
-/** One line of the agenda, as the session shows it to the learner. */
-export interface TrainerAgendaItem {
-  readonly kind: TrainerAgendaKind;
-  readonly subject: string;
-}
-
 export interface TrainerTools {
   readonly tools: StructuredToolInterface[];
   /** What search_knowledge cited this request, for the response to show. */
@@ -145,7 +129,7 @@ const NEWS_ACTIVITY = {
   kind: "read_the_news" as const,
   subject: NEWS_SUBJECT,
   prompt:
-    "Call fetch_simple_german_news and follow the level instruction it returns: retell one item at the learner's level, then ask what they understood.",
+    "Call fetch_simple_german_news and follow the level instruction it returns: retell one item at the learner's level, ask what they understood, then correct and confirm like a teacher.",
 };
 
 const grammarKeySchema = z
@@ -171,8 +155,46 @@ export function createTrainerTools(deps: TrainerToolDeps): TrainerTools {
   const covered = new Set(deps.covered ?? []);
   const lemmaFor = new Map<string, string>();
   const errorIdFor = new Map<string, string>();
+  const grammarKeyFor = new Map<string, string>();
   let agenda: TrainerAgendaItem[] | null = null;
   let complete = false;
+
+  /**
+   * The level's target grammar, as drills.
+   *
+   * What keeps a session mixed when nothing has gone wrong: the patterns the
+   * learner's current mini-level is teaching, each one an item the trainer
+   * introduces and sets an exercise for. In curriculum order, and tolerant of
+   * everything — a failed read, or a repository fake without the method, is a
+   * session with no drills in it, never a dead one.
+   */
+  const levelDrills = async (): Promise<AgendaActivity[]> => {
+    try {
+      const state = await deps.learners.getState(deps.learnerId);
+      if (!state.ok) return [];
+
+      const keys = getMiniLevel(state.data.miniLevel).targetGrammar;
+      const patterns = await deps.grammar.findByKeys([...keys]);
+      if (!patterns.ok) return [];
+
+      const byKey = new Map(patterns.data.map((pattern) => [pattern.key, pattern]));
+      return keys.flatMap((key) => {
+        const pattern = byKey.get(key);
+        return pattern
+          ? [
+              {
+                kind: "grammar_drill" as const,
+                subject: pattern.name,
+                prompt: pattern.explanation,
+                patternKey: pattern.key,
+              },
+            ]
+          : [];
+      });
+    } catch {
+      return [];
+    }
+  };
 
   /**
    * The session's words, looked up again for the closing summary.
@@ -278,13 +300,29 @@ export function createTrainerTools(deps: TrainerToolDeps): TrainerTools {
           limit: MAX_REVIEW_ITEMS,
         });
 
+        // The drills the level teaches, remembered by name so a recorded
+        // outcome can tell a pattern from a word without a second look-up.
+        const drills = await levelDrills();
+        for (const drill of drills) {
+          if (drill.patternKey !== undefined) {
+            grammarKeyFor.set(drill.subject, drill.patternKey);
+          }
+        }
+
         const size = Math.min(limit ?? MAX_AGENDA_ITEMS, MAX_AGENDA_ITEMS);
-        // The news goes last, and it goes in whatever the review rows say:
-        // a learner with nothing due still has something real to read, and a
-        // learner with a full agenda ends on it rather than on a drill.
-        const remaining = [...plan.activities, NEWS_ACTIVITY]
-          .filter((activity) => !covered.has(activity.subject))
-          .slice(0, size);
+        const notCovered = (activity: AgendaActivity) =>
+          !covered.has(activity.subject);
+        // A mix rather than a queue: vocabulary interleaved with grammar —
+        // recorded mistakes ahead of the syllabus — and the news last, in
+        // whatever the review rows say: a learner with nothing due still has
+        // something real to read, and a learner with a full agenda ends on it
+        // rather than on a drill.
+        const remaining = composeMixedAgenda({
+          vocabulary: plan.vocabularyActivities.filter(notCovered),
+          grammar: [...plan.mistakeActivities, ...drills].filter(notCovered),
+          news: covered.has(NEWS_SUBJECT) ? null : NEWS_ACTIVITY,
+          size,
+        });
 
         agenda = remaining.map((activity) => ({
           kind: activity.kind,
@@ -321,18 +359,25 @@ export function createTrainerTools(deps: TrainerToolDeps): TrainerTools {
           // asked as written. A recurring mistake arrives as "struggles":
           // the note recorded about what keeps going wrong, background for
           // the trainer to teach from, never an exercise to read out — the
-          // session protocol tells the model to write its own.
+          // session protocol tells the model to write its own. A grammar
+          // drill arrives as "teach": the catalogue's own explanation of the
+          // pattern, with the key that opens get_grammar_pattern for more.
           next: next
             ? {
                 position: 1,
                 kind: next.kind,
                 subject: next.subject,
-                // Either field carries model-authored wording from an earlier
-                // evaluation; neutralise anything fence-shaped before it
-                // re-enters a prompt.
+                // "struggles" carries model-authored wording from an earlier
+                // evaluation, and the others quote stored text; neutralise
+                // anything fence-shaped before it re-enters a prompt.
                 ...(next.kind === "correct_the_mistake"
                   ? { struggles: escapeUntrusted(next.prompt) }
-                  : { prompt: escapeUntrusted(next.prompt) }),
+                  : next.kind === "grammar_drill"
+                    ? {
+                        teach: escapeUntrusted(next.prompt),
+                        pattern: next.patternKey,
+                      }
+                    : { prompt: escapeUntrusted(next.prompt) }),
               }
             : null,
           sessionComplete: complete,
@@ -517,6 +562,20 @@ export function createTrainerTools(deps: TrainerToolDeps): TrainerTools {
           });
         }
 
+        // A grammar drill has no schedule and no progress row: the level
+        // teaches it until the level moves on, so practising it closes the
+        // item and writes nothing.
+        if (grammarKeyFor.has(key)) {
+          close(key);
+          return JSON.stringify({
+            recorded: false,
+            reason: "grammar_practised",
+            subject: key,
+            outcome,
+            closed: true,
+          });
+        }
+
         // The agenda says "der Tisch" because that is what a learner should
         // read; a progress row is keyed by the lemma. Either spelling of the
         // same word resolves, so the model never has to know the difference.
@@ -537,7 +596,25 @@ export function createTrainerTools(deps: TrainerToolDeps): TrainerTools {
         // may quiz freestyle, and a recurring-error drill has no word at all,
         // but the record only ever holds catalogue words.
         if (!item) {
+          // The key map is per-request like errorIdFor, and the answer to a
+          // drill usually lands a turn after the question — a turn that may
+          // record before it plans. A subject that is neither an error nor a
+          // word gets one look at the level's own patterns before it is
+          // written off, so how a drill closes does not depend on tool-call
+          // order.
+          const drilled = (await levelDrills()).some(
+            (drill) => drill.subject === key,
+          );
           close(key);
+          if (drilled) {
+            return JSON.stringify({
+              recorded: false,
+              reason: "grammar_practised",
+              subject: key,
+              outcome,
+              closed: true,
+            });
+          }
           return JSON.stringify({
             recorded: false,
             reason: "not_in_curriculum",

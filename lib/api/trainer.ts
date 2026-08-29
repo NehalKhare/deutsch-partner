@@ -19,13 +19,10 @@ import {
   TRAINER_PROMPT_VERSION,
   trainerSystemPrompt,
 } from "@/lib/ai/prompts/trainer";
+import type { TrainerAgendaItem } from "@/lib/trainer/agenda";
 import { runTrainerTurn } from "@/lib/trainer/agent";
 import type { McpToolset } from "@/lib/trainer/mcp";
-import {
-  createTrainerTools,
-  type TrainerAgendaItem,
-  type TrainerSource,
-} from "@/lib/trainer/tools";
+import { createTrainerTools, type TrainerSource } from "@/lib/trainer/tools";
 import type { GermanLearningRetriever } from "@/lib/retrieval/retriever";
 import { nullLogger, type Logger } from "@/lib/observability/logger";
 import type { GrammarRepository } from "@/repositories/grammar-repository";

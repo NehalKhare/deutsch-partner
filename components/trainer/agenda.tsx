@@ -34,12 +34,12 @@ export interface AgendaEntry {
 /**
  * What each kind of practice asks of the learner, and the colour it wears.
  *
- * Three colours for the three kinds of work, used consistently so the panel
- * can be read at a glance: vocabulary practice is green (the growth colour
- * this product already uses for skills), a recurring mistake is ember (it is
- * the one thing here that went wrong), and the reading item is blue. The
- * accent stays out of it — apricot marks what is happening now, not what
- * kind of thing it is.
+ * One colour per kind of work, used consistently so the panel can be read at
+ * a glance: vocabulary practice is green (the growth colour this product
+ * already uses for skills), a recurring mistake is ember (it is the one thing
+ * here that went wrong), a grammar drill is rose (grammar work, but nothing
+ * has gone wrong), and the reading item is blue. The accent stays out of it —
+ * apricot marks what is happening now, not what kind of thing it is.
  */
 const KINDS: Readonly<
   Record<string, { readonly label: string; readonly dot: string; readonly tint: string }>
@@ -55,6 +55,11 @@ const KINDS: Readonly<
     label: "fix the mistake",
     dot: "bg-ember",
     tint: "text-ember/90",
+  },
+  grammar_drill: {
+    label: "grammar practice",
+    dot: "bg-die",
+    tint: "text-die/90",
   },
   read_the_news: { label: "read today's news", dot: "bg-der", tint: "text-der/90" },
 };
@@ -91,10 +96,12 @@ export function TrainerAgenda({ plan, finished }: TrainerAgendaProps) {
         {plan.map((item, index) => {
           const kind = item.kind ? (KINDS[item.kind] ?? FALLBACK_KIND) : FALLBACK_KIND;
           const now = index === current;
-          // A mistake's subject is an English label ("The dative case");
-          // everything else on this list is German. A screen reader told the
-          // wrong language reads teaching as gibberish.
-          const german = item.kind !== "correct_the_mistake";
+          // A mistake's subject is an English label ("The dative case") and a
+          // grammar drill's is a pattern name; everything else on this list is
+          // German. A screen reader told the wrong language reads teaching as
+          // gibberish.
+          const german =
+            item.kind !== "correct_the_mistake" && item.kind !== "grammar_drill";
 
           return (
             <li

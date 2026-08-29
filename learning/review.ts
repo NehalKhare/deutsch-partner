@@ -147,6 +147,15 @@ export interface ReviewPlan {
   readonly due: readonly DueItem[];
   readonly weak: readonly LearnerVocabulary[];
   readonly recurringErrors: readonly { errorType: ErrorType; pattern: string }[];
+  /**
+   * The same work, kept apart by texture: the vocabulary (due first, then
+   * weak) and the recurring mistakes. The Catch up page wants one list and
+   * reads `activities`; the trainer composes its own mix and needs the pools
+   * it is mixing — slicing them back out of the concatenation would mean
+   * knowing which kinds count as which, twice.
+   */
+  readonly vocabularyActivities: readonly ReviewActivity[];
+  readonly mistakeActivities: readonly ReviewActivity[];
   readonly activities: readonly ReviewActivity[];
 }
 
@@ -259,26 +268,37 @@ export function buildReviewPlan(inputs: ReviewInputs): ReviewPlan {
     return { kind, subject: item.word, prompt: promptFor(kind, item) };
   };
 
-  const activities: ReviewActivity[] = [
+  const vocabularyActivities = [
     ...due.map((item) => activityFor(item.record)),
     ...weak.map(activityFor),
-    ...mistakes.map((error) => ({
-      kind: "correct_the_mistake" as const,
-      // The label, not the type key: this subject is read aloud in the
-      // trainer's agenda and printed on the review page, and "case_dative"
-      // is a log line where "The dative case" is teaching.
-      subject: ERROR_TYPE_LABELS[error.errorType],
-      // The note the evaluator recorded about what keeps going wrong. It is
-      // a description, not an exercise — the old text prefixed it with "Fix
-      // the sentence:" and there was never a sentence, which the trainer
-      // then read out verbatim to a learner with nothing to fix.
-      prompt: error.pattern,
-    })),
-  ]
-    .filter((activity): activity is ReviewActivity => activity !== null)
-    .slice(0, limit);
+  ].filter((activity): activity is ReviewActivity => activity !== null);
 
-  return { due, weak, recurringErrors: inputs.recurringErrors, activities };
+  const mistakeActivities: ReviewActivity[] = mistakes.map((error) => ({
+    kind: "correct_the_mistake" as const,
+    // The label, not the type key: this subject is read aloud in the
+    // trainer's agenda and printed on the review page, and "case_dative"
+    // is a log line where "The dative case" is teaching.
+    subject: ERROR_TYPE_LABELS[error.errorType],
+    // The note the evaluator recorded about what keeps going wrong. It is
+    // a description, not an exercise — the old text prefixed it with "Fix
+    // the sentence:" and there was never a sentence, which the trainer
+    // then read out verbatim to a learner with nothing to fix.
+    prompt: error.pattern,
+  }));
+
+  const activities = [...vocabularyActivities, ...mistakeActivities].slice(
+    0,
+    limit,
+  );
+
+  return {
+    due,
+    weak,
+    recurringErrors: inputs.recurringErrors,
+    vocabularyActivities,
+    mistakeActivities,
+    activities,
+  };
 }
 
 /**

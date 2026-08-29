@@ -59,6 +59,7 @@ function fakeDeps(
     failVocabulary?: boolean;
     noVocabulary?: boolean;
     noErrors?: boolean;
+    noGrammar?: boolean;
     cefr?: "A1" | "A2" | "B1";
     covered?: readonly string[];
   } = {},
@@ -135,6 +136,19 @@ function fakeDeps(
               examples: ["Ich fahre mit dem Zug."],
             })
           : fail(),
+      // Echoes the first key it was asked for, so the one drill this learner
+      // gets always belongs to whatever their level's target grammar is.
+      findByKeys: async (keys: readonly string[]) =>
+        options.noGrammar
+          ? ok([])
+          : ok(
+              keys.slice(0, 1).map((key) => ({
+                key,
+                name: "Dative prepositions",
+                explanation: "mit, nach, bei take the dative.",
+                examples: ["Ich fahre mit dem Zug."],
+              })),
+            ),
       listUpToMiniLevel: async () =>
         ok([{ key: "sein_present", name: "sein in the present" }]),
     } as unknown as TrainerToolDeps["grammar"],
@@ -202,11 +216,13 @@ describe("the session agenda", () => {
       "fahren",
       // The label a learner hears, never the error-type key.
       "The dative case",
+      // The level's own grammar, drilled even though nothing went wrong.
+      "Dative prepositions",
       "Nachrichten von heute",
     ]);
     expect(JSON.stringify(parsed.agenda)).not.toContain("prompt");
     expect(parsed.completed).toBe(0);
-    expect(parsed.remaining).toBe(3);
+    expect(parsed.remaining).toBe(4);
     expect(parsed.next).toMatchObject({
       subject: "fahren",
       prompt: 'What is the German for "to drive"?',
@@ -244,6 +260,7 @@ describe("the session agenda", () => {
 
     expect(parsed.agenda.map((line) => line.subject)).toEqual([
       "The dative case",
+      "Dative prepositions",
       "Nachrichten von heute",
     ]);
     expect(parsed.completed).toBe(1);
@@ -252,7 +269,12 @@ describe("the session agenda", () => {
 
   it("has nothing left to ask once the whole agenda is covered", async () => {
     const { deps } = fakeDeps({
-      covered: ["fahren", "The dative case", "Nachrichten von heute"],
+      covered: [
+        "fahren",
+        "The dative case",
+        "Dative prepositions",
+        "Nachrichten von heute",
+      ],
     });
     const tools = createTrainerTools(deps);
 
@@ -269,7 +291,13 @@ describe("the session agenda", () => {
 
   it("ends with what to recall, read back out of the catalogue", async () => {
     const { deps } = fakeDeps({
-      covered: ["fahren", "The dative case", "der Tisch", "Nachrichten von heute"],
+      covered: [
+        "fahren",
+        "The dative case",
+        "Dative prepositions",
+        "der Tisch",
+        "Nachrichten von heute",
+      ],
     });
     const tools = createTrainerTools(deps);
 
@@ -285,7 +313,12 @@ describe("the session agenda", () => {
 
   it("recaps only what it can look up, and invents nothing", async () => {
     const { deps } = fakeDeps({
-      covered: ["The dative case", "fahren", "Nachrichten von heute"],
+      covered: [
+        "The dative case",
+        "Dative prepositions",
+        "fahren",
+        "Nachrichten von heute",
+      ],
     });
     const tools = createTrainerTools(deps);
 
@@ -299,17 +332,18 @@ describe("the session agenda", () => {
   });
 
   it("is not a finished session when there was never anything to do", async () => {
-    // Nothing due and nothing gone wrong: the session is not over, it just
-    // has one thing in it, and "your session is over" is a strange hello.
+    // Nothing due and nothing gone wrong: the session is not over, it still
+    // has grammar and reading in it, and "your session is over" is a strange
+    // hello.
     const { deps } = fakeDeps({ noVocabulary: true, noErrors: true });
     const tools = createTrainerTools(deps);
 
     const result = await toolNamed(tools, "get_review_session").invoke({});
 
     expect(JSON.parse(result as string)).toMatchObject({
-      remaining: 1,
+      remaining: 2,
       sessionComplete: false,
-      next: { subject: "Nachrichten von heute" },
+      next: { subject: "Dative prepositions" },
     });
     expect(JSON.parse(result as string).recap).toBeUndefined();
     expect(tools.complete()).toBe(false);
@@ -317,6 +351,22 @@ describe("the session agenda", () => {
 
   it("always ends the agenda on something real to read", async () => {
     const { deps } = fakeDeps({ noVocabulary: true, noErrors: true });
+    const tools = createTrainerTools(deps);
+
+    await toolNamed(tools, "get_review_session").invoke({});
+
+    expect(tools.agenda()?.at(-1)).toEqual({
+      kind: "read_the_news",
+      subject: "Nachrichten von heute",
+    });
+  });
+
+  it("still has something to read when the grammar shelf is empty too", async () => {
+    const { deps } = fakeDeps({
+      noVocabulary: true,
+      noErrors: true,
+      noGrammar: true,
+    });
     const tools = createTrainerTools(deps);
 
     await toolNamed(tools, "get_review_session").invoke({});
@@ -332,11 +382,40 @@ describe("the session agenda", () => {
 
     await toolNamed(tools, "get_review_session").invoke({});
 
+    // A mix, not a queue: the vocabulary, the mistake, the level's grammar,
+    // and the reading item last.
     expect(tools.agenda()).toEqual([
       { kind: "recall", subject: "fahren" },
       { kind: "correct_the_mistake", subject: "The dative case" },
+      { kind: "grammar_drill", subject: "Dative prepositions" },
       { kind: "read_the_news", subject: "Nachrichten von heute" },
     ]);
+  });
+
+  it("hands a grammar drill over as a rule to teach, with its pattern key", async () => {
+    const { deps } = fakeDeps({ covered: ["fahren", "The dative case"] });
+    const tools = createTrainerTools(deps);
+
+    const result = await toolNamed(tools, "get_review_session").invoke({});
+    const parsed = JSON.parse(result as string) as {
+      next: {
+        subject: string;
+        kind: string;
+        prompt?: string;
+        struggles?: string;
+        teach?: string;
+        pattern?: string;
+      } | null;
+    };
+
+    // The rule is background to teach from, not a question to read out, and
+    // the key is there for get_grammar_pattern if the trainer wants examples.
+    expect(parsed.next?.kind).toBe("grammar_drill");
+    expect(parsed.next?.subject).toBe("Dative prepositions");
+    expect(parsed.next?.prompt).toBeUndefined();
+    expect(parsed.next?.struggles).toBeUndefined();
+    expect(parsed.next?.teach).toContain("dative");
+    expect(parsed.next?.pattern).toMatch(/^[a-z][a-z0-9_]*$/);
   });
 
   it("reports no agenda at all when it was never asked for one", () => {
@@ -540,6 +619,46 @@ describe("recording a review outcome", () => {
 
     expect(JSON.parse(result as string)).toMatchObject({ resolved: true, closed: true });
     expect(resolved).toEqual([ERROR_ID]);
+  });
+
+  it("closes a practised grammar drill without inventing a progress row", async () => {
+    const { deps, upserts, resolved } = fakeDeps();
+    const tools = createTrainerTools(deps);
+
+    await toolNamed(tools, "get_review_session").invoke({});
+    const result = await toolNamed(tools, "record_review_outcome").invoke({
+      subject: "Dative prepositions",
+      outcome: "correct",
+    });
+
+    // A drill has no schedule behind it: nothing written, nothing resolved,
+    // and the item closed so the session moves on.
+    expect(JSON.parse(result as string)).toMatchObject({
+      recorded: false,
+      reason: "grammar_practised",
+      closed: true,
+    });
+    expect(upserts).toHaveLength(0);
+    expect(resolved).toEqual([]);
+    expect(tools.covered()).toContain("Dative prepositions");
+  });
+
+  it("closes a grammar drill even when this turn never planned an agenda", async () => {
+    // The answer usually lands a turn after the question, in a request whose
+    // key map is empty. The level's own patterns are the fallback.
+    const { deps, upserts } = fakeDeps();
+    const tools = createTrainerTools(deps);
+
+    const result = await toolNamed(tools, "record_review_outcome").invoke({
+      subject: "Dative prepositions",
+      outcome: "correct",
+    });
+
+    expect(JSON.parse(result as string)).toMatchObject({
+      reason: "grammar_practised",
+      closed: true,
+    });
+    expect(upserts).toHaveLength(0);
   });
 
   it("stops writing at the per-request cap", async () => {

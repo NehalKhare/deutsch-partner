@@ -10,7 +10,7 @@ import {
   sectionTitle,
 } from "@/components/ui/styles";
 import { cn } from "@/lib/utils";
-import { buildReviewPlan, dueForReview } from "@/learning/review";
+import { MAX_REVIEW_ITEMS, buildReviewPlan, dueForReview } from "@/learning/review";
 import { requireAuthenticatedUserId } from "@/lib/auth/current-user";
 import { createLearnerErrorRepository } from "@/repositories/learner-error-repository";
 import { createVocabularyRepository } from "@/repositories/vocabulary-repository";
@@ -20,12 +20,31 @@ import type { DatabaseClient } from "@/repositories/types";
 export const metadata = { title: "Catch up — Deutsch Partner" };
 
 /**
+ * What each kind of word practice asks for, in the trainer panel's words.
+ *
+ * The same labels the session agenda shows, because this list and that panel
+ * are the same work seen from two pages — a learner who reads "recall" here
+ * and "recall" there learns the word once.
+ */
+const WORD_KIND_LABELS: Readonly<Record<string, string>> = {
+  recognise: "meaning",
+  recall: "recall",
+  use_in_sentence: "use in a sentence",
+};
+
+/**
  * The review session.
  *
  * Two reads and one pure function. What is due, what is weak and what keeps
  * going wrong are all facts the database already holds; the scheduling
  * arithmetic that turns them into a session is in learning/review.ts, where it
  * is unit-tested without a database.
+ *
+ * Shown in two sections rather than one list — the words to practise and the
+ * mistakes that keep coming back are different kinds of work, and a learner
+ * scanning the page should see at a glance how much of each is waiting. The
+ * mistakes take their places first: a backlog of vocabulary must not push
+ * them off the page, for the same reason the trainer reserves them slots.
  */
 export default async function ReviewPage() {
   const learnerId = await requireAuthenticatedUserId();
@@ -57,6 +76,27 @@ export default async function ReviewPage() {
     now,
   });
 
+  // The sitting, sectioned. Mistakes are few (at most one per category) and
+  // always shown; the words fill what the cap leaves, so the total is still
+  // the number the nav badge counts.
+  const mistakes = plan.mistakeActivities;
+  const words = plan.vocabularyActivities.slice(
+    0,
+    Math.max(0, MAX_REVIEW_ITEMS - mistakes.length),
+  );
+  const total = words.length + mistakes.length;
+
+  // "5 words and 2 mistakes to go over." — the sections, counted in the
+  // sentence that introduces them.
+  const summary = [
+    words.length > 0 ? `${words.length} word${words.length === 1 ? "" : "s"}` : null,
+    mistakes.length > 0
+      ? `${mistakes.length} mistake${mistakes.length === 1 ? "" : "s"}`
+      : null,
+  ]
+    .filter((part) => part !== null)
+    .join(" and ");
+
   // The overdue total, uncapped.
   //
   // plan.due is the session's list and is capped at MAX_REVIEW_ITEMS, which is
@@ -75,33 +115,85 @@ export default async function ReviewPage() {
         <div className="flex flex-col gap-2">
           <h1 className={pageTitle}>Catch up</h1>
           <p className={prose}>
-            {plan.activities.length === 0
+            {total === 0
               ? "Nothing is due. Come back after your next conversation."
-              : `${plan.activities.length} thing${plan.activities.length === 1 ? "" : "s"} to go over.`}
+              : `${summary} to go over.`}
           </p>
         </div>
         <TrainerInvite />
       </header>
 
-      {plan.activities.length === 0 ? (
+      {total === 0 ? (
         <Link href="/chat" className={cn(buttonQuiet, "self-start")}>
           Have a conversation instead
         </Link>
-      ) : (
-        <ol className="flex flex-col gap-3">
-          {plan.activities.map((activity, index) => (
-            <li
-              key={`${activity.kind}:${activity.subject}:${index}`}
-              className={card}
+      ) : null}
+
+      {/* The coloured dots are the trainer panel's: vocabulary wears the
+          growth green, a mistake wears ember. Two pages, one association. */}
+      {words.length > 0 ? (
+        <section aria-labelledby="words-heading" className="flex flex-col gap-3">
+          <div className="flex items-baseline justify-between gap-4">
+            <h2
+              id="words-heading"
+              className={cn(sectionTitle, "flex items-center gap-2.5")}
             >
-              <p className={eyebrow}>{activity.kind.replace(/_/gu, " ")}</p>
-              <p className="mt-2 text-lg leading-relaxed text-chalk">
-                {activity.prompt}
-              </p>
-            </li>
-          ))}
-        </ol>
-      )}
+              <span aria-hidden className="size-2 shrink-0 rounded-full bg-sprout" />
+              Words to practise
+            </h2>
+            <span className="text-sm tabular-nums text-chalk/45">
+              {words.length}
+            </span>
+          </div>
+          <ol className="flex flex-col gap-3">
+            {words.map((activity, index) => (
+              <li
+                key={`${activity.kind}:${activity.subject}:${index}`}
+                className={card}
+              >
+                <p className={eyebrow}>
+                  {WORD_KIND_LABELS[activity.kind] ?? activity.kind.replace(/_/gu, " ")}
+                </p>
+                <p className="mt-2 text-lg leading-relaxed text-chalk">
+                  {activity.prompt}
+                </p>
+              </li>
+            ))}
+          </ol>
+        </section>
+      ) : null}
+
+      {mistakes.length > 0 ? (
+        <section aria-labelledby="mistakes-heading" className="flex flex-col gap-3">
+          <div className="flex items-baseline justify-between gap-4">
+            <h2
+              id="mistakes-heading"
+              className={cn(sectionTitle, "flex items-center gap-2.5")}
+            >
+              <span aria-hidden className="size-2 shrink-0 rounded-full bg-ember" />
+              Mistakes that keep coming back
+            </h2>
+            <span className="text-sm tabular-nums text-chalk/45">
+              {mistakes.length}
+            </span>
+          </div>
+          <ol className="flex flex-col gap-3">
+            {/* Named by what goes wrong, described by the recorded note. The
+                note is a description of the pattern, not an exercise — the
+                trainer writes the exercise when this is drilled. */}
+            {mistakes.map((activity, index) => (
+              <li key={`${activity.subject}:${index}`} className={card}>
+                <p className="font-display font-semibold tracking-tight text-chalk">
+                  {activity.subject}
+                </p>
+                <p className="mt-1.5 leading-relaxed text-chalk/65">
+                  {activity.prompt}
+                </p>
+              </li>
+            ))}
+          </ol>
+        </section>
+      ) : null}
 
       <section
         aria-labelledby="due-heading"
