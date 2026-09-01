@@ -120,6 +120,13 @@ export async function runTrainerTurn(
   turn: {
     readonly message: string;
     readonly history: readonly TranscriptMessage[];
+    /**
+     * The answer analyzer's rendered block, when this turn carried German
+     * worth checking. Appended to the current message only — the client's
+     * transcript becomes the next turn's history, and the analysis must not
+     * ride along into it.
+     */
+    readonly analysis?: string;
   },
 ): Promise<TrainerRunOutcome> {
   const logger = deps.logger ?? nullLogger;
@@ -131,6 +138,11 @@ export async function runTrainerTurn(
   // model under the account's data policy. That refusal arrives on the very
   // first call, before any tool has run, so retrying the whole turn on the
   // next candidate repeats nothing.
+  const message =
+    turn.analysis === undefined
+      ? turn.message
+      : `${turn.message}\n\n${turn.analysis}`;
+
   let result: { messages: BaseMessage[] } | null = null;
   for (const [attempt, model] of deps.models.entries()) {
     const agent = createAgent({
@@ -144,7 +156,7 @@ export async function runTrainerTurn(
         {
           messages: [
             ...toLangChainHistory(turn.history),
-            new HumanMessage(turn.message),
+            new HumanMessage(message),
           ],
         },
         // Each step is a model call plus a tool round; the +1 is the final

@@ -38,6 +38,7 @@ const EXPECTED_TABLES = [
   "profiles",
   "recommendations",
   "scenarios",
+  "trainer_mined_sessions",
   "vocabulary_items",
 ];
 
@@ -241,6 +242,20 @@ describe("constraints", () => {
         `insert into public.learner_errors
            (learner_id, error_type, pattern, occurrence_count)
          values (gen_random_uuid(), 'bad_vibes', 'x', 1)`,
+      ),
+    ).rejects.toThrow();
+  });
+
+  it("defaults a grammar pattern's category and keeps the pair closed", async () => {
+    const seeded = await rows<{ category: string }>(
+      `select category from public.grammar_patterns limit 1`,
+    );
+    expect(seeded[0]?.category).toBe("grammar");
+
+    await expect(
+      database.db.query(
+        `update public.grammar_patterns set category = 'vibes'
+         where key = (select key from public.grammar_patterns limit 1)`,
       ),
     ).rejects.toThrow();
   });

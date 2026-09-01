@@ -37,3 +37,29 @@ export const coveredSubjectsSchema = z
   .array(coveredSubjectSchema)
   .max(MAX_COVERED_SUBJECTS)
   .default([]);
+
+/**
+ * The agenda the session opened with, sent back up each turn.
+ *
+ * Keys again, exactly like the covered list: the server resolves each subject
+ * against what the database holds right now and drops what no longer resolves,
+ * so a tampered pin can only rearrange or shorten someone's own practice. What
+ * pinning buys is a promise kept — the plan announced in the first reply is
+ * the plan the session works through, instead of being recomposed from the
+ * whole backlog every call, which refilled finished items' slots with new
+ * words and pushed the closing news item forever out of reach.
+ */
+export const pinnedAgendaSchema = z
+  .array(
+    z.strictObject({
+      /** A display kind, never resolved server-side. Bounded, slug-shaped. */
+      kind: z
+        .string()
+        .trim()
+        .min(1)
+        .max(32)
+        .regex(/^[a-z][a-z0-9_]*$/u),
+      subject: coveredSubjectSchema,
+    }),
+  )
+  .max(MAX_AGENDA_ITEMS);

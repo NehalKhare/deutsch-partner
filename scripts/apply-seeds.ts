@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 
+import { CULTURE_MIGRATION_FILE } from "../learning/culture-sql";
 import { CURRICULUM_MIGRATION_FILE } from "../learning/curriculum-sql";
 import { GRAMMAR_MIGRATION_FILE } from "../learning/grammar-sql";
 import { VOCABULARY_MIGRATION_FILE } from "../learning/vocabulary-sql";
@@ -22,6 +23,7 @@ const SEEDS = [
   CURRICULUM_MIGRATION_FILE,
   VOCABULARY_MIGRATION_FILE,
   GRAMMAR_MIGRATION_FILE,
+  CULTURE_MIGRATION_FILE,
 ];
 
 for (const file of SEEDS) {

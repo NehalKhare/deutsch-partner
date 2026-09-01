@@ -4,6 +4,10 @@ import { cefrLevelSchema } from "@/domain/cefr";
 import { learningEvaluationSchema } from "@/domain/evaluation";
 import { errorTypeSchema } from "@/domain/learner-error";
 import { nonEmptyTextSchema, unitIntervalSchema } from "@/domain/primitives";
+import {
+  answerAnalysisSchema,
+  sessionMiningSchema,
+} from "@/domain/trainer-analysis";
 import { BLOCK_IDS, type BlockId, type Register } from "@/lib/ai/prompts/blocks";
 import { STREAMED_TEXT, type OutputContract } from "@/lib/ai/prompts/contract";
 import { taskIdSchema, tierSchema, type TaskId, type Tier } from "@/lib/ai/tasks";
@@ -181,13 +185,15 @@ const ENTRIES: readonly PromptCatalogEntry[] = [
   {
     name: "evaluation.learner_message",
     register: "machine",
+    // Version 5: the closed error taxonomy gained register_formality (du/Sie
+    // and register slips), and the taxonomy renders into this contract.
     // Version 4: the explanation's form is fixed, not just its language —
     // English prose that quotes the German and names the correct form,
     // because the dashboard stores no separate correction and this sentence
     // is all the learner gets. Version 3 asked for English; the model obliged
     // in language but not in shape. Version 2 made the contract the domain's
     // own schema, which is what lets both fixes be a .describe().
-    version: 4,
+    version: 5,
     task: "evaluation.learner_message",
     tier: routeFor("evaluation.learner_message").tier,
     purpose:
@@ -202,9 +208,11 @@ const ENTRIES: readonly PromptCatalogEntry[] = [
   {
     name: "extraction.errors",
     register: "machine",
+    // Version 3: the closed error taxonomy gained register_formality (du/Sie
+    // and register slips), and the taxonomy renders into this contract.
     // Version 2: the prompt now states its output contract, generated from
     // the schema that validates the reply.
-    version: 2,
+    version: 3,
     task: "extraction.errors",
     tier: routeFor("extraction.errors").tier,
     purpose:
@@ -214,6 +222,36 @@ const ENTRIES: readonly PromptCatalogEntry[] = [
     safetyRules: EXTRACTION_SAFETY,
     blocks: EXTRACTION_BLOCKS,
     evalSet: "golden/error-extraction",
+  },
+  {
+    name: "trainer.answer_analysis",
+    register: "machine",
+    version: 1,
+    task: "trainer.answer_analysis",
+    tier: routeFor("trainer.answer_analysis").tier,
+    purpose:
+      "Inspects one learner answer in the Trainer's reply path: grammar findings against the closed taxonomy, anglicisms, vocabulary upgrades, and a register verdict.",
+    inputSchema: evaluationInput,
+    outputContract: answerAnalysisSchema,
+    safetyRules: EXTRACTION_SAFETY,
+    // The trainer's preceding question travels as recent_messages: whether an
+    // answer is right cannot be judged without what it answers.
+    blocks: EVALUATION_BLOCKS,
+    evalSet: "golden/trainer-answer-analysis",
+  },
+  {
+    name: "trainer.session_mining",
+    register: "machine",
+    version: 1,
+    task: "trainer.session_mining",
+    tier: routeFor("trainer.session_mining").tier,
+    purpose:
+      "Mines a finished Trainer session's transcript for cross-turn recurring mistakes, vocabulary gaps and words seen, after the response has gone out.",
+    inputSchema: z.strictObject({ transcript: nonEmptyTextSchema(12000) }),
+    outputContract: sessionMiningSchema,
+    safetyRules: EXTRACTION_SAFETY,
+    blocks: EXTRACTION_BLOCKS,
+    evalSet: "golden/trainer-session-mining",
   },
   {
     name: "extraction.memory",

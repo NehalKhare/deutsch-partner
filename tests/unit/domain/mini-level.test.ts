@@ -17,6 +17,7 @@ const definition: MiniLevelDefinition = miniLevelDefinitionSchema.parse({
   focus: "ordering food and drink",
   targetVocabulary: ["der Kaffee", "das Wasser", "bestellen", "zahlen"],
   targetGrammar: ["moechten_present", "accusative_case_objects"],
+  targetCulture: ["bitte_und_danke"],
   conversationFunctions: ["order a drink", "ask for the bill"],
   comprehensionGoals: ["Follow a short exchange in a café."],
   productionGoals: ["Order a drink without rehearsing the sentence."],

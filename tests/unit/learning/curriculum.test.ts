@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { MAX_MINI_LEVEL, cefrForMiniLevel } from "@/domain/cefr";
 import { miniLevelDefinitionSchema } from "@/domain/mini-level";
+import { CULTURE_LABELS } from "@/learning/culture-labels";
 import { GRAMMAR_LABELS } from "@/learning/grammar-labels";
 import {
   MINI_LEVEL_CURRICULUM,
@@ -62,6 +63,20 @@ describe("the curriculum", () => {
 
   it("uses slugs, not prose, as grammar keys", () => {
     const slugs = MINI_LEVEL_CURRICULUM.flatMap((level) => level.targetGrammar);
+
+    for (const slug of slugs) expect(slug).toMatch(/^[a-z][a-z0-9_]*$/);
+  });
+
+  it("names a known culture note in every culture target", () => {
+    const unlabelled = MINI_LEVEL_CURRICULUM.flatMap((level) =>
+      level.targetCulture.filter((slug) => !(slug in CULTURE_LABELS)),
+    );
+
+    expect([...new Set(unlabelled)]).toEqual([]);
+  });
+
+  it("uses slugs, not prose, as culture keys", () => {
+    const slugs = MINI_LEVEL_CURRICULUM.flatMap((level) => level.targetCulture);
 
     for (const slug of slugs) expect(slug).toMatch(/^[a-z][a-z0-9_]*$/);
   });

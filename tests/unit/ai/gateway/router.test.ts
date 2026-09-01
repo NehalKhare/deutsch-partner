@@ -39,6 +39,11 @@ const EXPECTED: Readonly<Record<TaskId, { tier: Tier; input: number; output: num
   // a reasoning model spends that budget before it writes, and a correction
   // that names the rule and shows two sentences came back cut off at 700.
   "trainer.session": { tier: "strong", input: 6000, output: 1000 },
+  // The Trainer's specialists: one structured pass each, cheap like the other
+  // extractors against the same closed taxonomy. The analyzer shares the
+  // session's €0.05 request ceiling; the miner runs post-response on its own.
+  "trainer.answer_analysis": { tier: "cheap", input: 2000, output: 500 },
+  "trainer.session_mining": { tier: "cheap", input: 4000, output: 600 },
 };
 
 describe("task router", () => {

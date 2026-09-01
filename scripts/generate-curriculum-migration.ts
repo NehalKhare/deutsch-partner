@@ -6,6 +6,11 @@ import {
   renderCurriculumSeed,
 } from "../learning/curriculum-sql";
 import { MINI_LEVEL_CURRICULUM } from "../learning/mini-levels";
+import { CULTURE_CATALOGUE } from "../learning/culture-catalogue";
+import {
+  CULTURE_MIGRATION_FILE,
+  renderCultureSeed,
+} from "../learning/culture-sql";
 import { GRAMMAR_CATALOGUE } from "../learning/grammar-catalogue";
 import {
   GRAMMAR_MIGRATION_FILE,
@@ -44,4 +49,10 @@ write(
   GRAMMAR_MIGRATION_FILE,
   renderGrammarSeed(GRAMMAR_CATALOGUE),
   `${GRAMMAR_CATALOGUE.length} grammar patterns`,
+);
+
+write(
+  CULTURE_MIGRATION_FILE,
+  renderCultureSeed(CULTURE_CATALOGUE),
+  `${CULTURE_CATALOGUE.length} culture notes`,
 );

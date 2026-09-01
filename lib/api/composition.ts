@@ -1,5 +1,7 @@
 import "server-only";
 
+import { after } from "next/server";
+
 import { createEvaluator } from "@/lib/ai/evaluation";
 import {
   createEmbeddingService,
@@ -45,6 +47,7 @@ import { createConversationRepository } from "@/repositories/conversation-reposi
 import { createEmbeddingCache } from "@/repositories/ingestion-repository";
 import { createGrammarRepository } from "@/repositories/grammar-repository";
 import { createLearnerErrorRepository } from "@/repositories/learner-error-repository";
+import { createMinedSessionRepository } from "@/repositories/mined-session-repository";
 import { createLearnerRepository } from "@/repositories/learner-repository";
 import { createPerformanceRepository } from "@/repositories/performance-repository";
 import { createKnowledgeSearch } from "@/repositories/retrieval-repository";
@@ -365,9 +368,17 @@ export async function createTrainerGraph(): Promise<{
           })
         : RETRIEVAL_UNAVAILABLE,
       budgets: accounting,
+      // The chat gateway's own transport, reused for the answer analyzer's
+      // structured call — no new connection-opener, same ledger discipline.
+      gateway: createGateway(operatorClient, env, logger),
       createModels: (context) =>
         createTrainerModelLadder({ env, accounting, logger }, context),
       loadMcp: (identity) => loadMcpTools(env, identity, logger),
+      // The learner's own client again: the guard row is theirs, RLS applies.
+      mined: createMinedSessionRepository(learnerClient),
+      // Post-response work rides Next's after(). The callback form, so the
+      // work does not even start until the response has gone out.
+      schedule: (work) => after(work),
       logger,
     },
   };

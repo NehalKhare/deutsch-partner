@@ -68,6 +68,13 @@ export interface TrainerToolDeps {
    * a prompt, and the model is only ever handed words the database just gave.
    */
   readonly covered?: readonly string[];
+  /**
+   * The agenda the session opened with, as ordered subject keys the client
+   * sent back. When present, get_review_session serves from this promise
+   * instead of recomposing from the backlog — each key resolved against what
+   * the database holds right now, so the pin selects, it never supplies text.
+   */
+  readonly pinned?: readonly string[];
   readonly userIdHash: string;
   readonly requestId: string;
   readonly vocabulary: VocabularyRepository;
@@ -160,21 +167,23 @@ export function createTrainerTools(deps: TrainerToolDeps): TrainerTools {
   let complete = false;
 
   /**
-   * The level's target grammar, as drills.
+   * The level's target grammar and culture notes, as drills.
    *
    * What keeps a session mixed when nothing has gone wrong: the patterns the
-   * learner's current mini-level is teaching, each one an item the trainer
-   * introduces and sets an exercise for. In curriculum order, and tolerant of
-   * everything — a failed read, or a repository fake without the method, is a
-   * session with no drills in it, never a dead one.
+   * learner's current mini-level is teaching — grammar and, where the level
+   * has one, a culture note, told apart by the row's category — each an item
+   * the trainer introduces and sets an exercise for. In curriculum order, and
+   * tolerant of everything — a failed read, or a repository fake without the
+   * method, is a session with no drills in it, never a dead one.
    */
   const levelDrills = async (): Promise<AgendaActivity[]> => {
     try {
       const state = await deps.learners.getState(deps.learnerId);
       if (!state.ok) return [];
 
-      const keys = getMiniLevel(state.data.miniLevel).targetGrammar;
-      const patterns = await deps.grammar.findByKeys([...keys]);
+      const level = getMiniLevel(state.data.miniLevel);
+      const keys = [...level.targetGrammar, ...level.targetCulture];
+      const patterns = await deps.grammar.findByKeys(keys);
       if (!patterns.ok) return [];
 
       const byKey = new Map(patterns.data.map((pattern) => [pattern.key, pattern]));
@@ -183,7 +192,10 @@ export function createTrainerTools(deps: TrainerToolDeps): TrainerTools {
         return pattern
           ? [
               {
-                kind: "grammar_drill" as const,
+                kind:
+                  pattern.category === "culture"
+                    ? ("culture_drill" as const)
+                    : ("grammar_drill" as const),
                 subject: pattern.name,
                 prompt: pattern.explanation,
                 patternKey: pattern.key,
@@ -257,9 +269,186 @@ export function createTrainerTools(deps: TrainerToolDeps): TrainerTools {
     };
   };
 
+  /**
+   * The one write, shared by record_review_outcome and the record shortcut on
+   * get_review_session: closing and advancing used to be two calls, and the
+   * turn that judged an answer but forgot the second one re-asked the same
+   * question. One body, so both doors close the item the same way.
+   */
+  const recordOutcome = async (
+    subject: string,
+    outcome: "correct" | "incorrect",
+  ): Promise<string> => {
+    const key = subject.trim();
+
+    // Closing happens on every path out of here, including the ones that
+    // write nothing. Whether the word turns out to be in the catalogue,
+    // or the read failed, has nothing to do with whether the session has
+    // now dealt with the item — and an item that cannot close is one the
+    // trainer offers again next turn, to a learner who just answered it.
+    if (reviewWrites >= MAX_REVIEW_WRITES_PER_REQUEST) {
+      close(key);
+      return JSON.stringify({
+        recorded: false,
+        reason: "write_limit_reached",
+        closed: true,
+      });
+    }
+
+    // A recurring mistake the learner has just fixed stops being an
+    // unresolved mistake, so the review page stops listing it. Reversible
+    // by the only thing that should reverse it: making it again, which
+    // sets the row back to unresolved when the next turn is evaluated.
+    //
+    // The id map is per-request, and the answer usually arrives a turn
+    // after the question — a turn that may record before it plans. So a
+    // miss falls back to reading the unresolved errors again: whether a
+    // mistake gets resolved must not depend on tool-call order.
+    let errorId = errorIdFor.get(key);
+    if (errorId === undefined) {
+      const unresolved = await deps.errors.listUnresolved(deps.learnerId, 5);
+      if (unresolved.ok) {
+        errorId = unresolved.data.find(
+          (error) => ERROR_TYPE_LABELS[error.errorType] === key,
+        )?.id;
+      }
+    }
+    if (errorId !== undefined) {
+      // Closed either way: recorded "incorrect" keeps the row unresolved so a
+      // later session lists it again, but this session moves on — leaving it
+      // open re-served the same mistake to a learner who had just been told
+      // it would come back another day.
+      close(key);
+      if (outcome === "correct") {
+        const resolved = await deps.errors.markResolved(errorId);
+        return JSON.stringify({
+          recorded: resolved.ok,
+          subject: key,
+          outcome,
+          resolved: resolved.ok,
+          closed: true,
+        });
+      }
+      return JSON.stringify({
+        recorded: false,
+        reason: "mistake_not_yet_fixed",
+        closed: true,
+      });
+    }
+
+    // A grammar drill has no schedule and no progress row: the level
+    // teaches it until the level moves on, so practising it closes the
+    // item and writes nothing.
+    if (grammarKeyFor.has(key)) {
+      close(key);
+      return JSON.stringify({
+        recorded: false,
+        reason: "grammar_practised",
+        subject: key,
+        outcome,
+        closed: true,
+      });
+    }
+
+    // The agenda says "der Tisch" because that is what a learner should
+    // read; a progress row is keyed by the lemma. Either spelling of the
+    // same word resolves, so the model never has to know the difference.
+    const candidates = [
+      ...new Set([lemmaFor.get(key) ?? key, withoutArticle(key) ?? key]),
+    ];
+
+    const found = await deps.vocabulary.findByLemmas(candidates);
+    if (!found.ok) {
+      close(key);
+      return UNAVAILABLE;
+    }
+    const item =
+      candidates
+        .map((candidate) => found.data.find((row) => row.lemma === candidate))
+        .find((row) => row !== undefined) ?? null;
+    // A word the curriculum does not teach gets no progress row: the model
+    // may quiz freestyle, and a recurring-error drill has no word at all,
+    // but the record only ever holds catalogue words.
+    if (!item) {
+      // The key map is per-request like errorIdFor, and the answer to a
+      // drill usually lands a turn after the question — a turn that may
+      // record before it plans. A subject that is neither an error nor a
+      // word gets one look at the level's own patterns before it is
+      // written off, so how a drill closes does not depend on tool-call
+      // order.
+      const drilled = (await levelDrills()).some(
+        (drill) => drill.subject === key,
+      );
+      close(key);
+      if (drilled) {
+        return JSON.stringify({
+          recorded: false,
+          reason: "grammar_practised",
+          subject: key,
+          outcome,
+          closed: true,
+        });
+      }
+      return JSON.stringify({
+        recorded: false,
+        reason: "not_in_curriculum",
+        closed: true,
+      });
+    }
+
+    // Closed under the name the agenda uses, which is the name the
+    // exclusion is checked against — and the only one worth showing back.
+    close(item.word);
+
+    const existing = await deps.vocabulary.listByItems(deps.learnerId, [item.id]);
+    if (!existing.ok) return UNAVAILABLE;
+
+    const record =
+      existing.data[0] ?? newLearnerVocabulary(deps.learnerId, item.id);
+    const next =
+      outcome === "correct"
+        ? recordCorrectUse(record, now())
+        : recordIncorrectUse(record, now());
+
+    const saved = await deps.vocabulary.upsertLearnerVocabulary(next);
+    if (!saved.ok) return UNAVAILABLE;
+
+    reviewWrites += 1;
+    return JSON.stringify({
+      recorded: true,
+      subject: item.word,
+      outcome,
+      closed: true,
+    });
+  };
+
   const getReviewSession = tool(
-    async ({ limit }: { limit?: number }) =>
+    async ({
+      limit,
+      record,
+    }: {
+      limit?: number;
+      record?: { subject: string; outcome: "correct" | "incorrect" };
+    }) =>
       audited("get_review_session", async () => {
+        // The record shortcut: close the item just judged in the same call
+        // that fetches the next one. Two calls collapsed into one, because
+        // the turn that judged an answer and forgot the second call re-asked
+        // the question the learner had just got right. Runs first, so the
+        // closure and any resolved mistake are visible to the plan below —
+        // and through the same audited door as the standalone tool.
+        let recorded: Record<string, unknown> | undefined;
+        if (record !== undefined) {
+          const raw = await audited("record_review_outcome", () =>
+            recordOutcome(record.subject, record.outcome),
+          )();
+          try {
+            recorded = JSON.parse(raw) as Record<string, unknown>;
+          } catch {
+            recorded = { error: "unavailable" };
+          }
+        }
+
         const [vocabulary, errors] = await Promise.all([
           deps.vocabulary.listForLearner(deps.learnerId, 200),
           deps.errors.listUnresolved(deps.learnerId, 5),
@@ -302,12 +491,20 @@ export function createTrainerTools(deps: TrainerToolDeps): TrainerTools {
 
         // The drills the level teaches, remembered by name so a recorded
         // outcome can tell a pattern from a word without a second look-up.
+        // Grammar and culture split here because the agenda gives each its
+        // own slot; they close identically.
         const drills = await levelDrills();
         for (const drill of drills) {
           if (drill.patternKey !== undefined) {
             grammarKeyFor.set(drill.subject, drill.patternKey);
           }
         }
+        const grammarDrills = drills.filter(
+          (drill) => drill.kind === "grammar_drill",
+        );
+        const cultureDrills = drills.filter(
+          (drill) => drill.kind === "culture_drill",
+        );
 
         const size = Math.min(limit ?? MAX_AGENDA_ITEMS, MAX_AGENDA_ITEMS);
         const notCovered = (activity: AgendaActivity) =>
@@ -317,12 +514,70 @@ export function createTrainerTools(deps: TrainerToolDeps): TrainerTools {
         // whatever the review rows say: a learner with nothing due still has
         // something real to read, and a learner with a full agenda ends on it
         // rather than on a drill.
-        const remaining = composeMixedAgenda({
-          vocabulary: plan.vocabularyActivities.filter(notCovered),
-          grammar: [...plan.mistakeActivities, ...drills].filter(notCovered),
-          news: covered.has(NEWS_SUBJECT) ? null : NEWS_ACTIVITY,
-          size,
-        });
+        const composeFresh = () =>
+          composeMixedAgenda({
+            vocabulary: plan.vocabularyActivities.filter(notCovered),
+            grammar: [...plan.mistakeActivities, ...grammarDrills].filter(notCovered),
+            culture: cultureDrills.filter(notCovered),
+            news: covered.has(NEWS_SUBJECT) ? null : NEWS_ACTIVITY,
+            size,
+          });
+
+        // The session's promise, kept. The opening call composes the agenda;
+        // every later call serves what is left of it, in order, instead of
+        // recomposing from the backlog — which refilled finished items' slots
+        // with new words, session after session, and kept the closing news
+        // item forever one agenda away. The pin is subject keys only: each is
+        // resolved against the pools just built, so the text the model reads
+        // is still what the database just said, and a key that no longer
+        // resolves is dropped rather than invented.
+        const resolveFromPin = (
+          pinned: readonly string[],
+        ): AgendaActivity[] => {
+          const bySubject = new Map<string, AgendaActivity>();
+          for (const activity of [
+            ...plan.vocabularyActivities,
+            ...plan.mistakeActivities,
+            ...drills,
+            NEWS_ACTIVITY,
+          ]) {
+            if (!bySubject.has(activity.subject)) {
+              bySubject.set(activity.subject, activity);
+            }
+          }
+
+          const seen = new Set<string>();
+          const resolved: AgendaActivity[] = [];
+          let stale = 0;
+          for (const subject of pinned) {
+            if (covered.has(subject) || seen.has(subject)) continue;
+            seen.add(subject);
+
+            const activity = bySubject.get(subject);
+            if (activity === undefined) {
+              stale += 1;
+              continue;
+            }
+            resolved.push(activity);
+          }
+          if (stale > 0) {
+            logger.info("trainer.agenda_item_stale", {
+              requestId: deps.requestId,
+              userIdHash: deps.userIdHash,
+              count: stale,
+            });
+          }
+          return resolved;
+        };
+
+        const pinned = deps.pinned ?? [];
+        let remaining =
+          pinned.length > 0 ? resolveFromPin(pinned) : composeFresh();
+        // A pin that resolves to nothing before anything was covered is a
+        // stale promise from another day, not a finished session: start over.
+        if (remaining.length === 0 && pinned.length > 0 && covered.size === 0) {
+          remaining = composeFresh();
+        }
 
         agenda = remaining.map((activity) => ({
           kind: activity.kind,
@@ -340,6 +595,9 @@ export function createTrainerTools(deps: TrainerToolDeps): TrainerTools {
 
         const next = remaining[0];
         return JSON.stringify({
+          // What the record shortcut did, so the model never has to guess
+          // whether the close it asked for happened.
+          ...(recorded === undefined ? {} : { record: recorded }),
           dueCount: plan.due.length,
           weakCount: plan.weak.length,
           completed: covered.size,
@@ -372,7 +630,7 @@ export function createTrainerTools(deps: TrainerToolDeps): TrainerTools {
                 // anything fence-shaped before it re-enters a prompt.
                 ...(next.kind === "correct_the_mistake"
                   ? { struggles: escapeUntrusted(next.prompt) }
-                  : next.kind === "grammar_drill"
+                  : next.kind === "grammar_drill" || next.kind === "culture_drill"
                     ? {
                         teach: escapeUntrusted(next.prompt),
                         pattern: next.patternKey,
@@ -394,6 +652,12 @@ export function createTrainerTools(deps: TrainerToolDeps): TrainerTools {
       description: TRAINER_TOOL_HELP.get_review_session,
       schema: z.strictObject({
         limit: z.number().int().min(1).max(MAX_AGENDA_ITEMS).optional(),
+        record: z
+          .strictObject({
+            subject: z.string().trim().min(1).max(96),
+            outcome: z.enum(["correct", "incorrect"]),
+          })
+          .optional(),
       }),
     },
   );
@@ -509,144 +773,7 @@ export function createTrainerTools(deps: TrainerToolDeps): TrainerTools {
 
   const recordReviewOutcome = tool(
     async ({ subject, outcome }: { subject: string; outcome: "correct" | "incorrect" }) =>
-      audited("record_review_outcome", async () => {
-        const key = subject.trim();
-
-        // Closing happens on every path out of here, including the ones that
-        // write nothing. Whether the word turns out to be in the catalogue,
-        // or the read failed, has nothing to do with whether the session has
-        // now dealt with the item — and an item that cannot close is one the
-        // trainer offers again next turn, to a learner who just answered it.
-        if (reviewWrites >= MAX_REVIEW_WRITES_PER_REQUEST) {
-          close(key);
-          return JSON.stringify({
-            recorded: false,
-            reason: "write_limit_reached",
-            closed: true,
-          });
-        }
-
-        // A recurring mistake the learner has just fixed stops being an
-        // unresolved mistake, so the review page stops listing it. Reversible
-        // by the only thing that should reverse it: making it again, which
-        // sets the row back to unresolved when the next turn is evaluated.
-        //
-        // The id map is per-request, and the answer usually arrives a turn
-        // after the question — a turn that may record before it plans. So a
-        // miss falls back to reading the unresolved errors again: whether a
-        // mistake gets resolved must not depend on tool-call order.
-        let errorId = errorIdFor.get(key);
-        if (errorId === undefined) {
-          const unresolved = await deps.errors.listUnresolved(deps.learnerId, 5);
-          if (unresolved.ok) {
-            errorId = unresolved.data.find(
-              (error) => ERROR_TYPE_LABELS[error.errorType] === key,
-            )?.id;
-          }
-        }
-        if (errorId !== undefined) {
-          if (outcome === "correct") {
-            const resolved = await deps.errors.markResolved(errorId);
-            return JSON.stringify({
-              recorded: resolved.ok,
-              subject: key,
-              outcome,
-              resolved: resolved.ok,
-              closed: true,
-            });
-          }
-          return JSON.stringify({
-            recorded: false,
-            reason: "mistake_not_yet_fixed",
-            closed: true,
-          });
-        }
-
-        // A grammar drill has no schedule and no progress row: the level
-        // teaches it until the level moves on, so practising it closes the
-        // item and writes nothing.
-        if (grammarKeyFor.has(key)) {
-          close(key);
-          return JSON.stringify({
-            recorded: false,
-            reason: "grammar_practised",
-            subject: key,
-            outcome,
-            closed: true,
-          });
-        }
-
-        // The agenda says "der Tisch" because that is what a learner should
-        // read; a progress row is keyed by the lemma. Either spelling of the
-        // same word resolves, so the model never has to know the difference.
-        const candidates = [
-          ...new Set([lemmaFor.get(key) ?? key, withoutArticle(key) ?? key]),
-        ];
-
-        const found = await deps.vocabulary.findByLemmas(candidates);
-        if (!found.ok) {
-          close(key);
-          return UNAVAILABLE;
-        }
-        const item =
-          candidates
-            .map((candidate) => found.data.find((row) => row.lemma === candidate))
-            .find((row) => row !== undefined) ?? null;
-        // A word the curriculum does not teach gets no progress row: the model
-        // may quiz freestyle, and a recurring-error drill has no word at all,
-        // but the record only ever holds catalogue words.
-        if (!item) {
-          // The key map is per-request like errorIdFor, and the answer to a
-          // drill usually lands a turn after the question — a turn that may
-          // record before it plans. A subject that is neither an error nor a
-          // word gets one look at the level's own patterns before it is
-          // written off, so how a drill closes does not depend on tool-call
-          // order.
-          const drilled = (await levelDrills()).some(
-            (drill) => drill.subject === key,
-          );
-          close(key);
-          if (drilled) {
-            return JSON.stringify({
-              recorded: false,
-              reason: "grammar_practised",
-              subject: key,
-              outcome,
-              closed: true,
-            });
-          }
-          return JSON.stringify({
-            recorded: false,
-            reason: "not_in_curriculum",
-            closed: true,
-          });
-        }
-
-        // Closed under the name the agenda uses, which is the name the
-        // exclusion is checked against — and the only one worth showing back.
-        close(item.word);
-
-        const existing = await deps.vocabulary.listByItems(deps.learnerId, [item.id]);
-        if (!existing.ok) return UNAVAILABLE;
-
-        const record =
-          existing.data[0] ?? newLearnerVocabulary(deps.learnerId, item.id);
-        const next =
-          outcome === "correct"
-            ? recordCorrectUse(record, now())
-            : recordIncorrectUse(record, now());
-
-        const saved = await deps.vocabulary.upsertLearnerVocabulary(next);
-        if (!saved.ok) return UNAVAILABLE;
-
-        reviewWrites += 1;
-        return JSON.stringify({
-          recorded: true,
-          subject: item.word,
-          outcome,
-          closed: true,
-        });
-      })(),
+      audited("record_review_outcome", () => recordOutcome(subject, outcome))(),
     {
       name: "record_review_outcome",
       description: TRAINER_TOOL_HELP.record_review_outcome,

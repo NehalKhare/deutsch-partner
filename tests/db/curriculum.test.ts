@@ -4,6 +4,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { MINI_LEVEL_CURRICULUM } from "../../learning/mini-levels";
+import { CULTURE_CATALOGUE } from "../../learning/culture-catalogue";
+import { CULTURE_MIGRATION_FILE } from "../../learning/culture-sql";
 import { GRAMMAR_CATALOGUE } from "../../learning/grammar-catalogue";
 import { VOCABULARY_CATALOGUE } from "../../learning/vocabulary-catalogue";
 import { GRAMMAR_MIGRATION_FILE } from "../../learning/grammar-sql";
@@ -165,7 +167,8 @@ describe("the seeded vocabulary", () => {
 describe("the seeded grammar patterns", () => {
   it("puts every pattern in the database", async () => {
     const [{ count }] = await rows<{ count: string }>(
-      `select count(*)::text as count from public.grammar_patterns`,
+      `select count(*)::text as count from public.grammar_patterns
+       where category = 'grammar'`,
     );
 
     expect(Number(count)).toBe(GRAMMAR_CATALOGUE.length);
@@ -228,6 +231,52 @@ describe("the seeded grammar patterns", () => {
 
     await database.db.exec(
       readFileSync(join(MIGRATIONS_DIR, GRAMMAR_MIGRATION_FILE), "utf8"),
+    );
+
+    const after = await rows<{ count: string }>(
+      `select count(*)::text as count from public.grammar_patterns`,
+    );
+
+    expect(after[0].count).toBe(before[0].count);
+  });
+});
+
+describe("the seeded culture notes", () => {
+  it("puts every note in the database, behind its category", async () => {
+    const [{ count }] = await rows<{ count: string }>(
+      `select count(*)::text as count from public.grammar_patterns
+       where category = 'culture'`,
+    );
+
+    expect(Number(count)).toBe(CULTURE_CATALOGUE.length);
+  });
+
+  it("stores the first note at the first level that teaches it", async () => {
+    const expected = CULTURE_CATALOGUE.find((note) => note.key === "du_oder_sie");
+
+    const [row] = await rows<{
+      name: string;
+      mini_level: number;
+      category: string;
+    }>(
+      `select name, mini_level, category
+       from public.grammar_patterns where key = 'du_oder_sie'`,
+    );
+
+    expect(row).toEqual({
+      name: expected!.name,
+      mini_level: 1,
+      category: "culture",
+    });
+  });
+
+  it("re-seeds without adding a second row for the same note", async () => {
+    const before = await rows<{ count: string }>(
+      `select count(*)::text as count from public.grammar_patterns`,
+    );
+
+    await database.db.exec(
+      readFileSync(join(MIGRATIONS_DIR, CULTURE_MIGRATION_FILE), "utf8"),
     );
 
     const after = await rows<{ count: string }>(

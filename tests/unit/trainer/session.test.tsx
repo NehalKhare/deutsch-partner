@@ -259,6 +259,32 @@ describe("the session's agenda", () => {
     expect(captured[1]?.covered).toEqual(["der Bahnhof", "fahren"]);
   });
 
+  it("sends the planned agenda back, so the plan is a promise the server keeps", async () => {
+    const captured: Array<Record<string, unknown>> = [];
+    server.use(
+      http.post(TRAINER_ENDPOINT, async ({ request }) => {
+        captured.push((await request.json()) as Record<string, unknown>);
+        return HttpResponse.json(REPLY);
+      }),
+    );
+    render(<TrainerSession />);
+
+    const user = await sendMessage();
+    await waitFor(() => expect(captured).toHaveLength(1));
+
+    await user.type(screen.getByLabelText(/your message to the trainer/i), "fahren");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(captured).toHaveLength(2));
+
+    // Nothing to pin before the trainer has planned; afterwards the plan
+    // travels up whole, keys only, exactly as the server announced it.
+    expect(captured[0]?.agenda).toBeUndefined();
+    expect(captured[1]?.agenda).toEqual([
+      { kind: "recall", subject: "fahren" },
+      { kind: "correct_the_mistake", subject: "case_dative" },
+    ]);
+  });
+
   it("keeps the agenda through a turn that did not touch it", async () => {
     let turn = 0;
     server.use(

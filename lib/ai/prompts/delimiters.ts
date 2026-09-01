@@ -23,6 +23,10 @@ export const UNTRUSTED_TAGS = [
   // text and neither gets to sound like policy.
   "mcp_results",
   "german_news",
+  // The answer analyzer's verdict, injected into the Trainer's turn. Machine
+  // output about learner text: validated JSON, but it quotes the learner's own
+  // German verbatim, so it rides inside a fence like everything else that does.
+  "answer_analysis",
 ] as const;
 
 export type UntrustedTag = (typeof UNTRUSTED_TAGS)[number];

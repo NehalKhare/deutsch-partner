@@ -15,6 +15,16 @@ export const grammarPatternKeySchema = z
   })
   .max(64);
 
+/**
+ * What kind of teaching a pattern is. Culture and pragmatics notes — du/Sie,
+ * register, politeness — live in the same catalogue and flow through the same
+ * teach machinery; the category is what lets the trainer's agenda give them a
+ * slot of their own.
+ */
+export const grammarPatternCategorySchema = z.enum(["grammar", "culture"]);
+
+export type GrammarPatternCategory = z.infer<typeof grammarPatternCategorySchema>;
+
 export const grammarPatternSchema = z
   .object({
     id: uuidSchema,
@@ -27,6 +37,7 @@ export const grammarPatternSchema = z
     difficulty: z.number().int().min(1).max(5),
     commonMistakes: z.array(nonEmptyTextSchema(300)).max(20).readonly(),
     relatedPatternKeys: z.array(grammarPatternKeySchema).max(20).readonly(),
+    category: grammarPatternCategorySchema,
   })
   .refine(
     (pattern) => {

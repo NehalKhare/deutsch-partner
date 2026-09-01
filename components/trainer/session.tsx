@@ -155,6 +155,11 @@ export function TrainerSession({
           message,
           history,
           covered: covered.slice(-MAX_COVERED_SUBJECTS),
+          // The plan the session opened with, sent back so the server keeps
+          // serving that promise instead of recomposing one from the backlog.
+          ...(agenda !== null && agenda.length > 0
+            ? { agenda: agenda.map(({ kind, subject }) => ({ kind, subject })) }
+            : {}),
         }),
       });
 

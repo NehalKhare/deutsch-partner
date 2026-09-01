@@ -68,6 +68,15 @@ export const miniLevelDefinitionSchema = z
       .min(1)
       .max(10)
       .readonly(),
+    /**
+     * Culture-note slugs taught at this level — du/Sie, register, politeness.
+     * The same key space as grammar (they share the catalogue table); most
+     * levels teach none, so the list may be empty where grammar's may not.
+     */
+    targetCulture: z
+      .array(z.string().regex(/^[a-z][a-z0-9_]*$/))
+      .max(3)
+      .readonly(),
     conversationFunctions: textList(120, 10),
     comprehensionGoals: textList(200, 6),
     productionGoals: textList(200, 6),

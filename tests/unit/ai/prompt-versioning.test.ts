@@ -65,11 +65,19 @@ const RECORDED: Readonly<Record<string, string>> = {
   "conversation.repair@5/A1": "7e503226",
   "conversation.repair@5/A2": "61631c4b",
   "conversation.repair@5/B1": "cb5b0716",
-  // Version 4: the contract fixes the explanation's form, not just its
-  // language — English prose quoting the German and naming the correct form,
-  // because that one sentence is all the dashboard shows.
-  "evaluation.learner_message@4": "115d51cb",
-  "extraction.errors@2": "07d19adb",
+  // Version 5 (evaluation) / version 3 (extraction.errors): the closed error
+  // taxonomy gained register_formality — du/Sie and register slips — and the
+  // taxonomy renders into both output contracts. (Version 4 fixed the
+  // evaluation explanation's form, not just its language: English prose
+  // quoting the German and naming the correct form, because that one sentence
+  // is all the dashboard shows.)
+  "evaluation.learner_message@5": "53c3d75c",
+  "extraction.errors@3": "ff6a17a2",
+  // Version 1: the Trainer's two specialist calls — the in-turn answer
+  // analyzer and the post-session miner. Structured workers in the
+  // evaluator's mould, never a second conversational voice.
+  "trainer.answer_analysis@1": "3f6fd6a9",
+  "trainer.session_mining@1": "19b070cb",
   "extraction.memory@2": "64dd8afe",
   "summarization.thread@2": "b9388353",
   "classification.intent@2": "34b3ed0b",
@@ -189,15 +197,18 @@ describe("the trainer's prompt", () => {
     // understood. (Version 3 ended the session with a recall list; version 2
     // introduced the agenda: open by listing what the sitting covers, quiz
     // only the item the tool hands over, never ask the same question twice.)
-    // Version 7: the session is a declared mix — vocabulary interleaved with
-    // grammar work and ending on the news — and a level grammar pattern can
-    // arrive as a "teach" item: the rule itself as background, introduced in
-    // English and practised through an exercise the trainer writes, exactly
-    // like a recurring mistake but with nothing having gone wrong. (Version 6
+    // Version 8: three changes landed as one bump. Closing and advancing
+    // collapse into a single call — get_review_session takes a "record" of the
+    // item just judged, so the fumbled two-call sequence that re-asked answered
+    // questions is gone. Some learner messages arrive with a fenced
+    // <answer_analysis> block, a machine check the trainer consumes without
+    // ever mentioning; and a "teach" item may now be a culture note —
+    // formality, register, politeness — scheduled like a grammar pattern.
+    // (Version 7 made the session a declared mix ending on the news; version 6
     // introduced "struggles" background and the three-exchange cap; version 5
     // taught corrections in English with model sentences; version 4 ended the
     // agenda on a reading item.)
-    "trainer.session@7": "8742ba8a",
+    "trainer.session@8": "fa24d7b3",
   };
 
   it("matches its recorded fingerprint", () => {

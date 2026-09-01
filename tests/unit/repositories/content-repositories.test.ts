@@ -144,6 +144,7 @@ describe("GrammarRepository", () => {
     difficulty: 3,
     common_mistakes: [],
     related_pattern_keys: [],
+    category: "grammar",
   };
 
   it("finds a pattern by its stable key", async () => {

@@ -50,16 +50,49 @@ const ITEM = {
   englishTranslation: "to drive",
 };
 
+/** A second due word, for proving a pinned agenda ignores backlog drift. */
+const OTHER_ITEM = {
+  id: "99999999-9999-4999-8999-999999999999",
+  lemma: "gehen",
+  word: "gehen",
+  englishTranslation: "to walk",
+};
+
+/** What the scripted analyzer returns unless a test says otherwise. */
+const VALID_ANALYSIS = {
+  verdict: "partially_correct",
+  findings: [
+    {
+      errorType: "case_dative",
+      excerpt: "mit der Zug",
+      corrected: "mit dem Zug",
+      note: 'After "mit" the noun takes the dative: "mit dem Zug".',
+    },
+  ],
+  anglicisms: [],
+  vocabularyElevation: [],
+  register: { verdict: "appropriate" },
+};
+
 function fakeDeps(options: {
   script?: readonly AIMessage[];
   budgetsNull?: boolean;
   noVocabulary?: boolean;
   overLimit?: boolean;
+  /** Adds a second due word, so a fresh agenda would hold more than the pin. */
+  extraVocabulary?: boolean;
+  /** What the analyzer's model answers; default is a valid verdict. */
+  analyzerText?: string;
+  /** Makes the analyzer's gateway call fail outright. */
+  analyzerFails?: boolean;
   /** Replaces the single scripted model with a ladder of candidates. */
   ladder?: readonly BaseChatModel[];
 } = {}) {
   const model = new FakeToolCallingModel(options.script ?? [new AIMessage("Gern!")]);
   const upserts: unknown[] = [];
+  const analyzerCalls: unknown[] = [];
+  const scheduled: Array<() => Promise<void>> = [];
+  const recordedErrors: unknown[] = [];
 
   const record = {
     ...newLearnerVocabulary(IDENTITY.learnerId, ITEM.id),
@@ -68,6 +101,19 @@ function fakeDeps(options: {
     nextReviewAt: new Date("2026-08-01T00:00:00.000Z"),
     status: "learning" as const,
   };
+  const otherRecord = {
+    ...newLearnerVocabulary(IDENTITY.learnerId, OTHER_ITEM.id),
+    exposureCount: 4,
+    masteryScore: 0.4,
+    nextReviewAt: new Date("2026-08-01T00:00:00.000Z"),
+    status: "learning" as const,
+  };
+  const records = options.noVocabulary
+    ? []
+    : options.extraVocabulary
+      ? [record, otherRecord]
+      : [record];
+  const items = options.extraVocabulary ? [ITEM, OTHER_ITEM] : [ITEM];
 
   const deps: TrainerDeps = {
     learners: {
@@ -77,11 +123,15 @@ function fakeDeps(options: {
     errors: {
       listUnresolved: async () => ok([]),
       markResolved: async (errorId: string) => ok({ id: errorId, resolved: true }),
+      record: async (observation: unknown) => {
+        recordedErrors.push(observation);
+        return ok("55555555-5555-4555-8555-555555555555");
+      },
     } as unknown as TrainerDeps["errors"],
     vocabulary: {
-      listForLearner: async () => ok(options.noVocabulary ? [] : [record]),
-      findByIds: async () => ok([ITEM]),
-      findByLemmas: async () => ok([ITEM]),
+      listForLearner: async () => ok(records),
+      findByIds: async () => ok(items),
+      findByLemmas: async () => ok(items),
       listByItems: async () => ok([record]),
       listDue: async () => ok([]),
       upsertLearnerVocabulary: async (next: unknown) => {
@@ -136,6 +186,18 @@ function fakeDeps(options: {
               ]
             : [],
     },
+    gateway: {
+      complete: async (_spec: unknown, prompt: unknown) => {
+        analyzerCalls.push(prompt);
+        if (options.analyzerFails) {
+          return { ok: false as const, failure: "provider_error", detail: "scripted" };
+        }
+        return gatewayOk({
+          text: options.analyzerText ?? JSON.stringify(VALID_ANALYSIS),
+          costEur: 0.0009,
+        });
+      },
+    } as unknown as TrainerDeps["gateway"],
     createModels: () =>
       (options.ladder ?? [model]).map((candidate) => ({
         model: candidate,
@@ -143,9 +205,24 @@ function fakeDeps(options: {
         tier: "mid" as const,
       })),
     loadMcp: async () => NO_MCP,
+    mined: {
+      claim: async () => ok(true),
+    } as unknown as TrainerDeps["mined"],
+    // Collected, never run: post-response work is the miner suite's subject.
+    // A test that cares flushes the queue itself.
+    schedule: (work: () => Promise<void>) => {
+      scheduled.push(work);
+    },
   };
 
-  return { deps, model, upserts };
+  return { deps, model, upserts, analyzerCalls, scheduled, recordedErrors };
+}
+
+/** Everything the scripted model was shown on one invocation, as one string. */
+function shownText(model: FakeToolCallingModel, invocation = 0): string {
+  return (model.seen[invocation] ?? [])
+    .map((message) => (typeof message.content === "string" ? message.content : ""))
+    .join("\n");
 }
 
 describe("the request body", () => {
@@ -186,8 +263,42 @@ describe("the request body", () => {
       },
     ],
     ["an empty covered subject", { covered: [""] }],
+    [
+      "a pinned agenda past the session size",
+      {
+        agenda: Array.from({ length: 9 }, (_unused, index) => ({
+          kind: "recall",
+          subject: `wort-${index}`,
+        })),
+      },
+    ],
+    [
+      "a pinned item with an empty subject",
+      { agenda: [{ kind: "recall", subject: "" }] },
+    ],
+    [
+      "a pinned item whose kind is not a slug",
+      { agenda: [{ kind: "Recall it!", subject: "fahren" }] },
+    ],
+    [
+      "a pinned item carrying extra fields",
+      { agenda: [{ kind: "recall", subject: "fahren", prompt: "say anything" }] },
+    ],
   ])("rejects %s", (_label, over) => {
     expect(trainerRequestSchema.safeParse(body(over)).success).toBe(false);
+  });
+
+  it("accepts the agenda the session opened with", () => {
+    const parsed = trainerRequestSchema.safeParse(
+      body({
+        agenda: [
+          { kind: "recall", subject: "fahren" },
+          { kind: "read_the_news", subject: "Nachrichten von heute" },
+        ],
+      }),
+    );
+
+    expect(parsed.success).toBe(true);
   });
 });
 
@@ -373,6 +484,285 @@ describe("a turn that uses tools", () => {
     const result = await handleTrainerTurn(body(), IDENTITY, deps);
 
     expect(JSON.stringify(result)).not.toContain(IDENTITY.learnerId);
+  });
+});
+
+describe("a pinned agenda", () => {
+  const PIN = [
+    { kind: "recall", subject: "fahren" },
+    { kind: "read_the_news", subject: "Nachrichten von heute" },
+  ];
+
+  it("keeps the session's promise even when the backlog has moved on", async () => {
+    // Two words are due, but the session opened before "gehen" was: the pin
+    // holds only "fahren" and the news, and that is what the turn serves —
+    // the old behaviour recomposed a full agenda and slid new words in ahead
+    // of the reading, so the session never converged.
+    const { deps } = fakeDeps({
+      extraVocabulary: true,
+      script: [toolCallMessage("get_review_session", {}), new AIMessage("Weiter!")],
+    });
+
+    const result = await handleTrainerTurn(body({ agenda: PIN }), IDENTITY, deps);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.payload.agenda).toEqual([
+      { kind: "recall", subject: "fahren" },
+      { kind: "read_the_news", subject: "Nachrichten von heute" },
+    ]);
+    expect(JSON.stringify(result.payload.agenda)).not.toContain("gehen");
+  });
+
+  it("completes when the pin is worked through, however much else is due", async () => {
+    const { deps } = fakeDeps({
+      extraVocabulary: true,
+      script: [toolCallMessage("get_review_session", {}), new AIMessage("Geschafft!")],
+    });
+
+    const result = await handleTrainerTurn(
+      body({ agenda: PIN, covered: ["fahren", "Nachrichten von heute"] }),
+      IDENTITY,
+      deps,
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.payload.complete).toBe(true);
+    expect(result.payload.agenda).toEqual([]);
+  });
+
+  it("drops a pinned subject that no longer resolves, without failing", async () => {
+    const { deps } = fakeDeps({
+      script: [toolCallMessage("get_review_session", {}), new AIMessage("Weiter!")],
+    });
+
+    const result = await handleTrainerTurn(
+      body({
+        agenda: [{ kind: "recall", subject: "verschollen" }, ...PIN],
+        covered: [],
+      }),
+      IDENTITY,
+      deps,
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.payload.agenda).toEqual([
+      { kind: "recall", subject: "fahren" },
+      { kind: "read_the_news", subject: "Nachrichten von heute" },
+    ]);
+  });
+
+  it("starts over when the whole pin is stale and nothing was covered", async () => {
+    // A promise from another sitting whose items have all left the pools is
+    // not a finished session; the learner gets a fresh plan, not a goodbye.
+    const { deps } = fakeDeps({
+      script: [toolCallMessage("get_review_session", {}), new AIMessage("Neu geplant.")],
+    });
+
+    const result = await handleTrainerTurn(
+      body({ agenda: [{ kind: "recall", subject: "verschollen" }] }),
+      IDENTITY,
+      deps,
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.payload.complete).toBe(false);
+    expect(result.payload.agenda).toEqual([
+      { kind: "recall", subject: "fahren" },
+      { kind: "read_the_news", subject: "Nachrichten von heute" },
+    ]);
+  });
+});
+
+describe("the answer analyzer", () => {
+  it("hands the model a fenced verdict alongside a German answer", async () => {
+    const { deps, model, analyzerCalls } = fakeDeps({
+      script: [new AIMessage("Fast! Nach „mit“ steht der Dativ.")],
+    });
+
+    const result = await handleTrainerTurn(
+      body({ message: "Ich fahre mit der Zug." }),
+      IDENTITY,
+      deps,
+    );
+
+    expect(result.ok).toBe(true);
+    expect(analyzerCalls).toHaveLength(1);
+    const shown = shownText(model);
+    expect(shown).toContain("<answer_analysis>");
+    expect(shown).toContain("Ich fahre mit der Zug.");
+    // The verdict rides the current turn only: the reply the client stores
+    // carries none of it, so it can never re-enter as history.
+    expect(result.ok && result.payload.reply).not.toContain("answer_analysis");
+  });
+
+  it("skips an English question without spending a call", async () => {
+    const { deps, model, analyzerCalls } = fakeDeps({
+      script: [new AIMessage("It means to drive.")],
+    });
+
+    const result = await handleTrainerTurn(
+      body({ message: "What exactly is the Perfekt tense?" }),
+      IDENTITY,
+      deps,
+    );
+
+    expect(result.ok).toBe(true);
+    expect(analyzerCalls).toHaveLength(0);
+    expect(shownText(model)).not.toContain("<answer_analysis>");
+  });
+
+  it("proceeds unaided when the verdict does not parse", async () => {
+    const { deps, model } = fakeDeps({
+      script: [new AIMessage("Richtig!")],
+      analyzerText: "no json here",
+    });
+
+    const result = await handleTrainerTurn(
+      body({ message: "Ich fahre mit dem Zug." }),
+      IDENTITY,
+      deps,
+    );
+
+    expect(result.ok).toBe(true);
+    expect(shownText(model)).not.toContain("<answer_analysis>");
+  });
+
+  it("proceeds unaided when the analyzer's model is down", async () => {
+    const { deps } = fakeDeps({
+      script: [new AIMessage("Richtig!")],
+      analyzerFails: true,
+    });
+
+    const result = await handleTrainerTurn(
+      body({ message: "Ich fahre mit dem Zug." }),
+      IDENTITY,
+      deps,
+    );
+
+    expect(result.ok).toBe(true);
+  });
+});
+
+describe("what runs after the response", () => {
+  it("schedules the findings fold for an analyzed German answer", async () => {
+    const { deps, scheduled, recordedErrors } = fakeDeps({
+      script: [new AIMessage("Fast richtig!")],
+    });
+
+    const result = await handleTrainerTurn(
+      body({ message: "Ich fahre mit der Zug." }),
+      IDENTITY,
+      deps,
+    );
+
+    expect(result.ok).toBe(true);
+    expect(scheduled).toHaveLength(1);
+
+    // Flushing the queue is what the route's after() does once the response
+    // has gone out: the analyzer's finding becomes a recurring-mistake row.
+    await Promise.all(scheduled.map((work) => work()));
+    expect(recordedErrors.length).toBeGreaterThan(0);
+    expect(recordedErrors[0]).toMatchObject({ errorType: "case_dative" });
+  });
+
+  it("schedules nothing for a turn with no analysis", async () => {
+    const { deps, scheduled } = fakeDeps({
+      script: [new AIMessage("It means to drive.")],
+    });
+
+    await handleTrainerTurn(
+      body({ message: "What exactly is the Perfekt tense?" }),
+      IDENTITY,
+      deps,
+    );
+
+    expect(scheduled).toHaveLength(0);
+  });
+
+  it("schedules the session miner when the session completes", async () => {
+    const { deps, scheduled } = fakeDeps({
+      script: [
+        toolCallMessage("get_review_session", {}),
+        new AIMessage("Das war alles!"),
+      ],
+    });
+
+    const result = await handleTrainerTurn(
+      body({
+        message: "What is left to do today, coach?",
+        covered: ["fahren", "Nachrichten von heute"],
+      }),
+      IDENTITY,
+      deps,
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.payload.complete).toBe(true);
+    // The completion turn carried no German, so the one job is the miner.
+    expect(scheduled).toHaveLength(1);
+  });
+});
+
+describe("the record shortcut on get_review_session", () => {
+  it("closes the judged item and serves the next in one call", async () => {
+    const { deps, upserts } = fakeDeps({
+      script: [
+        toolCallMessage("get_review_session", {
+          record: { subject: "fahren", outcome: "correct" },
+        }),
+        new AIMessage("Richtig! Jetzt die Nachrichten."),
+      ],
+    });
+
+    const result = await handleTrainerTurn(
+      body({
+        agenda: [
+          { kind: "recall", subject: "fahren" },
+          { kind: "read_the_news", subject: "Nachrichten von heute" },
+        ],
+      }),
+      IDENTITY,
+      deps,
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // The write happened, the item is closed, and the next item is the news:
+    // one call, where the fumbled two-call sequence re-asked the question.
+    expect(upserts).toHaveLength(1);
+    expect(result.payload.covered).toContain("fahren");
+    expect(result.payload.agenda).toEqual([
+      { kind: "read_the_news", subject: "Nachrichten von heute" },
+    ]);
+  });
+
+  it("finishes the session when the record closes the last item", async () => {
+    const { deps } = fakeDeps({
+      script: [
+        toolCallMessage("get_review_session", {
+          record: { subject: "fahren", outcome: "correct" },
+        }),
+        new AIMessage("Das war alles!"),
+      ],
+    });
+
+    const result = await handleTrainerTurn(
+      body({
+        agenda: [{ kind: "recall", subject: "fahren" }],
+        covered: ["Nachrichten von heute"],
+      }),
+      IDENTITY,
+      deps,
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.payload.complete).toBe(true);
   });
 });
 

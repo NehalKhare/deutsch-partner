@@ -50,6 +50,8 @@ export const TASK_IDS = [
   "ingestion.embedding",
   "retrieval.embedding",
   "trainer.session",
+  "trainer.answer_analysis",
+  "trainer.session_mining",
 ] as const;
 
 export const taskIdSchema = z.enum(TASK_IDS);
@@ -129,6 +131,22 @@ const ROUTES: Readonly<Record<TaskId, TaskRoute>> = {
    * billed for room it does not use; a ceiling is a limit, not a purchase.
    */
   "trainer.session": { tier: "strong", maxInputTokens: 6000, maxOutputTokens: 1000 },
+  /**
+   * The Trainer's answer analyzer: one structured pass over one learner
+   * sentence, in the reply path before the loop's first call. Cheap because
+   * the schema is small and closed — the same tier extraction.errors runs
+   * against the identical taxonomy — and because it spends from the same
+   * €0.05 request ceiling as the loop it precedes: a dearer tier here is
+   * subtracted from the coach itself.
+   */
+  "trainer.answer_analysis": { tier: "cheap", maxInputTokens: 2000, maxOutputTokens: 500 },
+  /**
+   * The post-session miner: one pass over the finished session's transcript
+   * tail, after the response has gone out. Nobody is waiting, but it runs on
+   * every completed session, so it stays on the cheap tier with a repair pass
+   * rather than buying mid-tier accuracy for aggregate counters.
+   */
+  "trainer.session_mining": { tier: "cheap", maxInputTokens: 4000, maxOutputTokens: 600 },
 };
 
 export function routeFor(task: TaskId): TaskRoute {

@@ -28,4 +28,5 @@ export const ERROR_TYPE_LABELS: Readonly<Record<ErrorType, string>> = {
   plural_form: "Plural forms",
   vocabulary_choice: "Word choice",
   spelling: "Spelling",
+  register_formality: "Formality (du and Sie)",
 };

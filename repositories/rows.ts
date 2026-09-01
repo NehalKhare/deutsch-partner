@@ -14,7 +14,10 @@ import {
 } from "@/domain/learner";
 import { learnerMemorySchema, type LearnerMemory } from "@/domain/memory";
 import { levelPerformanceSchema, type LevelPerformance } from "@/domain/performance";
-import { grammarPatternSchema } from "@/domain/grammar";
+import {
+  grammarPatternCategorySchema,
+  grammarPatternSchema,
+} from "@/domain/grammar";
 import {
   learnerVocabularySchema,
   vocabularyItemSchema,
@@ -269,6 +272,7 @@ export const grammarPatternRowSchema = z.object({
   difficulty: z.number().int(),
   common_mistakes: z.array(z.string()),
   related_pattern_keys: z.array(z.string()),
+  category: grammarPatternCategorySchema,
 });
 
 export const grammarPatternFromRow = grammarPatternRowSchema.transform(
@@ -284,6 +288,7 @@ export const grammarPatternFromRow = grammarPatternRowSchema.transform(
       difficulty: row.difficulty,
       commonMistakes: row.common_mistakes,
       relatedPatternKeys: row.related_pattern_keys,
+      category: row.category,
     }, ctx),
 );
 

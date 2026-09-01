@@ -12,6 +12,10 @@ import { quoteLiteral, textArray } from "@/learning/sql-literals";
 
 export const GRAMMAR_MIGRATION_FILE = "20260821121400_seed_grammar_patterns.sql";
 
+// Deliberately without `category`: this file's timestamp predates the
+// migration that adds the column, so naming it here would break a fresh
+// `db push`. Grammar rows take the column's default; culture rows arrive in
+// their own, later seed (learning/culture-sql.ts).
 const COLUMNS = [
   "key",
   "name",

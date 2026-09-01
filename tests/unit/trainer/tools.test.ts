@@ -60,6 +60,8 @@ function fakeDeps(
     noVocabulary?: boolean;
     noErrors?: boolean;
     noGrammar?: boolean;
+    /** Puts the learner on mini-level 27, whose curriculum has a culture note. */
+    cultureLevel?: boolean;
     cefr?: "A1" | "A2" | "B1";
     covered?: readonly string[];
   } = {},
@@ -122,7 +124,7 @@ function fakeDeps(
     learners: {
       getState: async () =>
         ok({
-          miniLevel: 26,
+          miniLevel: options.cultureLevel ? 27 : 26,
           effectiveLevel: { cefr: options.cefr ?? "A2", plus: false },
         }),
     } as unknown as TrainerToolDeps["learners"],
@@ -137,18 +139,32 @@ function fakeDeps(
             })
           : fail(),
       // Echoes the first key it was asked for, so the one drill this learner
-      // gets always belongs to whatever their level's target grammar is.
+      // gets always belongs to whatever their level's target grammar is —
+      // plus, on the culture level, the note that level teaches.
       findByKeys: async (keys: readonly string[]) =>
         options.noGrammar
           ? ok([])
-          : ok(
-              keys.slice(0, 1).map((key) => ({
+          : ok([
+              ...keys.slice(0, 1).map((key) => ({
                 key,
                 name: "Dative prepositions",
                 explanation: "mit, nach, bei take the dative.",
                 examples: ["Ich fahre mit dem Zug."],
+                category: "grammar",
               })),
-            ),
+              ...(options.cultureLevel && keys.includes("reklamieren_mit_stil")
+                ? [
+                    {
+                      key: "reklamieren_mit_stil",
+                      name: "Firm but polite complaint",
+                      explanation:
+                        "Name the problem plainly; the politeness sits in the Konjunktiv.",
+                      examples: ["Ich möchte die Jacke umtauschen."],
+                      category: "culture",
+                    },
+                  ]
+                : []),
+            ]),
       listUpToMiniLevel: async () =>
         ok([{ key: "sein_present", name: "sein in the present" }]),
     } as unknown as TrainerToolDeps["grammar"],
@@ -585,6 +601,7 @@ describe("recording a review outcome", () => {
       closed: true,
     });
     expect(resolved).toEqual([ERROR_ID]);
+    expect(tools.covered()).toContain("The dative case");
   });
 
   it("leaves a mistake unresolved when the learner did not fix it", async () => {
@@ -603,6 +620,10 @@ describe("recording a review outcome", () => {
       closed: true,
     });
     expect(resolved).toEqual([]);
+    // Unresolved in the database — a later session lists it again — but
+    // closed for this sitting: leaving it open re-served the same mistake
+    // to a learner who had just been told it would come back another day.
+    expect(tools.covered()).toContain("The dative case");
   });
 
   it("resolves a fixed mistake even when this turn never planned an agenda", async () => {
@@ -774,5 +795,64 @@ describe("when a dependency throws instead of failing politely", () => {
     const result = await toolNamed(tools, "get_progress").invoke({});
 
     expect(JSON.parse(result as string)).toEqual({ error: "unavailable" });
+  });
+});
+
+describe("the culture note on the agenda", () => {
+  it("appears as its own kind, after grammar and before the news", async () => {
+    const { deps } = fakeDeps({ cultureLevel: true });
+    const tools = createTrainerTools(deps);
+
+    const result = JSON.parse(
+      (await toolNamed(tools, "get_review_session").invoke({})) as string,
+    ) as { agenda: Array<{ kind: string; subject: string }> };
+
+    const kinds = result.agenda.map((line) => line.kind);
+    expect(kinds).toContain("culture_drill");
+    expect(kinds.indexOf("culture_drill")).toBeGreaterThan(
+      kinds.indexOf("grammar_drill"),
+    );
+    expect(kinds.at(-1)).toBe("read_the_news");
+  });
+
+  it("arrives as teach, with the key that opens get_grammar_pattern", async () => {
+    const { deps } = fakeDeps({
+      cultureLevel: true,
+      covered: ["fahren", "The dative case", "Dative prepositions"],
+    });
+    const tools = createTrainerTools(deps);
+
+    const result = JSON.parse(
+      (await toolNamed(tools, "get_review_session").invoke({})) as string,
+    ) as { next: Record<string, unknown> };
+
+    expect(result.next).toMatchObject({
+      kind: "culture_drill",
+      subject: "Firm but polite complaint",
+      pattern: "reklamieren_mit_stil",
+    });
+    expect(String(result.next.teach)).toContain("Konjunktiv");
+    // Background for the trainer to teach from, never a ready-made question.
+    expect(result.next.prompt).toBeUndefined();
+  });
+
+  it("closes without a write, exactly like a grammar drill", async () => {
+    const { deps, upserts, resolved } = fakeDeps({ cultureLevel: true });
+    const tools = createTrainerTools(deps);
+
+    await toolNamed(tools, "get_review_session").invoke({});
+    const result = await toolNamed(tools, "record_review_outcome").invoke({
+      subject: "Firm but polite complaint",
+      outcome: "correct",
+    });
+
+    expect(JSON.parse(result as string)).toMatchObject({
+      recorded: false,
+      reason: "grammar_practised",
+      closed: true,
+    });
+    expect(upserts).toHaveLength(0);
+    expect(resolved).toEqual([]);
+    expect(tools.covered()).toContain("Firm but polite complaint");
   });
 });

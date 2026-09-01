@@ -6,9 +6,13 @@ import {
   transcriptMessageSchema,
 } from "@/domain/conversation";
 import { nonEmptyTextSchema } from "@/domain/primitives";
-import { coveredSubjectsSchema } from "@/domain/trainer-session";
+import {
+  coveredSubjectsSchema,
+  pinnedAgendaSchema,
+} from "@/domain/trainer-session";
 import { createTurnBudget } from "@/lib/ai/gateway/budgeter";
 import { evaluateBudgets, type BudgetSource } from "@/lib/ai/gateway/budget-gate";
+import type { ModelGateway } from "@/lib/ai/gateway/gateway";
 import type {
   TrainerModel,
   TrainerModelContext,
@@ -19,15 +23,23 @@ import {
   TRAINER_PROMPT_VERSION,
   trainerSystemPrompt,
 } from "@/lib/ai/prompts/trainer";
+import type { AnswerAnalysis } from "@/domain/trainer-analysis";
 import type { TrainerAgendaItem } from "@/lib/trainer/agenda";
 import { runTrainerTurn } from "@/lib/trainer/agent";
+import {
+  createAnswerAnalyzer,
+  renderAnalysisBlock,
+} from "@/lib/trainer/analysis";
+import { shouldAnalyze } from "@/lib/trainer/analysis-gate";
 import type { McpToolset } from "@/lib/trainer/mcp";
+import { foldFindings, mineSession } from "@/lib/trainer/miner";
 import { createTrainerTools, type TrainerSource } from "@/lib/trainer/tools";
 import type { GermanLearningRetriever } from "@/lib/retrieval/retriever";
 import { nullLogger, type Logger } from "@/lib/observability/logger";
 import type { GrammarRepository } from "@/repositories/grammar-repository";
 import type { LearnerErrorRepository } from "@/repositories/learner-error-repository";
 import type { LearnerRepository } from "@/repositories/learner-repository";
+import type { MinedSessionRepository } from "@/repositories/mined-session-repository";
 import type { PerformanceRepository } from "@/repositories/performance-repository";
 import type { VocabularyRepository } from "@/repositories/vocabulary-repository";
 
@@ -52,6 +64,9 @@ export const trainerRequestSchema = z.strictObject({
   // And so does the session's progress: the subjects already worked through,
   // sent back so the agenda never offers the same item twice.
   covered: coveredSubjectsSchema,
+  // The agenda the session opened with, pinned: later turns serve what is
+  // left of that promise instead of recomposing from the whole backlog.
+  agenda: pinnedAgendaSchema.optional(),
 });
 
 export type TrainerRequest = z.infer<typeof trainerRequestSchema>;
@@ -88,6 +103,9 @@ export const trainerErrorResponse = (error: TrainerError) => RESPONSES[error];
 /** The per-request euro ceiling for the whole loop. A bound, not a price. */
 export const TRAINER_MAX_TURN_EUR = 0.05;
 
+/** The post-session miner's own ceiling: the request's budget is already spent. */
+export const TRAINER_MINER_MAX_EUR = 0.01;
+
 export interface TrainerDeps {
   readonly learners: LearnerRepository;
   readonly errors: LearnerErrorRepository;
@@ -96,6 +114,8 @@ export interface TrainerDeps {
   readonly grammar: GrammarRepository;
   readonly retriever: GermanLearningRetriever;
   readonly budgets: BudgetSource;
+  /** The two-role gateway, for the answer analyzer's structured call. */
+  readonly gateway: ModelGateway;
   /** Builds the ledger-attached LangChain models — the tier's primary and
    * its same-tier fallbacks, in the order to try. Injected so tests script it. */
   readonly createModels: (context: TrainerModelContext) => readonly TrainerModel[];
@@ -104,6 +124,14 @@ export interface TrainerDeps {
     readonly requestId: string;
     readonly userIdHash: string;
   }) => Promise<McpToolset>;
+  /** The post-session miner's idempotency guard. */
+  readonly mined: MinedSessionRepository;
+  /**
+   * Runs work after the response has gone out — the route hands in Next's
+   * after(), tests hand in something synchronous. The learner never waits on
+   * anything scheduled here.
+   */
+  readonly schedule: (work: () => Promise<void>) => void;
   readonly logger?: Logger;
   readonly now?: () => Date;
 }
@@ -178,6 +206,7 @@ export async function handleTrainerTurn(
   const local = createTrainerTools({
     learnerId: identity.learnerId,
     covered: parsed.data.covered,
+    pinned: parsed.data.agenda?.map((item) => item.subject),
     userIdHash: identity.userIdHash,
     requestId: identity.requestId,
     vocabulary: deps.vocabulary,
@@ -194,6 +223,41 @@ export async function handleTrainerTurn(
     userIdHash: identity.userIdHash,
   });
 
+  // The answer analyzer: one structured pass over the learner's German before
+  // the loop's first call, spending from the same per-request budget. Code
+  // decides whether it runs — a deterministic gate, not a model's whim — and
+  // every failure is a value: the trainer judges unaided, as it did before.
+  let analysis: string | undefined;
+  let findings: AnswerAnalysis | undefined;
+  const gate = shouldAnalyze(parsed.data.message);
+  if (gate.analyze) {
+    const state = await deps.learners
+      .getState(identity.learnerId)
+      .catch(() => null);
+    const analyzer = createAnswerAnalyzer({ gateway: deps.gateway, logger });
+    const analyzed = await analyzer.analyze(
+      {
+        message: parsed.data.message,
+        cefr: state !== null && state.ok ? state.data.effectiveLevel.cefr : "A1",
+        precedingTurns: parsed.data.history.slice(-2),
+      },
+      {
+        requestId: identity.requestId,
+        userIdHash: identity.userIdHash,
+        turn,
+      },
+    );
+    if (analyzed.status === "analyzed") {
+      analysis = renderAnalysisBlock(analyzed.analysis);
+      findings = analyzed.analysis;
+    }
+  } else {
+    logger.debug("trainer.analysis_skipped", {
+      reason: gate.reason,
+      requestId: identity.requestId,
+    });
+  }
+
   try {
     const outcome = await runTrainerTurn(
       {
@@ -201,7 +265,7 @@ export async function handleTrainerTurn(
         tools: [...local.tools, ...mcp.tools],
         logger,
       },
-      { message: parsed.data.message, history: parsed.data.history },
+      { message: parsed.data.message, history: parsed.data.history, analysis },
     );
 
     if (!outcome.ok) {
@@ -217,8 +281,55 @@ export async function handleTrainerTurn(
       steps: outcome.data.steps.length,
       covered: local.covered().length,
       complete: local.complete(),
+      analysis: findings !== undefined,
       costEur: Number(turn.spentEur().toFixed(8)),
     });
+
+    // After the response has gone out: the turn's validated findings become
+    // recurring-mistake rows (no model call), and a completed session gets
+    // one mining pass for what per-turn analysis cannot see. Neither is ever
+    // something the learner waits on, and each degrades to nothing.
+    if (findings !== undefined) {
+      const analysed = findings;
+      deps.schedule(() =>
+        foldFindings(
+          {
+            errors: deps.errors,
+            learnerId: identity.learnerId,
+            requestId: identity.requestId,
+            logger,
+            now,
+          },
+          analysed,
+        ),
+      );
+    }
+    if (local.complete()) {
+      const transcript = [
+        ...parsed.data.history,
+        { role: "user" as const, content: parsed.data.message },
+        { role: "assistant" as const, content: outcome.data.reply },
+      ];
+      const covered = local.covered();
+      deps.schedule(() =>
+        mineSession(
+          {
+            gateway: deps.gateway,
+            errors: deps.errors,
+            vocabulary: deps.vocabulary,
+            learners: deps.learners,
+            mined: deps.mined,
+            learnerId: identity.learnerId,
+            requestId: identity.requestId,
+            userIdHash: identity.userIdHash,
+            budget: createTurnBudget(TRAINER_MINER_MAX_EUR),
+            logger,
+            now,
+          },
+          { transcript, covered },
+        ),
+      );
+    }
 
     return {
       ok: true,

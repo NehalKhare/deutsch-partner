@@ -76,6 +76,22 @@ async function reset(): Promise<void> {
   await database.db.query(`delete from public.learner_errors`);
 }
 
+describe("the taxonomy's nineteenth member", () => {
+  it("records a register slip through the ordinary path", async () => {
+    await reset();
+    await record(ALICE, {
+      errorType: "register_formality",
+      pattern: "du to a stranger at a counter",
+      utterance: "Wie heißt du?",
+      observedAt: at(0),
+    });
+
+    const errors = await stored(ALICE);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.pattern).toBe("du to a stranger at a counter");
+  });
+});
+
 describe("repeated observations", () => {
   it("aggregate into one record with a rising count", async () => {
     await reset();

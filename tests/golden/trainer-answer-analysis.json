@@ -1,0 +1,223 @@
+{
+  "description": "Golden fixtures for trainer.answer_analysis. Each case is a trainer question, a learner answer, what the deterministic gate must decide, and — for analyzed cases — a reference verdict a correct analyzer produces. The unit test runs these against the scripted pipeline; a live-eval runner can compare real model output to the same expectations.",
+  "cases": [
+    {
+      "id": "correct-a2-answer",
+      "question": "Wie fährst du zur Arbeit?",
+      "answer": "Ich fahre mit dem Zug zur Arbeit.",
+      "gate": "analyze",
+      "analysis": {
+        "verdict": "correct",
+        "findings": [],
+        "anglicisms": [],
+        "vocabularyElevation": [],
+        "register": { "verdict": "appropriate" }
+      },
+      "expected": { "verdict": "correct", "errorTypes": [], "register": "appropriate" }
+    },
+    {
+      "id": "v2-violation",
+      "question": "Was machst du heute?",
+      "answer": "Heute ich gehe ins Kino.",
+      "gate": "analyze",
+      "analysis": {
+        "verdict": "partially_correct",
+        "findings": [
+          {
+            "errorType": "word_order",
+            "excerpt": "Heute ich gehe",
+            "corrected": "Heute gehe ich",
+            "note": "The verb stays in second position: when the sentence opens with Heute, the verb comes next."
+          }
+        ],
+        "anglicisms": [],
+        "vocabularyElevation": [],
+        "register": { "verdict": "appropriate" }
+      },
+      "expected": { "verdict": "partially_correct", "errorTypes": ["word_order"], "register": "appropriate" }
+    },
+    {
+      "id": "weil-clause-verb-final",
+      "question": "Warum bleibst du zu Hause?",
+      "answer": "Ich bleibe zu Hause, weil ich bin krank.",
+      "gate": "analyze",
+      "analysis": {
+        "verdict": "partially_correct",
+        "findings": [
+          {
+            "errorType": "word_order",
+            "excerpt": "weil ich bin krank",
+            "corrected": "weil ich krank bin",
+            "note": "In a weil clause the conjugated verb goes to the end."
+          }
+        ],
+        "anglicisms": [],
+        "vocabularyElevation": [],
+        "register": { "verdict": "appropriate" }
+      },
+      "expected": { "verdict": "partially_correct", "errorTypes": ["word_order"], "register": "appropriate" }
+    },
+    {
+      "id": "dative-after-mit",
+      "question": "Womit fährst du nach Berlin?",
+      "answer": "Ich fahre mit der Zug.",
+      "gate": "analyze",
+      "analysis": {
+        "verdict": "partially_correct",
+        "findings": [
+          {
+            "errorType": "case_dative",
+            "excerpt": "mit der Zug",
+            "corrected": "mit dem Zug",
+            "note": "After mit the noun takes the dative: der Zug becomes dem Zug."
+          }
+        ],
+        "anglicisms": [],
+        "vocabularyElevation": [],
+        "register": { "verdict": "appropriate" }
+      },
+      "expected": { "verdict": "partially_correct", "errorTypes": ["case_dative"], "register": "appropriate" }
+    },
+    {
+      "id": "adjective-ending",
+      "question": "Wie findest du das Haus?",
+      "answer": "Das ist ein schöne Haus.",
+      "gate": "analyze",
+      "analysis": {
+        "verdict": "partially_correct",
+        "findings": [
+          {
+            "errorType": "adjective_ending",
+            "excerpt": "ein schöne Haus",
+            "corrected": "ein schönes Haus",
+            "note": "After ein a neuter noun takes the -es ending: ein schönes Haus."
+          }
+        ],
+        "anglicisms": [],
+        "vocabularyElevation": [],
+        "register": { "verdict": "appropriate" }
+      },
+      "expected": { "verdict": "partially_correct", "errorTypes": ["adjective_ending"], "register": "appropriate" }
+    },
+    {
+      "id": "anglicism-ich-bin-kalt",
+      "question": "Wie geht es dir heute?",
+      "answer": "Ich bin kalt und ein bisschen müde.",
+      "gate": "analyze",
+      "analysis": {
+        "verdict": "partially_correct",
+        "findings": [],
+        "anglicisms": [
+          {
+            "excerpt": "Ich bin kalt",
+            "idiomatic": "Mir ist kalt"
+          }
+        ],
+        "vocabularyElevation": [],
+        "register": { "verdict": "appropriate" }
+      },
+      "expected": { "verdict": "partially_correct", "errorTypes": [], "register": "appropriate" }
+    },
+    {
+      "id": "perfekt-auxiliary",
+      "question": "Was hast du am Wochenende gemacht?",
+      "answer": "Ich habe nach Berlin gefahren.",
+      "gate": "analyze",
+      "analysis": {
+        "verdict": "partially_correct",
+        "findings": [
+          {
+            "errorType": "perfekt",
+            "excerpt": "Ich habe nach Berlin gefahren",
+            "corrected": "Ich bin nach Berlin gefahren",
+            "note": "Fahren builds its Perfekt with sein when it describes movement: ich bin gefahren."
+          }
+        ],
+        "anglicisms": [],
+        "vocabularyElevation": [],
+        "register": { "verdict": "appropriate" }
+      },
+      "expected": { "verdict": "partially_correct", "errorTypes": ["perfekt"], "register": "appropriate" }
+    },
+    {
+      "id": "du-to-a-formal-prompt",
+      "question": "Sie sprechen mit einer Beamtin. Fragen Sie nach dem Formular.",
+      "answer": "Kannst du mir das Formular geben?",
+      "gate": "analyze",
+      "analysis": {
+        "verdict": "partially_correct",
+        "findings": [],
+        "anglicisms": [],
+        "vocabularyElevation": [],
+        "register": {
+          "verdict": "too_informal",
+          "note": "An official at a counter takes Sie: Können Sie mir das Formular geben?"
+        }
+      },
+      "expected": { "verdict": "partially_correct", "errorTypes": [], "register": "too_informal" }
+    },
+    {
+      "id": "vocabulary-elevation",
+      "question": "Wie war das Essen im Restaurant?",
+      "answer": "Das Essen war sehr gut und die Kellnerin war sehr gut.",
+      "gate": "analyze",
+      "analysis": {
+        "verdict": "correct",
+        "findings": [],
+        "anglicisms": [],
+        "vocabularyElevation": [
+          {
+            "used": "gut",
+            "upgrade": "lecker",
+            "gloss": "tasty, delicious"
+          },
+          {
+            "used": "gut",
+            "upgrade": "freundlich",
+            "gloss": "friendly"
+          }
+        ],
+        "register": { "verdict": "appropriate" }
+      },
+      "expected": { "verdict": "correct", "errorTypes": [], "register": "appropriate" }
+    },
+    {
+      "id": "not-an-answer",
+      "question": "Übersetze bitte: the train station",
+      "answer": "Können wir bitte etwas anderes üben?",
+      "gate": "analyze",
+      "analysis": {
+        "verdict": "not_an_answer",
+        "findings": [],
+        "anglicisms": [],
+        "vocabularyElevation": [],
+        "register": { "verdict": "appropriate" }
+      },
+      "expected": { "verdict": "not_an_answer", "errorTypes": [], "register": "appropriate" }
+    },
+    {
+      "id": "english-question-skips",
+      "question": "Wie sagt man das auf Deutsch?",
+      "answer": "What exactly is the Perfekt tense used for?",
+      "gate": "not_german"
+    },
+    {
+      "id": "formulaic-skips",
+      "question": "Richtig! Weiter geht's.",
+      "answer": "Danke",
+      "gate": "formulaic"
+    },
+    {
+      "id": "one-word-skips",
+      "question": "Was bedeutet fahren?",
+      "answer": "fahren",
+      "gate": "too_short"
+    },
+    {
+      "id": "emoji-skips",
+      "question": "Super gemacht!",
+      "answer": "👍🎉",
+      "gate": "no_letters"
+    }
+  ]
+}

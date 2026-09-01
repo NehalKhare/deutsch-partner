@@ -33,6 +33,7 @@ export const ERROR_TYPES = [
   "plural_form",
   "vocabulary_choice",
   "spelling",
+  "register_formality",
 ] as const;
 
 export const errorTypeSchema = z.enum(ERROR_TYPES);

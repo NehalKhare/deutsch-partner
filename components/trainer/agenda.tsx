@@ -61,6 +61,14 @@ const KINDS: Readonly<
     dot: "bg-die",
     tint: "text-die/90",
   },
+  // Chalk, deliberately: the semantic colours are spoken for, and the accent
+  // marks what is happening now — a culture note is the one line here that is
+  // neither review nor a slip, so it wears the page's own voice.
+  culture_drill: {
+    label: "culture note",
+    dot: "bg-chalk/60",
+    tint: "text-chalk/60",
+  },
   read_the_news: { label: "read today's news", dot: "bg-der", tint: "text-der/90" },
 };
 
@@ -97,11 +105,13 @@ export function TrainerAgenda({ plan, finished }: TrainerAgendaProps) {
           const kind = item.kind ? (KINDS[item.kind] ?? FALLBACK_KIND) : FALLBACK_KIND;
           const now = index === current;
           // A mistake's subject is an English label ("The dative case") and a
-          // grammar drill's is a pattern name; everything else on this list is
-          // German. A screen reader told the wrong language reads teaching as
-          // gibberish.
+          // grammar or culture drill's is a pattern name; everything else on
+          // this list is German. A screen reader told the wrong language reads
+          // teaching as gibberish.
           const german =
-            item.kind !== "correct_the_mistake" && item.kind !== "grammar_drill";
+            item.kind !== "correct_the_mistake" &&
+            item.kind !== "grammar_drill" &&
+            item.kind !== "culture_drill";
 
           return (
             <li

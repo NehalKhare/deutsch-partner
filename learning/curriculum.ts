@@ -24,6 +24,11 @@ export interface CurriculumEntry {
   readonly vocabulary: readonly string[];
   /** Slugs from GRAMMAR_LABELS; the first one leads the level. */
   readonly grammar: readonly string[];
+  /**
+   * Slugs from CULTURE_LABELS: the culture and pragmatics notes this level
+   * teaches — du/Sie, register, politeness. Most levels teach none.
+   */
+  readonly culture?: readonly string[];
   /** What the learner should be able to do, as verb phrases. */
   readonly functions: readonly string[];
 }
@@ -36,6 +41,7 @@ export const CURRICULUM_ENTRIES: readonly CurriculumEntry[] = [
     topic: "daily_life",
     vocabulary: ["hallo", "guten Morgen", "tschüss", "der Name", "heißen", "danke"],
     grammar: ["sein_present", "personal_pronouns_nominative"],
+    culture: ["du_oder_sie"],
     functions: ["greet someone and say goodbye", "give your name and ask for someone else's"],
   },
   {
@@ -92,6 +98,7 @@ export const CURRICULUM_ENTRIES: readonly CurriculumEntry[] = [
     topic: "food",
     vocabulary: ["der Kaffee", "das Wasser", "bestellen", "die Rechnung", "zahlen", "bitte"],
     grammar: ["moechten_present", "accusative_case_objects"],
+    culture: ["bitte_und_danke"],
     functions: ["order a drink and something to eat", "ask for the bill"],
   },
   {
@@ -116,6 +123,7 @@ export const CURRICULUM_ENTRIES: readonly CurriculumEntry[] = [
     topic: "travel",
     vocabulary: ["die Straße", "links", "rechts", "geradeaus", "die Haltestelle", "fragen"],
     grammar: ["dative_prepositions_place", "imperative_formal"],
+    culture: ["fremde_ansprechen"],
     functions: ["ask for directions", "give simple directions"],
   },
   {
@@ -148,6 +156,7 @@ export const CURRICULUM_ENTRIES: readonly CurriculumEntry[] = [
     topic: "health",
     vocabulary: ["müde", "krank", "können", "müssen", "der Termin", "helfen"],
     grammar: ["modal_verbs_koennen_muessen", "negation_nicht_kein"],
+    culture: ["wie_gehts_unter_freunden"],
     functions: ["say how you are feeling", "say what you can and cannot do"],
   },
 
@@ -158,6 +167,7 @@ export const CURRICULUM_ENTRIES: readonly CurriculumEntry[] = [
     topic: "daily_life",
     vocabulary: ["sich verabreden", "absagen", "verschieben", "der Vorschlag", "passen", "leider"],
     grammar: ["dative_case_people", "modal_verb_wollen"],
+    culture: ["puenktlichkeit_und_absagen"],
     functions: ["suggest a time and a place", "turn an invitation down politely"],
   },
   {
@@ -222,6 +232,7 @@ export const CURRICULUM_ENTRIES: readonly CurriculumEntry[] = [
     topic: "work",
     vocabulary: ["die Bewerbung", "der Lebenslauf", "die Stelle", "die Erfahrung", "sich bewerben", "der Anhang"],
     grammar: ["konjunktiv_ii_politeness", "formal_register_sie"],
+    culture: ["schriftliche_anrede"],
     functions: ["make a polite written request", "ask about a job advert"],
   },
   {
@@ -246,6 +257,7 @@ export const CURRICULUM_ENTRIES: readonly CurriculumEntry[] = [
     topic: "daily_life",
     vocabulary: ["umtauschen", "der Kassenbon", "kaputt", "reklamieren", "die Garantie", "zurückgeben"],
     grammar: ["adjective_endings_indefinite", "modal_verb_duerfen"],
+    culture: ["reklamieren_mit_stil"],
     functions: ["explain a problem with a purchase", "ask for your money back"],
   },
   {
@@ -270,6 +282,7 @@ export const CURRICULUM_ENTRIES: readonly CurriculumEntry[] = [
     topic: "daily_life",
     vocabulary: ["sich streiten", "sich vertragen", "vertrauen", "die Beziehung", "sich freuen", "enttäuscht"],
     grammar: ["verbs_with_prepositions", "da_wo_compounds"],
+    culture: ["duzen_anbieten"],
     functions: ["say what you are looking forward to", "describe a disagreement"],
   },
   {
@@ -310,6 +323,7 @@ export const CURRICULUM_ENTRIES: readonly CurriculumEntry[] = [
     topic: "daily_life",
     vocabulary: ["eigentlich", "trotzdem", "deswegen", "zuerst", "schließlich", "außerdem"],
     grammar: ["connectors_deshalb_trotzdem", "word_order_main_clause"],
+    culture: ["smalltalk_themen"],
     functions: ["keep a conversation going", "link several ideas in one turn"],
   },
 
@@ -368,6 +382,7 @@ export const CURRICULUM_ENTRIES: readonly CurriculumEntry[] = [
     topic: "daily_life",
     vocabulary: ["die Bitte", "sich beschweren", "das Anliegen", "dringend", "bedauern", "entgegenkommen"],
     grammar: ["konjunktiv_ii_politeness", "indirect_questions"],
+    culture: ["bitten_abschwaechen"],
     functions: ["make a formal request", "complain in writing"],
   },
   {
@@ -400,6 +415,7 @@ export const CURRICULUM_ENTRIES: readonly CurriculumEntry[] = [
     topic: "work",
     vocabulary: ["der Vertrag", "die Kündigung", "befristet", "die Beförderung", "das Betriebsklima", "die Überstunde"],
     grammar: ["nominalisation", "genitive_case"],
+    culture: ["sie_und_du_im_beruf"],
     functions: ["describe working conditions", "compare two job offers"],
   },
   {
@@ -408,6 +424,7 @@ export const CURRICULUM_ENTRIES: readonly CurriculumEntry[] = [
     topic: "work",
     vocabulary: ["die Stärke", "die Schwäche", "der Werdegang", "sich einarbeiten", "die Herausforderung", "motiviert"],
     grammar: ["subordinate_clause_dass", "konjunktiv_ii_politeness"],
+    culture: ["vorstellungsgespraech_umgangsformen"],
     functions: ["present your strengths honestly", "answer an awkward question"],
   },
   {
@@ -432,6 +449,7 @@ export const CURRICULUM_ENTRIES: readonly CurriculumEntry[] = [
     topic: "daily_life",
     vocabulary: ["das Amt", "die Anmeldung", "das Formular", "die Bescheinigung", "zuständig", "der Antrag"],
     grammar: ["nominalisation", "indirect_questions"],
+    culture: ["amtssprache"],
     functions: ["ask which office is responsible", "query something on a form"],
   },
   {
@@ -520,6 +538,7 @@ export const CURRICULUM_ENTRIES: readonly CurriculumEntry[] = [
     topic: "culture",
     vocabulary: ["die Rücksicht", "die Regel", "das Ehrenamt", "die Gemeinschaft", "sich engagieren", "der Konflikt"],
     grammar: ["purpose_clause_um_zu", "impersonal_man"],
+    culture: ["direktheit_verstehen"],
     functions: ["explain an unwritten rule", "argue for taking part"],
   },
   {
@@ -552,6 +571,7 @@ export const CURRICULUM_ENTRIES: readonly CurriculumEntry[] = [
     topic: "culture",
     vocabulary: ["der Brauch", "die Region", "der Dialekt", "die Tracht", "stattfinden", "überliefern"],
     grammar: ["relative_clauses_nominative_accusative", "passive_present"],
+    culture: ["regionale_gruesse"],
     functions: ["explain a tradition to an outsider", "describe a regional difference"],
   },
   {

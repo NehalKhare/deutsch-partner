@@ -12,11 +12,21 @@ const pattern = {
   difficulty: 3,
   commonMistakes: ["mit der Zug"],
   relatedPatternKeys: ["case_dative"],
+  category: "grammar",
 };
 
 describe("grammarPatternSchema", () => {
   it("accepts a valid pattern", () => {
     expect(grammarPatternSchema.parse(pattern).key).toBe("dative_after_mit");
+  });
+
+  it("accepts a culture note and keeps the category pair closed", () => {
+    expect(
+      grammarPatternSchema.safeParse({ ...pattern, category: "culture" }).success,
+    ).toBe(true);
+    expect(
+      grammarPatternSchema.safeParse({ ...pattern, category: "vibes" }).success,
+    ).toBe(false);
   });
 
   it("requires at least one example, since a rule without one cannot be taught", () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  CULTURE_SLOTS,
   GRAMMAR_SLOTS,
   composeMixedAgenda,
   type AgendaActivity,
@@ -47,6 +48,7 @@ describe("what a full backlog cannot crowd out", () => {
     const agenda = composeMixedAgenda({
       vocabulary: vocab(20),
       grammar: [mistake, drill],
+      culture: [],
       news,
       size: 8,
     });
@@ -62,6 +64,7 @@ describe("what a full backlog cannot crowd out", () => {
     const agenda = composeMixedAgenda({
       vocabulary: vocab(20),
       grammar: [mistake, drill],
+      culture: [],
       news,
       size: 8,
     });
@@ -90,6 +93,7 @@ describe("what a full backlog cannot crowd out", () => {
     const agenda = composeMixedAgenda({
       vocabulary: vocab(20),
       grammar: [mistake, drill, secondDrill],
+      culture: [],
       news,
       size: 8,
     });
@@ -107,6 +111,7 @@ describe("what an empty pool hands over", () => {
     const agenda = composeMixedAgenda({
       vocabulary: [],
       grammar: [mistake, drill, { ...drill, subject: "sein in the present" }],
+      culture: [],
       news,
       size: 8,
     });
@@ -124,6 +129,7 @@ describe("what an empty pool hands over", () => {
     const agenda = composeMixedAgenda({
       vocabulary: vocab(20),
       grammar: [],
+      culture: [],
       news,
       size: 8,
     });
@@ -134,7 +140,13 @@ describe("what an empty pool hands over", () => {
 
   it("is empty once everything including the news is covered", () => {
     expect(
-      composeMixedAgenda({ vocabulary: [], grammar: [], news: null, size: 8 }),
+      composeMixedAgenda({
+        vocabulary: [],
+        grammar: [],
+        culture: [],
+        news: null,
+        size: 8,
+      }),
     ).toEqual([]);
   });
 });
@@ -144,6 +156,7 @@ describe("the size is a promise", () => {
     const one = composeMixedAgenda({
       vocabulary: vocab(20),
       grammar: [mistake],
+      culture: [],
       news,
       size: 1,
     });
@@ -155,6 +168,7 @@ describe("the size is a promise", () => {
     const three = composeMixedAgenda({
       vocabulary: vocab(20),
       grammar: [mistake, drill],
+      culture: [],
       news,
       size: 3,
     });
@@ -170,11 +184,109 @@ describe("the size is a promise", () => {
     const four = composeMixedAgenda({
       vocabulary: vocab(20),
       grammar: [mistake, drill],
+      culture: [],
       news,
       size: 4,
     });
 
     expect(four.filter((item) => item.kind === "correct_the_mistake")).toHaveLength(1);
     expect(four.at(-1)?.kind).toBe("read_the_news");
+  });
+});
+
+describe("the culture slot", () => {
+  const note: AgendaActivity = {
+    kind: "culture_drill",
+    subject: "Choice between du and Sie",
+    prompt: "Sie for strangers, du for friends and family.",
+    patternKey: "du_oder_sie",
+  };
+  const secondNote: AgendaActivity = {
+    ...note,
+    subject: "Offer of the du",
+    patternKey: "duzen_anbieten",
+  };
+
+  it("takes one slot on a full agenda, after grammar and before the news", () => {
+    const agenda = composeMixedAgenda({
+      vocabulary: vocab(20),
+      grammar: [mistake, drill],
+      culture: [note],
+      news,
+      size: 8,
+    });
+
+    expect(agenda.map((item) => item.kind)).toEqual([
+      "recall",
+      "recall",
+      "recall",
+      "recall",
+      "correct_the_mistake",
+      "grammar_drill",
+      "culture_drill",
+      "read_the_news",
+    ]);
+  });
+
+  it("never exceeds its slots while vocabulary remains", () => {
+    const agenda = composeMixedAgenda({
+      vocabulary: vocab(20),
+      grammar: [mistake, drill],
+      culture: [note, secondNote],
+      news,
+      size: 8,
+    });
+
+    expect(agenda.filter((item) => item.kind === "culture_drill")).toHaveLength(
+      CULTURE_SLOTS,
+    );
+  });
+
+  it("gets no slot on a short sitting, which stays mostly vocabulary", () => {
+    const three = composeMixedAgenda({
+      vocabulary: vocab(20),
+      grammar: [mistake, drill],
+      culture: [note],
+      news,
+      size: 3,
+    });
+
+    expect(three.map((item) => item.kind)).toEqual([
+      "recall",
+      "recall",
+      "read_the_news",
+    ]);
+  });
+
+  it("backfills the room vocabulary and grammar left empty", () => {
+    const agenda = composeMixedAgenda({
+      vocabulary: [],
+      grammar: [mistake],
+      culture: [note, secondNote],
+      news,
+      size: 8,
+    });
+
+    expect(agenda.map((item) => item.subject)).toEqual([
+      "The dative case",
+      "Choice between du and Sie",
+      "Offer of the du",
+      "Nachrichten von heute",
+    ]);
+  });
+
+  it("changes nothing when the level teaches no culture", () => {
+    // The regression assertion for every session before this slot existed:
+    // an empty culture pool collapses the arithmetic to what it always was.
+    const agenda = composeMixedAgenda({
+      vocabulary: vocab(20),
+      grammar: [mistake, drill],
+      culture: [],
+      news,
+      size: 8,
+    });
+
+    expect(agenda.filter((item) => item.kind === "recall")).toHaveLength(5);
+    expect(agenda.at(-1)?.kind).toBe("read_the_news");
   });
 });

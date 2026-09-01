@@ -62,6 +62,7 @@ export const GRAMMAR_CATALOGUE: readonly GrammarSeedItem[] = Object.freeze(
       difficulty: difficultyFor(seed, miniLevel),
       commonMistakes: seed.mistakes,
       relatedPatternKeys: seed.related,
+      category: "grammar" as const,
     };
   }),
 );

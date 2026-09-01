@@ -94,6 +94,7 @@ function toDefinition(
     focus: entry.focus,
     targetVocabulary: entry.vocabulary,
     targetGrammar: entry.grammar,
+    targetCulture: entry.culture ?? [],
     conversationFunctions: entry.functions,
     comprehensionGoals: [
       `Follow a ${LISTENING[cefr]} conversation about ${entry.focus}.`,

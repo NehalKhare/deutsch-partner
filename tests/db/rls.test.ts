@@ -278,3 +278,50 @@ describe("thread deletion", () => {
     }
   });
 });
+
+describe("trainer_mined_sessions", () => {
+  it("lets a learner claim only their own session key", async () => {
+    await expect(
+      database.asLearner(ALICE, () =>
+        database.db.query(
+          `insert into public.trainer_mined_sessions (learner_id, session_key)
+           values ($1, 'claim-own')`,
+          [ALICE],
+        ),
+      ),
+    ).resolves.toBeDefined();
+
+    await expect(
+      database.asLearner(ALICE, () =>
+        database.db.query(
+          `insert into public.trainer_mined_sessions (learner_id, session_key)
+           values ($1, 'claim-other')`,
+          [BOB],
+        ),
+      ),
+    ).rejects.toThrow(/row-level security/i);
+  });
+
+  it("hides another learner's claims", async () => {
+    const rows = await database.asLearner(BOB, async () =>
+      (
+        await database.db.query(
+          `select learner_id from public.trainer_mined_sessions`,
+        )
+      ).rows as Array<{ learner_id: string }>,
+    );
+
+    expect(rows.every((row) => row.learner_id === BOB)).toBe(true);
+  });
+
+  it("grants a learner no update or delete at all — a claim is permanent", async () => {
+    await expect(
+      database.asLearner(ALICE, () =>
+        database.db.query(
+          `delete from public.trainer_mined_sessions where learner_id = $1`,
+          [ALICE],
+        ),
+      ),
+    ).rejects.toThrow(/permission denied/i);
+  });
+});

@@ -77,6 +77,29 @@ describe("how a recurring mistake is taught", () => {
   });
 });
 
+describe("what a teach item may be", () => {
+  it("covers a culture note as well as a grammar pattern", () => {
+    expect(prompt).toMatch(/grammar pattern or a culture note/i);
+    expect(prompt).toMatch(/formality, register and politeness/i);
+  });
+});
+
+describe("how the machine check is consumed", () => {
+  it("is used for judging and never surfaced to the learner", () => {
+    expect(prompt).toMatch(/<answer_analysis>/);
+    expect(prompt).toMatch(/never mention the check/i);
+    expect(prompt).toMatch(/never invent findings/i);
+    expect(prompt).toMatch(/when it is absent, judge as before/i);
+  });
+});
+
+describe("how an item is closed", () => {
+  it("records and advances in one call", () => {
+    expect(prompt).toMatch(/close the item and fetch the next in one call/i);
+    expect(prompt).toMatch(/"record" naming that subject/i);
+  });
+});
+
 describe("how long one item may take", () => {
   it("caps an item at three exchanges", () => {
     expect(prompt).toMatch(/at most three exchanges/i);
