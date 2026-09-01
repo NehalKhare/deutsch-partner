@@ -11,6 +11,13 @@
 export interface ModelRequest {
   readonly modelId: string;
   readonly system: string;
+  /**
+   * The leading part of `system` that is byte-identical across requests for
+   * the same task, or null when the caller makes no such promise. A transport
+   * whose provider supports prefix caching may mark it; it never alters what
+   * the model reads.
+   */
+  readonly systemStablePrefix: string | null;
   readonly user: string;
   /** Always sent to the provider. Layer 2 of the ceiling enforcement. */
   readonly maxOutputTokens: number;

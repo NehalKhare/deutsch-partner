@@ -112,11 +112,38 @@ export function createOpenRouterTransport(
     "X-Title": options.appName,
   });
 
+  /**
+   * The system message: one plain string, or — when the request is bound for
+   * an Anthropic model and the caller marked a stable prefix — two text parts
+   * with a cache_control breakpoint on the stable one. OpenRouter forwards
+   * the marker to Anthropic, whose prompt cache then serves the marked prefix
+   * at a tenth of the input price on every request inside the cache TTL; no
+   * other provider is sent the marker. Below Anthropic's minimum cacheable
+   * length the marker is a documented no-op, so it is never a surcharge.
+   */
+  const systemContent = (request: ModelRequest) => {
+    const prefix = request.systemStablePrefix;
+    if (
+      prefix === null ||
+      prefix.length === 0 ||
+      !request.modelId.startsWith("anthropic/") ||
+      !request.system.startsWith(prefix)
+    ) {
+      return request.system;
+    }
+
+    const rest = request.system.slice(prefix.length);
+    return [
+      { type: "text", text: prefix, cache_control: { type: "ephemeral" } },
+      ...(rest.length > 0 ? [{ type: "text", text: rest }] : []),
+    ];
+  };
+
   const body = (request: ModelRequest, stream: boolean) =>
     JSON.stringify({
       model: request.modelId,
       messages: [
-        { role: "system", content: request.system },
+        { role: "system", content: systemContent(request) },
         { role: "user", content: request.user },
       ],
       // Layer 2 of the ceiling enforcement. Never omitted.

@@ -261,7 +261,7 @@ export async function handleTrainerTurn(
   try {
     const outcome = await runTrainerTurn(
       {
-        models: ladder.map((candidate) => candidate.model),
+        models: ladder,
         tools: [...local.tools, ...mcp.tools],
         logger,
       },

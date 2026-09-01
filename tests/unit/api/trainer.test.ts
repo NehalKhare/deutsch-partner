@@ -203,6 +203,7 @@ function fakeDeps(options: {
         model: candidate,
         modelId: "vendor/fake",
         tier: "mid" as const,
+        cacheMarks: false,
       })),
     loadMcp: async () => NO_MCP,
     mined: {

@@ -150,6 +150,20 @@ function withoutArticle(subject: string): string | null {
   return article ? subject.slice(article.length + 1) : null;
 }
 
+/** Whether two subjects name the same agenda item, article and case aside. */
+function sameSubject(a: string, b: string): boolean {
+  const forms = (subject: string): string[] => {
+    const whole = subject.trim();
+    const bare = withoutArticle(whole);
+    return bare === null
+      ? [whole.toLowerCase()]
+      : [whole.toLowerCase(), bare.toLowerCase()];
+  };
+
+  const those = forms(b);
+  return forms(a).some((form) => those.includes(form));
+}
+
 export function createTrainerTools(deps: TrainerToolDeps): TrainerTools {
   const logger = deps.logger ?? nullLogger;
   const now = deps.now ?? (() => new Date());
@@ -165,6 +179,10 @@ export function createTrainerTools(deps: TrainerToolDeps): TrainerTools {
   const grammarKeyFor = new Map<string, string>();
   let agenda: TrainerAgendaItem[] | null = null;
   let complete = false;
+  // Whether this request has already handed the model the agenda listing.
+  // Once is the contract: the listing exists to be read out when a session
+  // opens, and a model handed the list again mid-session re-announces it.
+  let announced = false;
 
   /**
    * The level's target grammar and culture notes, as drills.
@@ -275,7 +293,7 @@ export function createTrainerTools(deps: TrainerToolDeps): TrainerTools {
    * turn that judged an answer but forgot the second one re-asked the same
    * question. One body, so both doors close the item the same way.
    */
-  const recordOutcome = async (
+  const recordFor = async (
     subject: string,
     outcome: "correct" | "incorrect",
   ): Promise<string> => {
@@ -420,6 +438,38 @@ export function createTrainerTools(deps: TrainerToolDeps): TrainerTools {
       outcome,
       closed: true,
     });
+  };
+
+  /**
+   * Both record doors go through here: a record is only ever about an item
+   * the session's agenda still has open. A learner got stuck in a loop when
+   * the model drilled the open item but recorded it under the name of one
+   * already closed ("Spelling", again and again) — a no-op close, so the same
+   * item came back forever — and junk names ("Ich bin neun Jahre alt.") were
+   * closed into the covered list the sidebar shows. When the session has a
+   * promised agenda, a record naming no open item is applied to the first
+   * open one — the item being worked — so every judged answer advances the
+   * session, and the response says what was actually recorded.
+   */
+  const recordOutcome = async (
+    subject: string,
+    outcome: "correct" | "incorrect",
+  ): Promise<string> => {
+    const requested = subject.trim();
+    const open = (deps.pinned ?? []).filter((line) => !covered.has(line));
+    const redirected =
+      open.length > 0 && !open.some((line) => sameSubject(line, requested));
+
+    const raw = await recordFor(redirected ? open[0] : requested, outcome);
+    if (!redirected) return raw;
+    try {
+      return JSON.stringify({
+        ...(JSON.parse(raw) as Record<string, unknown>),
+        redirectedFrom: requested,
+      });
+    } catch {
+      return raw;
+    }
   };
 
   const getReviewSession = tool(
@@ -573,10 +623,12 @@ export function createTrainerTools(deps: TrainerToolDeps): TrainerTools {
         const pinned = deps.pinned ?? [];
         let remaining =
           pinned.length > 0 ? resolveFromPin(pinned) : composeFresh();
+        let composedFresh = pinned.length === 0;
         // A pin that resolves to nothing before anything was covered is a
         // stale promise from another day, not a finished session: start over.
         if (remaining.length === 0 && pinned.length > 0 && covered.size === 0) {
           remaining = composeFresh();
+          composedFresh = true;
         }
 
         agenda = remaining.map((activity) => ({
@@ -593,6 +645,15 @@ export function createTrainerTools(deps: TrainerToolDeps): TrainerTools {
         // a strange way to say hello.
         complete = remaining.length === 0 && covered.size > 0;
 
+        // The opening, and only the opening, is handed the listing: a fresh
+        // agenda for a session with nothing done yet and no answer to record.
+        // Mid-session calls get counts and the next item — a model handed the
+        // full list again read it as a session starting and announced it all
+        // over, mid-quiz, to a learner whose screen already shows the plan.
+        const opening =
+          composedFresh && record === undefined && covered.size === 0 && !announced;
+        if (opening) announced = true;
+
         const next = remaining[0];
         return JSON.stringify({
           // What the record shortcut did, so the model never has to guess
@@ -602,14 +663,19 @@ export function createTrainerTools(deps: TrainerToolDeps): TrainerTools {
           weakCount: plan.weak.length,
           completed: covered.size,
           remaining: remaining.length,
-          // The list to read out: subjects only. An agenda that carried its
-          // prompts would be a quiz the learner can read ahead of, and a
-          // model handed eight questions asks all eight.
-          agenda: agenda.map((line, index) => ({
-            position: index + 1,
-            kind: line.kind,
-            subject: line.subject,
-          })),
+          // The list to read out, on the opening call alone: subjects only.
+          // An agenda that carried its prompts would be a quiz the learner
+          // can read ahead of, and a model handed eight questions asks all
+          // eight.
+          ...(opening
+            ? {
+                agenda: agenda.map((line, index) => ({
+                  position: index + 1,
+                  kind: line.kind,
+                  subject: line.subject,
+                })),
+              }
+            : {}),
           // One question, and only the next one. The model cannot ask an item
           // twice because it is never handed one the session has closed.
           // One question, and only the next one — under a field name that

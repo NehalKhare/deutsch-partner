@@ -200,6 +200,42 @@ describe("the ladder", () => {
     expect(ladder[0]?.modelId).toBe("vendor/custom-model");
     expect(ladder.length).toBeGreaterThan(1);
   });
+
+  it("grants cache marks to anthropic candidates and to nobody else", () => {
+    // The agent loop asks each candidate whether it may mark its prompt for
+    // the provider's prefix cache; only Anthropic models read the marks.
+    const { accounting } = fakeAccounting();
+    const context = {
+      requestId: "33333333-3333-4333-8333-333333333333",
+      userIdHash: "hash-user",
+      turn: createTurnBudget(0.05),
+      prompt: IDENTITY,
+    };
+
+    const anthropicFirst = createTrainerModelLadder(
+      {
+        env: parseEnv({
+          OPENROUTER_API_KEY: "openrouter-key-long-enough",
+          [TIER_OVERRIDE]: "anthropic/custom-model",
+        }),
+        accounting,
+      },
+      context,
+    );
+    expect(anthropicFirst[0]?.cacheMarks).toBe(true);
+
+    const vendorFirst = createTrainerModelLadder(
+      {
+        env: parseEnv({
+          OPENROUTER_API_KEY: "openrouter-key-long-enough",
+          [TIER_OVERRIDE]: "vendor/custom-model",
+        }),
+        accounting,
+      },
+      context,
+    );
+    expect(vendorFirst[0]?.cacheMarks).toBe(false);
+  });
 });
 
 describe("what counts as a model without an endpoint", () => {

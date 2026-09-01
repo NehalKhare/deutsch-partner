@@ -6,6 +6,7 @@ import type { ModelRequest } from "@/lib/ai/gateway/transport";
 const request = (over: Partial<ModelRequest> = {}): ModelRequest => ({
   modelId: "vendor/model",
   system: "Du bist eine Deutschlehrerin.",
+  systemStablePrefix: null,
   user: "Guten Tag!",
   maxOutputTokens: 300,
   signal: new AbortController().signal,
@@ -130,6 +131,99 @@ describe("openrouter transport", () => {
     const body = JSON.parse(String((fetchImpl.mock.calls[0] as [string, RequestInit])[1].body));
 
     expect(body.response_format).toEqual({ type: "json_object" });
+  });
+});
+
+describe("prompt caching", () => {
+  const STABLE = "Du bist eine Deutschlehrerin.";
+  const VOLATILE = "\n\nDer Lernende steht bei A2, Mini-Level 3.";
+  const SYSTEM = `${STABLE}${VOLATILE}`;
+
+  const sentSystem = (fetchImpl: ReturnType<typeof vi.fn>) => {
+    const body = JSON.parse(String((fetchImpl.mock.calls[0] as [string, RequestInit])[1].body));
+    return body.messages[0] as { role: string; content: unknown };
+  };
+
+  it("marks the stable prefix for an anthropic model, keeping the text whole", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(COMPLETION));
+    await transportWith(fetchImpl).complete(
+      request({
+        modelId: "anthropic/claude-sonnet-5",
+        system: SYSTEM,
+        systemStablePrefix: STABLE,
+      }),
+    );
+
+    const system = sentSystem(fetchImpl);
+    expect(system.role).toBe("system");
+    expect(system.content).toEqual([
+      { type: "text", text: STABLE, cache_control: { type: "ephemeral" } },
+      { type: "text", text: VOLATILE },
+    ]);
+  });
+
+  it("marks a system prompt that is stable in its entirety as one part", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(COMPLETION));
+    await transportWith(fetchImpl).complete(
+      request({
+        modelId: "anthropic/claude-sonnet-5",
+        system: STABLE,
+        systemStablePrefix: STABLE,
+      }),
+    );
+
+    expect(sentSystem(fetchImpl).content).toEqual([
+      { type: "text", text: STABLE, cache_control: { type: "ephemeral" } },
+    ]);
+  });
+
+  it("sends any other vendor the plain string, marker-free", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(COMPLETION));
+    await transportWith(fetchImpl).complete(
+      request({
+        modelId: "openai/gpt-5.4",
+        system: SYSTEM,
+        systemStablePrefix: STABLE,
+      }),
+    );
+
+    expect(sentSystem(fetchImpl).content).toBe(SYSTEM);
+  });
+
+  it("sends the plain string when no stable prefix was promised", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(COMPLETION));
+    await transportWith(fetchImpl).complete(
+      request({ modelId: "anthropic/claude-sonnet-5", system: SYSTEM }),
+    );
+
+    expect(sentSystem(fetchImpl).content).toBe(SYSTEM);
+  });
+
+  it("refuses to mark text that is not actually a prefix of the system", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(COMPLETION));
+    await transportWith(fetchImpl).complete(
+      request({
+        modelId: "anthropic/claude-sonnet-5",
+        system: SYSTEM,
+        systemStablePrefix: "Etwas ganz anderes.",
+      }),
+    );
+
+    expect(sentSystem(fetchImpl).content).toBe(SYSTEM);
+  });
+
+  it("marks a streaming request the same way", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(sseResponse(["data: [DONE]\n\n"]));
+    await transportWith(fetchImpl).stream(
+      request({
+        modelId: "anthropic/claude-sonnet-5",
+        system: SYSTEM,
+        systemStablePrefix: STABLE,
+      }),
+    );
+
+    const [first] = sentSystem(fetchImpl).content as { cache_control?: unknown }[];
+    expect(first.cache_control).toEqual({ type: "ephemeral" });
   });
 });
 

@@ -105,6 +105,17 @@ describe("how long one item may take", () => {
     expect(prompt).toMatch(/at most three exchanges/i);
   });
 
+  it("ends an item the moment it is answered correctly", () => {
+    // The stall the screenshot showed: right answer after right answer, each
+    // rewarded with a fresh exercise, and the agenda never advancing.
+    expect(prompt).toMatch(/a correct answer ends it at once/i);
+    expect(prompt).toMatch(/never set another exercise for an item the learner just got right/i);
+  });
+
+  it("names the record by the agenda's own subject", () => {
+    expect(prompt).toMatch(/name the subject exactly as the agenda does/i);
+  });
+
   it("hands a stubborn item to a later session instead of stalling", () => {
     expect(prompt).toMatch(/come back in a later session/i);
     expect(prompt).toMatch(/never let the session stall/i);

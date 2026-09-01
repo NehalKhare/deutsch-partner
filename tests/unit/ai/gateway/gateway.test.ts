@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 import type { BudgetSnapshot, BudgetSource } from "@/lib/ai/gateway/budget-gate";
 import { createTurnBudget } from "@/lib/ai/gateway/budgeter";
@@ -711,6 +712,50 @@ describe("a ledger that is itself down", () => {
 
     expect(outcome.ok).toBe(true);
     expect(lines.join("\n")).toContain("ledger.write_failed");
+  });
+});
+
+describe("prompt caching", () => {
+  it("hands the transport the stable prefix for a conversation task", async () => {
+    const { gateway, transport } = harness();
+
+    await gateway.complete(
+      spec,
+      { ...PROMPT, systemStable: "Du bist eine Deutschlehrerin." },
+      CONTEXT,
+    );
+
+    expect(sentRequests(transport)[0].systemStablePrefix).toBe(
+      "Du bist eine Deutschlehrerin.",
+    );
+  });
+
+  it("hands the transport nothing when the prompt promises no stable prefix", async () => {
+    const { gateway, transport } = harness();
+
+    await gateway.complete(spec, PROMPT, CONTEXT);
+
+    expect(sentRequests(transport)[0].systemStablePrefix).toBeNull();
+  });
+
+  it("never marks a prefix for a one-shot task", async () => {
+    // A summary runs once per thread compaction: a cache entry written for it
+    // is never read back, so its stable prefix must not reach the transport.
+    const oneShot = callSpecFor("summarization.thread", {
+      timeoutMs: 5_000,
+      outputSchema: z.object({ summary: z.string() }),
+    });
+    if (!oneShot.ok) throw new Error("fixture spec did not build");
+
+    const { gateway, transport } = harness();
+
+    await gateway.complete(
+      oneShot.data,
+      { ...PROMPT, systemStable: "Du bist eine Deutschlehrerin." },
+      CONTEXT,
+    );
+
+    expect(sentRequests(transport)[0].systemStablePrefix).toBeNull();
   });
 });
 

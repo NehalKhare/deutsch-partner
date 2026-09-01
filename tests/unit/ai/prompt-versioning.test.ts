@@ -208,7 +208,20 @@ describe("the trainer's prompt", () => {
     // introduced "struggles" background and the three-exchange cap; version 5
     // taught corrections in English with model sentences; version 4 ended the
     // agenda on a reading item.)
-    "trainer.session@8": "fa24d7b3",
+    // Version 9: the agenda is announced exactly once. The tool now returns
+    // the listing on the opening call alone, and the protocol says so — plus
+    // two behaviours the screenshot of a wandering session demanded: once the
+    // session is open, get_review_session is only called with "record" (a
+    // bare call repeats the same next item), and an empty agenda gets a
+    // concrete offer — grammar, vocabulary, a rule explained, or the news —
+    // rather than "something else".
+    "trainer.session@9": "c99e21ed",
+    // Version 10: a session that stalled on one item forced two rules. A
+    // correct answer ends an item at once — recorded, never rewarded with
+    // another exercise — and a record must name the subject exactly as the
+    // agenda does, because the tool now applies a record naming anything
+    // else (a closed item, a learner's sentence) to the open item instead.
+    "trainer.session@10": "b5a6a8b8",
   };
 
   it("matches its recorded fingerprint", () => {

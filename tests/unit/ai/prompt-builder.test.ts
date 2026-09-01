@@ -595,3 +595,36 @@ describe("the shedding ladder, driven directly", () => {
     expect(shedOne(base)).toBeNull();
   });
 });
+
+describe("the stable system prefix", () => {
+  it("is a byte-for-byte prefix of the system prompt", () => {
+    const prompt = built();
+
+    expect(prompt.systemStable.length).toBeGreaterThan(0);
+    expect(prompt.system.startsWith(prompt.systemStable)).toBe(true);
+  });
+
+  it("is identical across turns whose caller data differs", () => {
+    const first = built();
+    const second = built({
+      userMessage: "Wo ist der Schalter?",
+      threadSummary: "A completely different conversation so far.",
+      recentMessages: [{ role: "user", content: "Hallo?" }],
+      learner: {
+        ...request().learner,
+        theme: "Im Restaurant",
+        dueVocabulary: ["die Speisekarte"],
+      },
+    });
+
+    expect(second.systemStable).toBe(first.systemStable);
+  });
+
+  it("carries no caller data a provider cache would key on", () => {
+    const prompt = built();
+
+    expect(prompt.systemStable).not.toContain("Am Bahnhof");
+    expect(prompt.systemStable).not.toContain("missed a connection");
+    expect(prompt.systemStable).not.toContain("Frankfurt");
+  });
+});

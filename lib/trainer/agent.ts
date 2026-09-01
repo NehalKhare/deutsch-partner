@@ -2,8 +2,10 @@ import type { BaseChatModel } from "@langchain/core/language_models/chat_models"
 import {
   AIMessage,
   HumanMessage,
+  SystemMessage,
   ToolMessage,
   type BaseMessage,
+  type MessageContent,
 } from "@langchain/core/messages";
 import type { StructuredToolInterface } from "@langchain/core/tools";
 import { createAgent } from "langchain";
@@ -82,7 +84,14 @@ function summarize(tool: string | undefined, content: unknown): string {
       const remaining = Number(parsed.remaining ?? 0);
       const completed = Number(parsed.completed ?? 0);
       const left = `${remaining} item${remaining === 1 ? "" : "s"} to go`;
-      return completed > 0 ? `${left}, ${completed} done` : left;
+      const progress = completed > 0 ? `${left}, ${completed} done` : left;
+      // The record shortcut closes an item and fetches the next in one call;
+      // a receipt that only said "looked up" read as a second lookup.
+      const note = summarize(
+        "record_review_outcome",
+        JSON.stringify(parsed.record ?? null),
+      );
+      return note.length > 0 ? `${note} · ${progress}` : progress;
     }
     case "record_review_outcome": {
       if (parsed.recorded === true && typeof parsed.subject === "string") {
@@ -104,16 +113,46 @@ function summarize(tool: string | undefined, content: unknown): string {
   }
 }
 
-function toLangChainHistory(history: readonly TranscriptMessage[]): BaseMessage[] {
-  return history.map((line) =>
-    line.role === "user" ? new HumanMessage(line.content) : new AIMessage(line.content),
-  );
+/**
+ * One text part carrying an Anthropic prompt-cache breakpoint. OpenRouter
+ * forwards the marker to Anthropic models, whose cache then serves everything
+ * up to the marked block at a tenth of the input price on every invocation
+ * inside the cache's five-minute lifetime — and this loop re-sends the same
+ * prefix on every one of its up-to-seven invocations per turn.
+ */
+const cacheMarked = (text: string): MessageContent => [
+  { type: "text", text, cache_control: { type: "ephemeral" } },
+];
+
+function toLangChainHistory(
+  history: readonly TranscriptMessage[],
+  markLast: boolean,
+): BaseMessage[] {
+  return history.map((line, index) => {
+    // The last history message is where the next turn's prefix still matches
+    // this one — everything after it (this turn's message and tool rounds) is
+    // rebuilt from the client transcript — so it carries the cross-turn mark.
+    const content =
+      markLast && index === history.length - 1
+        ? cacheMarked(line.content)
+        : line.content;
+
+    return line.role === "user"
+      ? new HumanMessage({ content })
+      : new AIMessage({ content });
+  });
+}
+
+export interface TrainerCandidate {
+  readonly model: BaseChatModel;
+  /** Whether this model's provider reads cache marks; the registry decides. */
+  readonly cacheMarks: boolean;
 }
 
 export async function runTrainerTurn(
   deps: {
     /** The tier's ladder: the primary first, same-tier fallbacks after. */
-    readonly models: readonly BaseChatModel[];
+    readonly models: readonly TrainerCandidate[];
     readonly tools: StructuredToolInterface[];
     readonly logger?: Logger;
   },
@@ -144,19 +183,29 @@ export async function runTrainerTurn(
       : `${turn.message}\n\n${turn.analysis}`;
 
   let result: { messages: BaseMessage[] } | null = null;
-  for (const [attempt, model] of deps.models.entries()) {
+  for (const [attempt, candidate] of deps.models.entries()) {
+    // Cache breakpoints, only for a model whose provider reads them: the
+    // system prompt (shared by every trainer session in the product), the
+    // last history message (what the next turn's prefix still matches), and
+    // the current message (what invocations two onward re-read verbatim).
+    const marked = candidate.cacheMarks;
+
     const agent = createAgent({
-      model,
+      model: candidate.model,
       tools: deps.tools,
-      systemPrompt: trainerSystemPrompt(),
+      systemPrompt: marked
+        ? new SystemMessage({ content: cacheMarked(trainerSystemPrompt()) })
+        : trainerSystemPrompt(),
     });
 
     try {
       result = await agent.invoke(
         {
           messages: [
-            ...toLangChainHistory(turn.history),
-            new HumanMessage(message),
+            ...toLangChainHistory(turn.history, marked),
+            marked
+              ? new HumanMessage({ content: cacheMarked(message) })
+              : new HumanMessage(message),
           ],
         },
         // Each step is a model call plus a tool round; the +1 is the final

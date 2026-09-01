@@ -6,6 +6,7 @@ import {
 } from "@/lib/ai/gateway/budget-gate";
 import { preflight, type TurnBudget } from "@/lib/ai/gateway/budgeter";
 import {
+  CONVERSATION_TASKS,
   modelCallSpecSchema,
   withLoweredOutputCeiling,
   type ModelCallSpec,
@@ -51,6 +52,12 @@ import { nullLogger, type Logger } from "@/lib/observability/logger";
 
 export interface GatewayPrompt {
   readonly system: string;
+  /**
+   * The leading part of `system` the builder promises is byte-identical on
+   * every call of this task — the versioned blocks, not caller data. Optional
+   * because a prompt assembled outside the catalogue makes no such promise.
+   */
+  readonly systemStable?: string;
   readonly user: string;
   /** Counted by the prompt builder. Checked here before anything is sent. */
   readonly inputTokens: number;
@@ -354,6 +361,14 @@ export function createModelGateway(deps: GatewayDeps): ModelGateway {
     return {
       modelId,
       system: prompt.system,
+      // Only a conversation recurs inside a provider cache's lifetime: the
+      // same stable prefix returns turn after turn. A one-shot task would pay
+      // the cache-write surcharge for an entry nothing reads back, so its
+      // prefix is never marked.
+      systemStablePrefix:
+        CONVERSATION_TASKS.has(spec.task) && prompt.systemStable
+          ? prompt.systemStable
+          : null,
       user: prompt.user,
       // Layer 2. Always sent, never omitted.
       maxOutputTokens: spec.maxOutputTokens,

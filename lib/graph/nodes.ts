@@ -424,6 +424,7 @@ export async function generate(
     spec.data,
     {
       system: built.prompt.system,
+      systemStable: built.prompt.systemStable,
       user: built.prompt.user,
       inputTokens: built.prompt.tokens.total,
     },

@@ -64,6 +64,7 @@ function fakeDeps(
     cultureLevel?: boolean;
     cefr?: "A1" | "A2" | "B1";
     covered?: readonly string[];
+    pinned?: readonly string[];
   } = {},
 ) {
   const upserts: Array<Record<string, unknown>> = [];
@@ -81,6 +82,7 @@ function fakeDeps(
   const deps: TrainerToolDeps = {
     learnerId: LEARNER,
     covered: options.covered ?? [],
+    pinned: options.pinned,
     userIdHash: "hash-alice",
     requestId: "33333333-3333-4333-8333-333333333333",
     now: () => new Date("2026-08-24T12:00:00.000Z"),
@@ -270,11 +272,12 @@ describe("the session agenda", () => {
     const result = await toolNamed(tools, "get_review_session").invoke({});
     const parsed = JSON.parse(result as string) as {
       completed: number;
-      agenda: Array<{ subject: string }>;
       next: { subject: string } | null;
     };
 
-    expect(parsed.agenda.map((line) => line.subject)).toEqual([
+    // The listing the client shows skips the finished item; the model's own
+    // response carries no listing at all mid-session (see "announced once").
+    expect(tools.agenda()?.map((line) => line.subject)).toEqual([
       "The dative case",
       "Dative prepositions",
       "Nachrichten von heute",
@@ -298,7 +301,6 @@ describe("the session agenda", () => {
 
     expect(JSON.parse(result as string)).toMatchObject({
       remaining: 0,
-      agenda: [],
       next: null,
       sessionComplete: true,
     });
@@ -440,6 +442,77 @@ describe("the session agenda", () => {
     expect(createTrainerTools(deps).agenda()).toBeNull();
   });
 
+  it("hands the listing to the opening call and never to a mid-session one", async () => {
+    // The screenshot bug: mid-quiz, the model called get_review_session
+    // without "record", was handed the full agenda again, read that as a
+    // session starting, and re-announced the plan and re-asked the open item.
+    // Mid-session the listing simply is not in the response any more.
+    const { deps } = fakeDeps({
+      covered: ["fahren"],
+      pinned: [
+        "fahren",
+        "The dative case",
+        "Dative prepositions",
+        "Nachrichten von heute",
+      ],
+    });
+    const tools = createTrainerTools(deps);
+
+    const parsed = JSON.parse(
+      (await toolNamed(tools, "get_review_session").invoke({})) as string,
+    ) as { agenda?: unknown; next: { subject: string } | null };
+
+    expect(parsed.agenda).toBeUndefined();
+    expect(parsed.next?.subject).toBe("The dative case");
+    // The client still gets the plan to draw the sidebar from.
+    expect(tools.agenda()?.length).toBe(3);
+  });
+
+  it("hands the listing out once per request, even to a repeated bare call", async () => {
+    const { deps } = fakeDeps();
+    const tools = createTrainerTools(deps);
+    const review = toolNamed(tools, "get_review_session");
+
+    const first = JSON.parse((await review.invoke({})) as string) as {
+      agenda?: unknown;
+    };
+    const second = JSON.parse((await review.invoke({})) as string) as {
+      agenda?: unknown;
+    };
+
+    expect(Array.isArray(first.agenda)).toBe(true);
+    expect(second.agenda).toBeUndefined();
+  });
+
+  it("withholds the listing from a call that records an answer", async () => {
+    // A call carrying "record" is an answer being judged, never an opening,
+    // however empty the covered list was when the request began.
+    const { deps } = fakeDeps();
+    const tools = createTrainerTools(deps);
+
+    const parsed = JSON.parse(
+      (await toolNamed(tools, "get_review_session").invoke({
+        record: { subject: "fahren", outcome: "correct" },
+      })) as string,
+    ) as { agenda?: unknown; next: { subject: string } | null };
+
+    expect(parsed.agenda).toBeUndefined();
+    expect(parsed.next?.subject).toBe("The dative case");
+  });
+
+  it("hands the listing out again when a stale pin forces a fresh agenda", async () => {
+    // A pin from another day that resolves to nothing is a new session in
+    // all but name: the recomposed agenda is one the learner has never heard.
+    const { deps } = fakeDeps({ pinned: ["längst vergangen"] });
+    const tools = createTrainerTools(deps);
+
+    const parsed = JSON.parse(
+      (await toolNamed(tools, "get_review_session").invoke({})) as string,
+    ) as { agenda?: Array<{ subject: string }> };
+
+    expect(parsed.agenda?.map((line) => line.subject)).toContain("fahren");
+  });
+
   it("neutralises fence-shaped text in the item it hands over", async () => {
     const { deps } = fakeDeps({ covered: ["fahren"] });
     const tools = createTrainerTools(deps);
@@ -457,6 +530,87 @@ describe("the session agenda", () => {
     const result = await toolNamed(tools, "get_review_session").invoke({});
 
     expect(JSON.parse(result as string)).toEqual({ error: "unavailable" });
+  });
+});
+
+describe("a record that names no open item", () => {
+  const PIN = [
+    "fahren",
+    "The dative case",
+    "Dative prepositions",
+    "Nachrichten von heute",
+  ];
+
+  it("is applied to the open item, so the session advances instead of looping", async () => {
+    // The stuck-session screenshot: the model drilled the open item but kept
+    // recording it under the name of an item already closed — a no-op close,
+    // the same "next" forever, and a learner answering correctly into a wall.
+    const { deps, resolved } = fakeDeps({ covered: ["fahren"], pinned: PIN });
+    const tools = createTrainerTools(deps);
+
+    const parsed = JSON.parse(
+      (await toolNamed(tools, "get_review_session").invoke({
+        record: { subject: "fahren", outcome: "correct" },
+      })) as string,
+    ) as {
+      record: { subject: string; redirectedFrom?: string };
+      next: { subject: string } | null;
+    };
+
+    expect(parsed.record).toMatchObject({
+      subject: "The dative case",
+      redirectedFrom: "fahren",
+    });
+    // The mistake the learner just fixed is really resolved, under its own id.
+    expect(resolved).toEqual([ERROR_ID]);
+    expect(parsed.next?.subject).toBe("Dative prepositions");
+  });
+
+  it("keeps invented subjects out of the covered list", async () => {
+    const { deps } = fakeDeps({ covered: ["fahren"], pinned: PIN });
+    const tools = createTrainerTools(deps);
+
+    await toolNamed(tools, "get_review_session").invoke({
+      record: { subject: "Ich bin neun Jahre alt.", outcome: "correct" },
+    });
+
+    expect(tools.covered()).toContain("The dative case");
+    expect(tools.covered()).not.toContain("Ich bin neun Jahre alt.");
+  });
+
+  it("redirects the standalone record tool the same way", async () => {
+    const { deps } = fakeDeps({ pinned: ["fahren", "The dative case"] });
+    const tools = createTrainerTools(deps);
+
+    const parsed = JSON.parse(
+      (await toolNamed(tools, "record_review_outcome").invoke({
+        subject: "Quatsch",
+        outcome: "incorrect",
+      })) as string,
+    ) as Record<string, unknown>;
+
+    expect(parsed).toMatchObject({
+      subject: "fahren",
+      outcome: "incorrect",
+      redirectedFrom: "Quatsch",
+    });
+    expect(tools.covered()).toEqual(["fahren"]);
+  });
+
+  it("leaves a record alone when it names an open item by another spelling", async () => {
+    const { deps, upserts } = fakeDeps({ pinned: ["der Tisch"] });
+    const tools = createTrainerTools(deps);
+
+    const parsed = JSON.parse(
+      (await toolNamed(tools, "record_review_outcome").invoke({
+        subject: "Tisch",
+        outcome: "correct",
+      })) as string,
+    ) as Record<string, unknown>;
+
+    expect(parsed).toMatchObject({ recorded: true, subject: "der Tisch" });
+    expect(parsed.redirectedFrom).toBeUndefined();
+    expect(upserts).toHaveLength(1);
   });
 });
 

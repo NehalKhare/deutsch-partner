@@ -83,6 +83,13 @@ export interface AssembledPrompt {
   readonly tier: string;
   /** Blocks 1 to 11: what goes in the system role. */
   readonly system: string;
+  /**
+   * The leading run of system blocks that comes from the catalogue entry
+   * rather than from caller data (the versioned blocks), so it is
+   * byte-identical on every turn of the task. A prefix of `system`, offered
+   * to the gateway so a provider's prompt cache can cover it.
+   */
+  readonly systemStable: string;
   /** Block 12: what goes in the user role, already fenced. */
   readonly user: string;
   readonly blocks: readonly RenderedBlock[];
@@ -390,6 +397,17 @@ export function buildPrompt(
     STABLE_PREFIX_BLOCKS.includes(block.id),
   );
 
+  // The leading run only, because a cache key is a byte-for-byte prefix: a
+  // versioned block that rendered after a caller-data block would sit past
+  // the first volatile byte and be worthless to a provider's cache.
+  let stableCount = 0;
+  while (
+    stableCount < systemBlocks.length &&
+    VERSIONED_BLOCKS.includes(systemBlocks[stableCount].id)
+  ) {
+    stableCount += 1;
+  }
+
   return {
     ok: true,
     prompt: {
@@ -398,6 +416,10 @@ export function buildPrompt(
       task: entry.task,
       tier: entry.tier,
       system: systemBlocks.map((block) => block.text).join("\n\n"),
+      systemStable: systemBlocks
+        .slice(0, stableCount)
+        .map((block) => block.text)
+        .join("\n\n"),
       user: userBlock?.text ?? "",
       blocks,
       tokens: {

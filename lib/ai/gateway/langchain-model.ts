@@ -69,6 +69,13 @@ export interface TrainerModel {
   readonly model: BaseChatModel;
   readonly modelId: string;
   readonly tier: Tier;
+  /**
+   * Whether this candidate's provider reads Anthropic-style cache_control
+   * marks, which OpenRouter forwards. Decided here because which vendor
+   * serves a tier is the registry's business, not the agent loop's: the loop
+   * only asks "may I mark my prompt for the prefix cache".
+   */
+  readonly cacheMarks: boolean;
 }
 
 /** Thrown between iterations once the request's euro ceiling is spent. */
@@ -354,7 +361,12 @@ export function createTrainerModelLadder(
       ],
     });
 
-    return { model, modelId, tier: route.tier };
+    return {
+      model,
+      modelId,
+      tier: route.tier,
+      cacheMarks: modelId.startsWith("anthropic/"),
+    };
   });
 }
 
