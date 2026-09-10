@@ -90,11 +90,17 @@ describe("describing a contract", () => {
   });
 
   it("stops recursing rather than unrolling an arbitrarily deep shape", () => {
+    // Seven objects deep. The limit sits at six nesting steps, which is what
+    // the deepest real contract needs and one more than any of them has.
     const deep = z.object({
-      a: z.object({ b: z.object({ c: z.object({ d: z.object({ e: z.string() }) }) }) }),
+      a: z.object({
+        b: z.object({
+          c: z.object({ d: z.object({ e: z.object({ f: z.object({ g: z.string() }) }) }) }),
+        }),
+      }),
     });
 
-    expect(describeContract(deep)).not.toContain("e:");
+    expect(describeContract(deep)).not.toContain("g:");
   });
 
   it("describes something that is not an object at all", () => {
@@ -108,6 +114,29 @@ describe("describing a contract", () => {
 
     expect(text).toMatch(/nothing else/i);
     expect(text).toMatch(/no code fence/i);
+  });
+});
+
+describe("nested shapes", () => {
+  it("names the fields of an object inside a list inside a wrapped list", () => {
+    // The market-research shape: a wrapper object, a list of findings, each
+    // carrying a list of evidence objects. At a depth limit of four the
+    // innermost object rendered as a bare "object", and the model, told
+    // nothing about its fields, invented one — every reply then failed
+    // validation on the same key.
+    const contract = describeContract(
+      z.strictObject({
+        findings: z.array(
+          z.strictObject({
+            title: z.string(),
+            evidence: z.array(z.strictObject({ url: z.string(), finding: z.string() })).max(2),
+          }),
+        ),
+      }),
+    );
+
+    expect(contract).toContain("finding: string");
+    expect(contract).not.toMatch(/\[object\]/);
   });
 });
 

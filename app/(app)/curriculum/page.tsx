@@ -5,7 +5,7 @@ import {
   practiseMiniLevelAction,
   switchLevelAction,
 } from "@/app/(app)/curriculum/actions";
-import { PendingButton } from "@/components/curriculum/pending-button";
+import { PendingButton } from "@/components/ui/pending-button";
 import { SwitchLevel } from "@/components/curriculum/switch-level";
 import {
   ARTICLE_COLOR,

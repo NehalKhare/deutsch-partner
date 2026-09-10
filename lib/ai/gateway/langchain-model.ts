@@ -16,14 +16,14 @@ import { nullLogger, type Logger } from "@/lib/observability/logger";
 import type { UsageAccounting } from "@/repositories/usage-repository";
 
 /**
- * The LangChain face of the gateway, for the Trainer's agent loop.
+ * The LangChain face of the gateway, for the tool-calling agent loops.
  *
- * The Trainer runs a tool-calling agent, and the gateway's own transport
- * deliberately cannot express one: it speaks exactly two roles and no tools,
- * because the tutor pipeline needs nothing more. Rather than widen the most
- * guarded interface in the codebase for one feature, this file builds a
- * LangChain chat model inside the gateway boundary — the only place a model
- * SDK may live — with the same discipline every other call gets:
+ * The Trainer runs a tool-calling agent, and so do the product-ops agents.
+ * The gateway's own transport deliberately cannot express one: it speaks
+ * exactly two roles and no tools, because the tutor pipeline needs nothing
+ * more. Rather than widen the most guarded interface in the codebase, this
+ * file builds a LangChain chat model inside the gateway boundary — the only
+ * place a model SDK may live — with the same discipline every other call gets:
  *
  *   - the model id comes from the registry, resolved by tier, never named here
  *   - the tier and both token ceilings come from the task table
@@ -63,7 +63,17 @@ export interface TrainerModelContext {
   /** The per-request euro ceiling; every invocation records into it. */
   readonly turn: TurnBudget;
   readonly prompt: PromptIdentity;
+  /**
+   * Which task this model speaks for. It decides the tier, both ceilings and
+   * the task column on every ledger row. Absent means the Trainer, which is
+   * the caller this file was written for and the one with no other way to
+   * say so.
+   */
+  readonly task?: TaskId;
 }
+
+/** The same context, named for callers that are not the Trainer. */
+export type TaskModelContext = TrainerModelContext & { readonly task: TaskId };
 
 export interface TrainerModel {
   readonly model: BaseChatModel;
@@ -81,10 +91,13 @@ export interface TrainerModel {
 /** Thrown between iterations once the request's euro ceiling is spent. */
 export class TrainerBudgetExhausted extends Error {
   constructor(maxEur: number) {
-    super(`the trainer request reached its ${maxEur} euro ceiling`);
+    super(`the agent request reached its ${maxEur} euro ceiling`);
     this.name = "TrainerBudgetExhausted";
   }
 }
+
+/** The name every agent loop should catch it by; the class predates them. */
+export const ModelBudgetExhausted = TrainerBudgetExhausted;
 
 interface UsageFigures {
   readonly inputTokens: number;
@@ -240,7 +253,7 @@ class LedgerCallback extends BaseCallbackHandler {
       userIdHash: this.context.userIdHash,
       threadId: null,
       messageId: null,
-      task: TRAINER_TASK,
+      task: this.context.task ?? TRAINER_TASK,
       tier: this.identity.tier,
       promptName: this.context.prompt.name,
       promptVersion: this.context.prompt.version,
@@ -268,7 +281,8 @@ class LedgerCallback extends BaseCallbackHandler {
       costEur: priced.costEur,
     });
 
-    this.logger.info("trainer.model_call", {
+    this.logger.info("agent.model_call", {
+      task: this.context.task ?? TRAINER_TASK,
       requestId: this.context.requestId,
       userIdHash: this.context.userIdHash,
       status,
@@ -314,7 +328,7 @@ export function createTrainerModelLadder(
   const now = deps.now ?? (() => new Date());
 
   const apiKey = requireEnvValue(deps.env.OPENROUTER_API_KEY, "OPENROUTER_API_KEY");
-  const route = routeFor(TRAINER_TASK);
+  const route = routeFor(context.task ?? TRAINER_TASK);
   const registry = createModelRegistry(registryOverridesFromEnv(deps.env));
 
   const accountant = createAccountant({
@@ -330,11 +344,17 @@ export function createTrainerModelLadder(
     now,
   });
 
+  const effort = registry.forTier(route.tier).reasoningEffort;
+
   return registry.candidates(route.tier).map((modelId): TrainerModel => {
     const model = new ChatOpenAI({
       apiKey,
       model: modelId,
       maxTokens: route.maxOutputTokens,
+      // The tier's, as the chat transport sends it. A small-ceiling tier on a
+      // reasoning model otherwise spends every agent turn thinking and emits
+      // neither a tool call nor an answer.
+      ...(effort ? { reasoning: { effort } } : {}),
       timeout: CALL_TIMEOUT_MS,
       maxRetries: 1,
       configuration: {
@@ -368,6 +388,20 @@ export function createTrainerModelLadder(
       cacheMarks: modelId.startsWith("anthropic/"),
     };
   });
+}
+
+/**
+ * The ladder for any task in the routing table.
+ *
+ * The product-ops agents call this. Same registry, same ledger, same budget
+ * callback; the only thing the task changes is which tier answers and what
+ * the ledger row says it was for.
+ */
+export function createTaskModelLadder(
+  deps: TrainerModelDeps,
+  context: TaskModelContext,
+): readonly TrainerModel[] {
+  return createTrainerModelLadder(deps, context);
 }
 
 /** The tier's primary alone, for callers that need exactly one model. */

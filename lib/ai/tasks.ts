@@ -52,6 +52,12 @@ export const TASK_IDS = [
   "trainer.session",
   "trainer.answer_analysis",
   "trainer.session_mining",
+  "productops.market_research",
+  "productops.proposal_synthesis",
+  "productops.prd_sections",
+  "productops.code_plan",
+  "productops.code_edit",
+  "productops.context_summary",
 ] as const;
 
 export const taskIdSchema = z.enum(TASK_IDS);
@@ -62,6 +68,19 @@ export interface TokenCeilings {
   readonly maxOutputTokens: number;
 }
 
+/**
+ * Grounding a call in a web search.
+ *
+ * A property of the task rather than of the call spec, deliberately. Search
+ * results are billed per result, so a caller that could switch this on would
+ * be a caller that could spend money the routing table never budgeted for —
+ * the same reasoning that keeps a caller from choosing its own tier. Only the
+ * tasks named here may search, and none of them chooses how much.
+ */
+export interface WebSearch {
+  readonly maxResults: number;
+}
+
 export interface TaskRoute extends TokenCeilings {
   readonly tier: Tier;
   /**
@@ -69,6 +88,7 @@ export interface TaskRoute extends TokenCeilings {
    * are too. Everything else uses one pair.
    */
   readonly byLevel?: Readonly<Record<CEFRLevel, TokenCeilings>>;
+  readonly webSearch?: WebSearch;
 }
 
 const ROUTES: Readonly<Record<TaskId, TaskRoute>> = {
@@ -147,10 +167,112 @@ const ROUTES: Readonly<Record<TaskId, TaskRoute>> = {
    * rather than buying mid-tier accuracy for aggregate counters.
    */
   "trainer.session_mining": { tier: "cheap", maxInputTokens: 4000, maxOutputTokens: 600 },
+  /**
+   * Market research: extraction from web results against a closed schema.
+   *
+   * On the cheap tier because that is what this is — pulling structured
+   * findings out of text somebody else wrote — and not the judgement that
+   * comes after it. The tier is also the one with the largest input allowance
+   * in the registry, 8000, which is exactly what a page of search results
+   * needs; the mid tier would cost more and read less. Output is small on
+   * purpose: at most two findings per call, so a scan is many cheap calls with
+   * their own ledger rows and their own idempotency key rather than one long
+   * call that is all-or-nothing.
+   *
+   * The promotion path is the documented one. If the golden set shows this
+   * tier failing schema validation often enough that repairs cost more than
+   * mid-tier calls would, it moves up with that measurement attached.
+   */
+  "productops.market_research": {
+    tier: "cheap",
+    maxInputTokens: 8000,
+    maxOutputTokens: 600,
+    webSearch: { maxResults: 5 },
+  },
+  /**
+   * The product judgement this whole feature exists to produce. Rare, offline,
+   * and the thing a human reviews — the same profile as assessment.milestone,
+   * which is the other task on this tier.
+   */
+  "productops.proposal_synthesis": {
+    tier: "reasoning",
+    maxInputTokens: 12_000,
+    maxOutputTokens: 2000,
+  },
+  /**
+   * Only the sections of a PRD that need judgement. The document around them
+   * is rendered from the approved proposal's own columns, so this asks for
+   * user stories and acceptance criteria rather than for a restatement of what
+   * is already stored.
+   *
+   * Mid rather than strong: this is structured output derived from a proposal
+   * a person has already approved, which is what the mid tier is described
+   * for. Reaching up to strong would be reaching without evidence, and the
+   * strong tier is also the streaming hot path, which this is not.
+   */
+  "productops.prd_sections": {
+    tier: "mid",
+    maxInputTokens: 6000,
+    maxOutputTokens: 1000,
+  },
+  /**
+   * Reading the repository and deciding what a change touches. The hardest
+   * reasoning in the product, off every hot path, and the output a person
+   * approves before anything is written.
+   */
+  "productops.code_plan": {
+    tier: "reasoning",
+    maxInputTokens: 12_000,
+    maxOutputTokens: 2000,
+  },
+  /**
+   * One file's worth of anchored edits.
+   *
+   * 2000 output tokens is the reasoning tier's hardMaxOutputTokens and
+   * therefore the most any call in this application may emit. A source file
+   * does not fit in it, which is why domain/product-ops.ts models an edit as
+   * an anchor and a replacement and will not accept whole contents for a file
+   * that already exists. The ceiling came first; the shape followed.
+   */
+  "productops.code_edit": {
+    tier: "reasoning",
+    maxInputTokens: 12_000,
+    maxOutputTokens: 2000,
+  },
+  /**
+   * Folding an agent's older tool results into a summary when its transcript
+   * nears the task's input ceiling. Compression, not judgement: the cheap
+   * tier, with the same input allowance the research task has, because what
+   * it reads is exactly the fenced tool output the agent read.
+   */
+  "productops.context_summary": {
+    tier: "cheap",
+    maxInputTokens: 8000,
+    maxOutputTokens: 400,
+  },
 };
 
 export function routeFor(task: TaskId): TaskRoute {
   return ROUTES[task];
+}
+
+/** The product-ops workflow's own tasks, named so tests can sweep them. */
+export const PRODUCT_OPS_TASKS = TASK_IDS.filter((task) =>
+  task.startsWith("productops."),
+);
+
+/**
+ * Every task allowed to reach the web, derived from the table rather than
+ * listed twice. A task acquires this by having a webSearch route, which is a
+ * deliberate edit here, not a flag a call site can pass.
+ */
+export const WEB_SEARCH_TASKS: readonly TaskId[] = TASK_IDS.filter(
+  (task) => ROUTES[task].webSearch !== undefined,
+);
+
+/** The search a task is permitted, or null for the great majority that is none. */
+export function webSearchFor(task: TaskId): WebSearch | null {
+  return ROUTES[task].webSearch ?? null;
 }
 
 /** The ceilings a task runs under, narrowed by level where the task varies. */

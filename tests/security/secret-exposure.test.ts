@@ -10,6 +10,9 @@ const SERVER_SECRET_NAMES = [
   "SUPABASE_SECRET_KEY",
   "OPENROUTER_API_KEY",
   "LANGSMITH_API_KEY",
+  // The credential a coding agent's work is ultimately pushed with. It is read
+  // by a CLI script and by nothing the browser ever loads.
+  "GITHUB_TOKEN",
 ];
 
 /** Modules that must never be imported from a Client Component. */

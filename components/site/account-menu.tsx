@@ -11,8 +11,8 @@ import { cn } from "@/lib/utils";
  * The account menu.
  *
  * Everything that is about *you* rather than about learning German: which
- * account you are in, your settings, the operator's spend dashboard if you are
- * one, and the way out. None of those is a room to walk into, so none of them
+ * account you are in, your settings, the operations pages if you are an
+ * operator, and the way out. None of those is a room to walk into, so none of them
  * belongs in the main navigation beside Chat and Catch up — and a sign-out link
  * sitting permanently in the open, one mis-click from ending a session, is the
  * worst of them.
@@ -29,7 +29,7 @@ export interface AccountMenuProps {
   readonly label: string;
   /** Shown in full inside the menu: this is where you check which account. */
   readonly email: string | null;
-  /** Operators get one more item. Decided on the server, never here. */
+  /** Operators get the two operations pages. Decided on the server, never here. */
   readonly isOperator: boolean;
   readonly signOut: () => Promise<void>;
 }
@@ -73,7 +73,12 @@ export function AccountMenu({ label, email, isOperator, signOut }: AccountMenuPr
 
   const links = [
     { href: "/settings", label: "Settings" },
-    ...(isOperator ? [{ href: "/operations/costs", label: "AI spend" }] : []),
+    ...(isOperator
+      ? [
+          { href: "/operations/costs", label: "AI spend" },
+          { href: "/operations/product", label: "Product ops" },
+        ]
+      : []),
   ];
 
   return (

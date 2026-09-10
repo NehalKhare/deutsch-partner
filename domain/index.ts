@@ -16,6 +16,7 @@ export * from "@/domain/learner-error";
 export * from "@/domain/memory";
 export * from "@/domain/performance";
 export * from "@/domain/primitives";
+export * from "@/domain/product-ops";
 export * from "@/domain/recommendation";
 export * from "@/domain/retrieval";
 export * from "@/domain/scenario";

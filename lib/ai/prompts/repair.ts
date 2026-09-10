@@ -23,3 +23,18 @@ export function repairInstruction(issues: readonly string[]): string {
     "Return the corrected JSON object only. Do not explain what went wrong.",
   ].join("\n");
 }
+
+/**
+ * The retry instruction for a reply the output ceiling cut off.
+ *
+ * A different failure from a malformed one: the JSON was probably fine and
+ * simply did not finish, so asking for "the corrected object" would get the
+ * same object cut off in the same place. What helps is asking for less.
+ */
+export function truncationRepairInstruction(): string {
+  return [
+    "",
+    "Your previous response was cut off before it finished, so it could not be parsed.",
+    "Return the same JSON object, shorter: fewer list items and briefer text in each field. Nothing else.",
+  ].join("\n");
+}

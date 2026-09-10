@@ -52,6 +52,7 @@ function gatewayReturning(...texts: string[]) {
         costEur: 0.00046,
         attempts: 1,
         ledgerId: call,
+        citations: [],
       });
     },
     async stream() {
@@ -181,6 +182,7 @@ describe("the prompt it sends", () => {
         costEur: 0,
         attempts: 1,
         ledgerId: 1,
+        citations: [],
       }),
     );
     const evaluator = createEvaluator({
@@ -217,6 +219,7 @@ describe("the prompt it sends", () => {
         costEur: 0,
         attempts: 1,
         ledgerId: 1,
+        citations: [],
       }),
     );
 

@@ -164,6 +164,7 @@ export function fakeGraph(options: FakeOptions = {}) {
             costEur: 0.004,
             attempts: 1,
             ledgerId: 1,
+            citations: [],
           });
         }
       }

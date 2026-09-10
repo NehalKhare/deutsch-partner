@@ -7,6 +7,12 @@ import {
   trainerSystemPrompt,
 } from "@/lib/ai/prompts/trainer";
 import {
+  PRODUCT_OPS_AGENTS,
+  PRODUCT_OPS_AGENT_PROMPT_VERSION,
+  productOpsAgentPromptName,
+  productOpsAgentPromptText,
+} from "@/lib/ai/prompts/product-ops-agents";
+import {
   PROMPT_CATALOGUE,
   behaviorPolicyFor,
   buildOutputContract,
@@ -82,6 +88,18 @@ const RECORDED: Readonly<Record<string, string>> = {
   "summarization.thread@2": "b9388353",
   "classification.intent@2": "34b3ed0b",
   "classification.safety_screen@2": "74efe76c",
+  // Version 1: the five product-ops calls. All machine register, and all five
+  // read untrusted text — search results, internal documents, repository
+  // source — so their versioned text is the identity, safety, data-boundary
+  // and output-contract blocks, and none of it is caller data.
+  // Version 2 (market_research): one finding per call with tighter list caps,
+  // because two did not fit the cheap tier's 600 output tokens — the model
+  // wrote valid JSON and the ceiling cut it off mid-array.
+  "productops.market_research@2": "b9782c34",
+  "productops.proposal_synthesis@1": "acba729e",
+  "productops.prd_sections@1": "bde28746",
+  "productops.code_plan@1": "4f387e2a",
+  "productops.code_edit@1": "74c5f47f",
 };
 
 /**
@@ -229,5 +247,41 @@ describe("the trainer's prompt", () => {
 
     expect(RECORDED_TRAINER[key]).toBeDefined();
     expect(fingerprint(trainerSystemPrompt())).toBe(RECORDED_TRAINER[key]);
+  });
+});
+
+describe("the product-ops agents' prompts", () => {
+  /**
+   * The same lock again, for the four agent prompts. Like the trainer's,
+   * each is a fixed system string handed to a tool-calling loop, so it is
+   * fingerprinted directly; the output contract is generated from the schema
+   * at call time and is covered by the schema tests instead.
+   */
+  const RECORDED_AGENTS: Readonly<Record<string, string>> = {
+    // Version 1: the research agent chooses its own queries and records
+    // findings as it goes; the CPO reads findings and prior proposals through
+    // tools; the planner reads the repository itself; the coder edits through
+    // the validation layer, one file per call.
+    "productops.agent.research@1": "29be1b72",
+    "productops.agent.cpo@1": "78564528",
+    "productops.agent.planner@1": "ba6a7234",
+    "productops.agent.coder@1": "9c299bef",
+  };
+
+  it.each(PRODUCT_OPS_AGENTS)("%s matches its recorded fingerprint", (agent) => {
+    const key = `${productOpsAgentPromptName(agent)}@${PRODUCT_OPS_AGENT_PROMPT_VERSION[agent]}`;
+
+    expect(RECORDED_AGENTS[key]).toBeDefined();
+    expect(fingerprint(productOpsAgentPromptText(agent))).toBe(RECORDED_AGENTS[key]);
+  });
+
+  it("records nothing for an agent that no longer exists", () => {
+    const live = new Set(
+      PRODUCT_OPS_AGENTS.map(
+        (agent) => `${productOpsAgentPromptName(agent)}@${PRODUCT_OPS_AGENT_PROMPT_VERSION[agent]}`,
+      ),
+    );
+
+    expect(Object.keys(RECORDED_AGENTS).filter((key) => !live.has(key))).toEqual([]);
   });
 });

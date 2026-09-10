@@ -27,13 +27,14 @@ import { estimateUsd, resolveRate, type PricingStore } from "@/lib/ai/gateway/pr
 import { downgradeTier, type ModelRegistry } from "@/lib/ai/gateway/registry";
 import { guardStream, type StreamGuardResult } from "@/lib/ai/gateway/stream-guard";
 import type {
+  Citation,
   CompletionResponse,
   ModelRequest,
   ModelTransport,
   ProviderUsage,
   StreamResponse,
 } from "@/lib/ai/gateway/transport";
-import type { Tier } from "@/lib/ai/tasks";
+import { webSearchFor, type Tier } from "@/lib/ai/tasks";
 import { nullLogger, type Logger } from "@/lib/observability/logger";
 
 /**
@@ -49,6 +50,14 @@ import { nullLogger, type Logger } from "@/lib/observability/logger";
  * a tier, or a ceiling, and they cannot skip the accounting, because there is
  * no path to a provider that goes around this file.
  */
+
+/**
+ * Re-exported because it is part of what a caller reads off an outcome, and
+ * the module it is declared in is behind the boundary a CI test enforces: a
+ * caller holding a ModelTransport could dispatch without a spec, a budget
+ * check or a ledger row. The type travels; the transport does not.
+ */
+export type { Citation } from "@/lib/ai/gateway/transport";
 
 export interface GatewayPrompt {
   readonly system: string;
@@ -93,6 +102,16 @@ export interface CompletionOutcome {
   readonly costEur: number;
   readonly attempts: number;
   readonly ledgerId: number | null;
+  /**
+   * The sources the provider says it consulted, empty for the great majority
+   * of calls that searched for nothing. Always an array, so a caller never has
+   * to tell an absent field from an empty one.
+   *
+   * Untrusted, like anything else that came from outside: a citation is fenced
+   * before it reaches another prompt, and its scheme is checked before it is
+   * rendered as a link.
+   */
+  readonly citations: readonly Citation[];
 }
 
 export interface StreamOutcome {
@@ -374,6 +393,13 @@ export function createModelGateway(deps: GatewayDeps): ModelGateway {
       maxOutputTokens: spec.maxOutputTokens,
       signal,
       structured: spec.outputSchema !== undefined,
+      // From the routing table, never from the caller. A search is billed per
+      // result, so the same reasoning that stops a caller choosing its own
+      // tier stops it switching this on.
+      webSearch: webSearchFor(spec.task),
+      // The tier's, so a schema-bound extractor on a reasoning model answers
+      // instead of thinking its whole ceiling away.
+      reasoningEffort: deps.registry.forTier(spec.tier).reasoningEffort ?? null,
     };
   }
 
@@ -470,10 +496,12 @@ export function createModelGateway(deps: GatewayDeps): ModelGateway {
             requestFor(admitted.spec, prompt, attempt.modelId, abort.signal),
           );
 
+          const truncated = response.truncated ?? false;
+
           const recorded = await recordAttempt(admitted.spec, context, attempt, admitted, {
             status: "ok",
             usage: response.usage,
-            truncated: false,
+            truncated,
             latencyMs: Date.now() - started,
             firstTokenMs: response.firstTokenMs,
             errorCode: null,
@@ -481,7 +509,7 @@ export function createModelGateway(deps: GatewayDeps): ModelGateway {
 
           return gatewayOk<CompletionOutcome>({
             text: response.text,
-            truncated: false,
+            truncated,
             degraded: admitted.degraded,
             tier: attempt.tier,
             modelIdResolved: response.usage.modelIdResolved,
@@ -491,6 +519,7 @@ export function createModelGateway(deps: GatewayDeps): ModelGateway {
             costEur: recorded.costEur,
             attempts: attempt.attemptNumber,
             ledgerId: recorded.id,
+            citations: response.citations ?? [],
           });
         } catch (error) {
           lastFailure = failureFor(error, abort);
@@ -653,6 +682,11 @@ export function createModelGateway(deps: GatewayDeps): ModelGateway {
           costEur: recorded.costEur,
           attempts: attempt.attemptNumber,
           ledgerId: recorded.id,
+          // Always empty: a streaming task is a conversation task, and no
+          // conversation task is granted a web search. A test locks that, so
+          // this is a consequence of the routing table rather than an omission
+          // waiting to be noticed.
+          citations: [],
         };
       }
 

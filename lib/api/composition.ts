@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import "server-only";
 
 import { after } from "next/server";
@@ -40,9 +42,14 @@ import {
   createSecretKeySupabaseClient,
   createServerSupabaseClient,
 } from "@/lib/supabase/server-client";
-import { createTrainerModelLadder } from "@/lib/ai/gateway/langchain-model";
+import {
+  createTaskModelLadder,
+  createTrainerModelLadder,
+} from "@/lib/ai/gateway/langchain-model";
 import { loadMcpTools } from "@/lib/trainer/mcp";
 import type { TrainerDeps } from "@/lib/api/trainer";
+import type { WorkflowDeps } from "@/lib/product-ops/workflow";
+import { createLocalRepositoryBrowser } from "@/lib/product-ops/browser";
 import { createConversationRepository } from "@/repositories/conversation-repository";
 import { createEmbeddingCache } from "@/repositories/ingestion-repository";
 import { createGrammarRepository } from "@/repositories/grammar-repository";
@@ -50,6 +57,10 @@ import { createLearnerErrorRepository } from "@/repositories/learner-error-repos
 import { createMinedSessionRepository } from "@/repositories/mined-session-repository";
 import { createLearnerRepository } from "@/repositories/learner-repository";
 import { createPerformanceRepository } from "@/repositories/performance-repository";
+import {
+  createProductOpsRepository,
+  type ProductOpsRepository,
+} from "@/repositories/product-ops-repository";
 import { createKnowledgeSearch } from "@/repositories/retrieval-repository";
 import {
   createScenarioRepository,
@@ -166,6 +177,91 @@ export function createVoiceProviders(): VoiceProviders | null {
     speechToText: createOpenRouterSpeechToText(options),
     textToSpeech: createOpenRouterTextToSpeech(options),
   };
+}
+
+// --- product ops ------------------------------------------------------------
+
+/**
+ * The operator workflow's dependencies.
+ *
+ * Everything here rides the secret-key client, and not for convenience: the
+ * product-ops tables have RLS enabled with no policy at all, so the
+ * request-scoped client would be refused outright rather than return an empty
+ * board. The authorization that matters happens before this is called — the
+ * route's operator check, and the action's own — and the tables' privileges
+ * are the layer behind it.
+ *
+ * No workspace. The server has no checkout, so the four stages that touch a
+ * repository defer to the CLI worker; that is a property of this composition
+ * rather than of the orchestrator.
+ */
+export interface ProductOpsReader {
+  readonly runs: ProductOpsRepository;
+  readonly logger: Logger;
+}
+
+function productOpsLogger(env: AppEnv): Logger {
+  return createLogger({
+    base: { service: "product-ops", environment: env.NODE_ENV },
+  });
+}
+
+/** For a page. Reads the board and nothing else, and needs no model key. */
+export function createProductOpsReader(): ProductOpsReader {
+  const env = serverEnv();
+  const client = createSecretKeySupabaseClient() as unknown as DatabaseClient;
+
+  return {
+    runs: createProductOpsRepository(client),
+    logger: productOpsLogger(env),
+  };
+}
+
+export interface ProductOpsGraph extends ProductOpsReader {
+  readonly workflow: WorkflowDeps;
+}
+
+/**
+ * For an action that advances a run. Demands the model key, which is why it is
+ * separate: a page that only reads the board should still render on a
+ * deployment with no key configured.
+ */
+export function createProductOpsGraph(): ProductOpsGraph {
+  const env = serverEnv();
+  const logger = productOpsLogger(env);
+  const client = createSecretKeySupabaseClient() as unknown as DatabaseClient;
+  const runs = createProductOpsRepository(client);
+
+  // The agents' models: the same ledger and budget discipline the Trainer's
+  // loop gets, keyed by the product-ops task each agent runs as.
+  const accounting = createUsageAccounting(client, logger);
+
+  return {
+    runs,
+    logger,
+    workflow: {
+      runs,
+      gateway: createGateway(client, env, logger),
+      models: (context) => createTaskModelLadder({ env, accounting, logger }, context),
+      browser: repositoryBrowserOrNull() ?? undefined,
+      logger,
+    },
+  };
+}
+
+/**
+ * The repository the server can read, if it is running beside one.
+ *
+ * In development the working directory is the checkout, so the planner can
+ * read it and the plan is produced in the pipeline. A deployment without a
+ * checkout has no browser, and the planning stage says so rather than
+ * guessing at files.
+ */
+function repositoryBrowserOrNull() {
+  const root = process.cwd();
+  return existsSync(join(root, "AGENTS.md")) && existsSync(join(root, "package.json"))
+    ? createLocalRepositoryBrowser({ root })
+    : null;
 }
 
 export interface RequestGraph {

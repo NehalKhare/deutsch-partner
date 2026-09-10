@@ -290,7 +290,7 @@ application code says:  "this is a conversation.turn"
 task table    →  tier: strong,  ceilings: 4000 in / 300 out at A1
       │
       ▼
-registry      →  anthropic/claude-sonnet-5, falling back to openai/gpt-5.4
+registry      →  openai/gpt-5.4, falling back to google/gemini-3.8-flash
       │
       ▼
 OpenRouter    →  one API for every chat and embedding model

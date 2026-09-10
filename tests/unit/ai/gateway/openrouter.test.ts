@@ -11,6 +11,7 @@ const request = (over: Partial<ModelRequest> = {}): ModelRequest => ({
   maxOutputTokens: 300,
   signal: new AbortController().signal,
   structured: false,
+  webSearch: null,
   ...over,
 });
 
@@ -329,5 +330,206 @@ describe("openrouter streaming", () => {
     );
 
     await expect(transport.stream(request())).rejects.toThrow(/429/);
+  });
+});
+
+describe("web search", () => {
+  const WITH_CITATIONS = {
+    ...COMPLETION,
+    choices: [
+      {
+        message: {
+          content: "Nurses report a vocabulary gap.",
+          annotations: [
+            {
+              type: "url_citation",
+              url_citation: {
+                url: "https://example.test/thread/1",
+                title: "Medical German thread",
+                content: "twelve replies",
+              },
+            },
+          ],
+        },
+      },
+    ],
+  };
+
+  function bodyOf(fetchImpl: ReturnType<typeof vi.fn>) {
+    const [, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    return JSON.parse(String(init.body));
+  }
+
+  it("sends no plugin when the task may not search", async () => {
+    // The default for every task in the product but one. An accidental plugin
+    // here is a charge per result on a call that never asked to search.
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(COMPLETION));
+    await transportWith(fetchImpl).complete(request({ webSearch: null }));
+
+    expect(bodyOf(fetchImpl).plugins).toBeUndefined();
+  });
+
+  it("sends the tier's reasoning effort when the registry sets one", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(COMPLETION));
+    await transportWith(fetchImpl).complete(request({ reasoningEffort: "minimal" }));
+
+    expect(bodyOf(fetchImpl).reasoning).toEqual({ effort: "minimal" });
+  });
+
+  it("sends no reasoning field when the tier leaves it to the model", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(COMPLETION));
+    await transportWith(fetchImpl).complete(request({ reasoningEffort: null }));
+
+    expect(bodyOf(fetchImpl).reasoning).toBeUndefined();
+  });
+
+  it("reports a reply the ceiling cut off as truncated", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      jsonResponse({
+        ...COMPLETION,
+        choices: [{ finish_reason: "length", message: { content: '{"findings": [{"title": "cut' } }],
+      }),
+    );
+
+    const response = await transportWith(fetchImpl).complete(request());
+
+    expect(response.truncated).toBe(true);
+  });
+
+  it("reports a reply the model finished itself as not truncated", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      jsonResponse({ ...COMPLETION, choices: [{ finish_reason: "stop", message: { content: "{}" } }] }),
+    );
+
+    const response = await transportWith(fetchImpl).complete(request());
+
+    expect(response.truncated).toBe(false);
+  });
+
+  it("names a reply whose ceiling was spent on reasoning before any text", async () => {
+    // A 200 with content null and finish_reason "length" is what a reasoning
+    // model returns when it thought its whole output ceiling away. It is not
+    // an outage, and the error says so by name.
+    const fetchImpl = vi.fn().mockResolvedValue(
+      jsonResponse({
+        ...COMPLETION,
+        choices: [{ finish_reason: "length", message: { content: null, reasoning: "..." } }],
+      }),
+    );
+
+    await expect(transportWith(fetchImpl).complete(request())).rejects.toMatchObject({
+      name: "ReasoningExhaustedCeiling",
+    });
+  });
+
+  it("sends the web plugin with the result count the table set", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(COMPLETION));
+    await transportWith(fetchImpl).complete(
+      request({ webSearch: { maxResults: 5 } }),
+    );
+
+    expect(bodyOf(fetchImpl).plugins).toEqual([{ id: "web", max_results: 5 }]);
+  });
+
+  it("returns the citations the provider actually reported", async () => {
+    // Real annotations rather than urls the model wrote into its own output:
+    // a model asked for a source can invent one, and the evidence on a
+    // proposal is the part a reviewer trusts most.
+    const transport = transportWith(
+      vi.fn().mockResolvedValue(jsonResponse(WITH_CITATIONS)),
+    );
+
+    const response = await transport.complete(
+      request({ webSearch: { maxResults: 5 } }),
+    );
+
+    expect(response.citations).toEqual([
+      {
+        url: "https://example.test/thread/1",
+        title: "Medical German thread",
+      },
+    ]);
+  });
+
+  it("reports no citations when the provider sends none", async () => {
+    const transport = transportWith(vi.fn().mockResolvedValue(jsonResponse(COMPLETION)));
+
+    const response = await transport.complete(request());
+
+    expect(response.citations).toEqual([]);
+  });
+
+  it("ignores an annotation of a kind it does not understand", async () => {
+    const transport = transportWith(
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          ...COMPLETION,
+          choices: [
+            {
+              message: {
+                content: "x",
+                annotations: [{ type: "file_citation", file_citation: {} }],
+              },
+            },
+          ],
+        }),
+      ),
+    );
+
+    const response = await transport.complete(request());
+
+    expect(response.citations).toEqual([]);
+  });
+
+  it("keeps the completion when an annotation is malformed", async () => {
+    // A shape change in the citation field must not lose the reply that came
+    // with it. The text is the expensive part.
+    const transport = transportWith(
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          ...COMPLETION,
+          choices: [
+            {
+              message: {
+                content: "Nurses report a vocabulary gap.",
+                annotations: [{ type: "url_citation", url_citation: { url: 42 } }],
+              },
+            },
+          ],
+        }),
+      ),
+    );
+
+    const response = await transport.complete(request());
+
+    expect(response.text).toBe("Nurses report a vocabulary gap.");
+    expect(response.citations).toEqual([]);
+  });
+
+  it("drops a citation whose url is not a web address", async () => {
+    const transport = transportWith(
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          ...COMPLETION,
+          choices: [
+            {
+              message: {
+                content: "x",
+                annotations: [
+                  {
+                    type: "url_citation",
+                    url_citation: { url: "javascript:alert(1)", title: "n" },
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+      ),
+    );
+
+    const response = await transport.complete(request());
+
+    expect(response.citations).toEqual([]);
   });
 });

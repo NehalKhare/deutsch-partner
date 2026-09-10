@@ -55,6 +55,15 @@ describe("model registry", () => {
     }
   });
 
+  it("tells the small-ceiling tiers not to think before they answer", () => {
+    // Their models are reasoning models and their ceilings are 600 and 50
+    // output tokens. Left to decide, gpt-5-mini spent all 600 reasoning about
+    // a market-research query and returned no text, which the transport
+    // could only report as a provider failure. Extraction needs no thinking.
+    expect(registry.forTier("cheap").reasoningEffort).toBe("minimal");
+    expect(registry.forTier("nano").reasoningEffort).toBe("minimal");
+  });
+
   it("gives every tier headroom for the largest task routed to it", () => {
     // A tier whose hard ceiling sits under a task's ceiling is a call that can
     // only ever be denied, discovered in production rather than here.

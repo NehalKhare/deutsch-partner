@@ -108,7 +108,7 @@ describe("the operator's door", () => {
 
     expect(screen.queryByRole("link", { name: /spend/i })).not.toBeInTheDocument();
     // And not in the markup at all, where a curious learner would find it.
-    expect(document.body.innerHTML).not.toContain("/operations/costs");
+    expect(document.body.innerHTML).not.toContain("/operations/");
   });
 
   it("is there for an operator", async () => {
@@ -118,6 +118,16 @@ describe("the operator's door", () => {
     expect(screen.getByRole("link", { name: /ai spend/i })).toHaveAttribute(
       "href",
       "/operations/costs",
+    );
+  });
+
+  it("opens onto the product workflow too", async () => {
+    renderMenu({ isOperator: true });
+    await openMenu();
+
+    expect(screen.getByRole("link", { name: /product ops/i })).toHaveAttribute(
+      "href",
+      "/operations/product",
     );
   });
 });

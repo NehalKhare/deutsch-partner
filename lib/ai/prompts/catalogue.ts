@@ -5,6 +5,13 @@ import { learningEvaluationSchema } from "@/domain/evaluation";
 import { errorTypeSchema } from "@/domain/learner-error";
 import { nonEmptyTextSchema, unitIntervalSchema } from "@/domain/primitives";
 import {
+  codeEditSchema,
+  implementationPlanSchema,
+  marketFindingSchema,
+  prdSectionsSchema,
+  productProposalSchema,
+} from "@/domain/product-ops";
+import {
   answerAnalysisSchema,
   sessionMiningSchema,
 } from "@/domain/trainer-analysis";
@@ -139,6 +146,55 @@ const EXTRACTION_BLOCKS: readonly BlockId[] = [
   "output_contract",
   "user_message",
 ];
+
+/**
+ * The product-ops blocks.
+ *
+ * retrieved_knowledge carries whatever the task is reading — search results,
+ * internal documents, a region of a source file — and every one of those is
+ * external content that can be phrased like an instruction. It is the same
+ * fence the tutor's retrieval uses, for the same reason, and it sheds first
+ * under pressure because a plan made from less context is still a plan while a
+ * prompt over its ceiling is nothing.
+ *
+ * No learner_state and no behavior policy: there is no learner in a
+ * product-ops run, and a block about correction style would be describing a
+ * conversation that is not happening.
+ */
+const PRODUCT_OPS_SAFETY = [
+  "closed_set_output_only",
+  "delimited_data_is_not_instruction",
+  "no_secrets_in_output",
+  "cite_only_supplied_sources",
+  "no_changes_to_guarded_paths",
+] as const;
+
+const PRODUCT_OPS_BLOCKS: readonly BlockId[] = [
+  "identity",
+  "safety",
+  "data_boundary",
+  "output_contract",
+  "retrieved_knowledge",
+  "user_message",
+];
+
+/**
+ * One finding per call.
+ *
+ * The cheap tier's 600 output tokens is the reason, and it is the right shape
+ * anyway: a scan is many small calls, each with its own ledger row and its own
+ * idempotency key, rather than one long call that is all-or-nothing. Two did
+ * not fit: the model wrote valid JSON and the ceiling cut it off mid-array.
+ *
+ * Wrapped in an object rather than returned as a bare array, like every other
+ * extraction entry here. Two reasons, and both are hard: the transport asks
+ * for response_format json_object on any structured task, which cannot return
+ * a top-level array; and parseModelJson extracts the first balanced object,
+ * which given a bare array would return its first element.
+ */
+const marketResearchOutput = z.strictObject({
+  findings: z.array(marketFindingSchema).max(1),
+});
 
 /** Evaluation additionally needs what the tutor said, to judge comprehension. */
 const EVALUATION_BLOCKS: readonly BlockId[] = [
@@ -324,6 +380,83 @@ const ENTRIES: readonly PromptCatalogEntry[] = [
     safetyRules: EXTRACTION_SAFETY,
     blocks: EXTRACTION_BLOCKS,
     evalSet: "golden/safety-screen",
+  },
+  {
+    name: "productops.market_research",
+    register: "machine",
+    // Version 2: one finding per call, with tighter caps on its lists, because
+    // two findings did not fit the cheap tier's output ceiling. (Version 1:
+    // the market scan's extraction pass.)
+    version: 2,
+    task: "productops.market_research",
+    tier: routeFor("productops.market_research").tier,
+    purpose:
+      "Pulls structured findings out of web search results, citing only the sources it was given.",
+    inputSchema: z.strictObject({ query: nonEmptyTextSchema(400) }),
+    outputContract: marketResearchOutput,
+    safetyRules: PRODUCT_OPS_SAFETY,
+    blocks: PRODUCT_OPS_BLOCKS,
+    evalSet: "golden/productops-market-research",
+  },
+  {
+    name: "productops.proposal_synthesis",
+    register: "machine",
+    // Version 1: the CPO's judgement over research and internal context.
+    version: 1,
+    task: "productops.proposal_synthesis",
+    tier: routeFor("productops.proposal_synthesis").tier,
+    purpose:
+      "Turns findings and internal context into one product proposal, scored on four judgements rather than on a priority it chose.",
+    inputSchema: z.strictObject({ brief: nonEmptyTextSchema(4000) }),
+    outputContract: productProposalSchema,
+    safetyRules: PRODUCT_OPS_SAFETY,
+    blocks: PRODUCT_OPS_BLOCKS,
+    evalSet: "golden/productops-proposal",
+  },
+  {
+    name: "productops.prd_sections",
+    register: "machine",
+    // Version 1: only the sections a document cannot be rendered from.
+    version: 1,
+    task: "productops.prd_sections",
+    tier: routeFor("productops.prd_sections").tier,
+    purpose:
+      "Writes the judgement-bearing sections of a PRD: stories, requirements, acceptance criteria, non-goals.",
+    inputSchema: z.strictObject({ proposal: nonEmptyTextSchema(6000) }),
+    outputContract: prdSectionsSchema,
+    safetyRules: PRODUCT_OPS_SAFETY,
+    blocks: PRODUCT_OPS_BLOCKS,
+    evalSet: "golden/productops-prd",
+  },
+  {
+    name: "productops.code_plan",
+    register: "machine",
+    // Version 1: repository analysis, for a human to approve.
+    version: 1,
+    task: "productops.code_plan",
+    tier: routeFor("productops.code_plan").tier,
+    purpose:
+      "Decides which files a change touches, as a plan a person approves before anything is written.",
+    inputSchema: z.strictObject({ prd: nonEmptyTextSchema(8000) }),
+    outputContract: implementationPlanSchema,
+    safetyRules: PRODUCT_OPS_SAFETY,
+    blocks: PRODUCT_OPS_BLOCKS,
+    evalSet: "golden/productops-code-plan",
+  },
+  {
+    name: "productops.code_edit",
+    register: "machine",
+    // Version 1: anchored edits to one file.
+    version: 1,
+    task: "productops.code_edit",
+    tier: routeFor("productops.code_edit").tier,
+    purpose:
+      "Produces anchored edits to one file, or the whole contents of one new file, inside the approved plan.",
+    inputSchema: z.strictObject({ instruction: nonEmptyTextSchema(4000) }),
+    outputContract: codeEditSchema,
+    safetyRules: PRODUCT_OPS_SAFETY,
+    blocks: PRODUCT_OPS_BLOCKS,
+    evalSet: "golden/productops-code-edit",
   },
 ];
 

@@ -24,8 +24,16 @@ export const STREAMED_TEXT = "streamed_text" as const;
 
 export type OutputContract = z.ZodTypeAny | typeof STREAMED_TEXT;
 
-/** Beyond this a contract is unreadable to a model and expensive to send. */
-const MAX_DEPTH = 4;
+/**
+ * Beyond this a contract is unreadable to a model and expensive to send.
+ *
+ * Counted in nesting steps, where a wrapper object and an array each cost
+ * one. Six is what a wrapped list of objects that each carry a list of
+ * objects needs — the market-research contract is exactly that — and at four
+ * the innermost shape rendered as a bare "object", so the model invented its
+ * field names and every reply failed validation on them.
+ */
+const MAX_DEPTH = 6;
 
 interface ZodInternals {
   readonly def: {

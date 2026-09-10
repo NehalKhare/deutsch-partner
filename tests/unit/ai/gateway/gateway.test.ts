@@ -146,6 +146,15 @@ function harness(
   return { gateway, rows, increments, transport };
 }
 
+function researchSpec() {
+  const spec = callSpecFor("productops.market_research", {
+    timeoutMs: 30_000,
+    outputSchema: z.array(z.unknown()),
+  });
+  if (!spec.ok) throw new Error("fixture spec did not build");
+  return spec.data;
+}
+
 function turnSpec() {
   const spec = callSpecFor("conversation.turn", { level: "A1", timeoutMs: 5_000 });
   if (!spec.ok) throw new Error("fixture spec did not build");
@@ -776,5 +785,74 @@ describe("dependencies", () => {
     await gateway.complete(spec, PROMPT, CONTEXT);
 
     expect(snapshot).toHaveBeenCalledWith({ userIdHash: "hash-alice", now: NOW });
+  });
+});
+
+describe("web search", () => {
+  it("is taken from the routing table, not from the caller", async () => {
+    // The caller hands over a spec and a prompt and never a search flag. The
+    // table is the only thing that can grant a paid capability.
+    const { gateway, transport } = harness();
+
+    await gateway.complete(researchSpec(), PROMPT, CONTEXT);
+
+    expect(sentRequests(transport)[0].webSearch).toEqual({ maxResults: 5 });
+  });
+
+  it("is absent for a task the table does not grant it to", async () => {
+    const { gateway, transport } = harness();
+
+    await gateway.complete(spec, PROMPT, CONTEXT);
+
+    expect(sentRequests(transport)[0].webSearch).toBeNull();
+  });
+
+  it("passes the provider's citations through to the caller", async () => {
+    const transport: ModelTransport & { requests: ModelRequest[] } = {
+      requests: [],
+      async complete(request) {
+        this.requests.push(request);
+        return {
+          text: "[]",
+          usage: usage(),
+          firstTokenMs: 200,
+          citations: [{ url: "https://example.test/a", title: "A" }],
+        } satisfies CompletionResponse;
+      },
+      async stream() {
+        throw new Error("not used");
+      },
+    };
+    const { gateway } = harness({ transport });
+
+    const outcome = await gateway.complete(researchSpec(), PROMPT, CONTEXT);
+
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.data.citations).toEqual([
+      { url: "https://example.test/a", title: "A" },
+    ]);
+  });
+
+  it("reports an empty citation list when a transport reports none", async () => {
+    // So a caller never has to tell "no citations" from "this transport does
+    // not do citations".
+    const { gateway } = harness();
+
+    const outcome = await gateway.complete(spec, PROMPT, CONTEXT);
+
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.data.citations).toEqual([]);
+  });
+
+  it("writes no citation into the ledger", async () => {
+    // A url is content. The ledger holds accounting and nothing a prompt or a
+    // reply carried (guardrails S17).
+    const { gateway, rows } = harness();
+
+    await gateway.complete(researchSpec(), PROMPT, CONTEXT);
+
+    expect(JSON.stringify(rows)).not.toContain("citation");
   });
 });

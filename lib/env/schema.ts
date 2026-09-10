@@ -141,6 +141,24 @@ const baseSchema = z.object({
    */
   MCP_SERVER_URL: z.url().optional(),
   MCP_SERVER_API_KEY: secret(),
+
+  /**
+   * The repository the product-ops worker opens pull requests against, and
+   * the token it uses.
+   *
+   * The token is fine-grained, scoped to that one repository, with contents
+   * and pull-request write and nothing else. Both are optional at boot and
+   * asserted where they are used: the worker is a CLI script, and a deployment
+   * that never runs it does not need either. A token with no repository named
+   * is a configuration mistake rather than a spare part, and is refused below.
+   */
+  GITHUB_TOKEN: secret(),
+  GITHUB_REPOSITORY: z
+    .string()
+    .regex(/^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/, {
+      error: 'must be a repository as "owner/name"',
+    })
+    .optional(),
 });
 
 /** Keys the browser bundle is allowed to see. */
@@ -156,6 +174,7 @@ export const SERVER_ENV_KEYS = [
   "LANGSMITH_API_KEY",
   "LOG_PSEUDONYM_SALT",
   "MCP_SERVER_API_KEY",
+  "GITHUB_TOKEN",
 ] as const;
 
 /** Required in production. Optional elsewhere so the app can still boot. */
@@ -193,6 +212,16 @@ const envSchema = baseSchema.superRefine((env, ctx) => {
       code: "custom",
       path: ["MCP_SERVER_URL"],
       message: "is required when MCP_SERVER_API_KEY is set",
+    });
+  }
+
+  // The same reasoning, and rather more pointedly: a write-scoped token with
+  // no repository named is a token nobody has decided the blast radius of.
+  if (env.GITHUB_TOKEN !== undefined && env.GITHUB_REPOSITORY === undefined) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["GITHUB_REPOSITORY"],
+      message: "is required when GITHUB_TOKEN is set",
     });
   }
 });

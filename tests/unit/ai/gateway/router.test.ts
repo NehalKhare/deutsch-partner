@@ -8,7 +8,8 @@ import { DETERMINISTIC_ONLY, TASK_IDS, type TaskId, type Tier } from "@/lib/ai/t
  *
  * Deliberately not imported from the module under test: a test that reads the
  * same constant it is checking asserts nothing. This copy comes from
- * model-routing-and-cost-control.md S4 and S6, so a drift between the document
+ * model-routing-and-cost-control.md S4 and S6 — and, for the product-ops tasks,
+ * from product-ops-spec.md S6 — so a drift between the document
  * and the code shows up here rather than on a bill.
  */
 const EXPECTED: Readonly<Record<TaskId, { tier: Tier; input: number; output: number }>> = {
@@ -44,6 +45,19 @@ const EXPECTED: Readonly<Record<TaskId, { tier: Tier; input: number; output: num
   // session's €0.05 request ceiling; the miner runs post-response on its own.
   "trainer.answer_analysis": { tier: "cheap", input: 2000, output: 500 },
   "trainer.session_mining": { tier: "cheap", input: 4000, output: 600 },
+  // product-ops-spec.md S6. Research is extraction on the cheap tier, which
+  // also has the largest input allowance of any tier — what a page of search
+  // results needs. The judgement that follows it, and the two coding tasks,
+  // are reasoning. The 2000 on code_edit is the reasoning tier's own maximum,
+  // which is why an edit is an anchor and a replacement rather than a file.
+  "productops.market_research": { tier: "cheap", input: 8000, output: 600 },
+  "productops.proposal_synthesis": { tier: "reasoning", input: 12000, output: 2000 },
+  "productops.prd_sections": { tier: "mid", input: 6000, output: 1000 },
+  "productops.code_plan": { tier: "reasoning", input: 12000, output: 2000 },
+  "productops.code_edit": { tier: "reasoning", input: 12000, output: 2000 },
+  // The agents' summarisation middleware: compression of fenced tool output,
+  // cheap like every other summariser in the table.
+  "productops.context_summary": { tier: "cheap", input: 8000, output: 400 },
 };
 
 describe("task router", () => {

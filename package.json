@@ -23,6 +23,7 @@
     "dummy:user": "tsx scripts/create-dummy-user.ts",
     "db:seed": "tsx scripts/apply-seeds.ts",
     "ingest": "tsx scripts/ingest.ts",
+    "product:implement": "tsx scripts/product-implement.ts",
     "fx:refresh": "tsx scripts/refresh-fx.ts",
     "scenarios:ingest": "uv run --project scripts/scenarios scripts/scenarios/ingest_scenarios.py",
     "scenarios:eval": "uv run --project scripts/scenarios --extra eval scripts/scenarios/eval_ragas.py",
@@ -30,6 +31,8 @@
   },
   "dependencies": {
     "@langchain/core": "^1.2.9",
+    "@langchain/langgraph": "^1.4.12",
+    "@langchain/langgraph-checkpoint": "^1.1.5",
     "@langchain/mcp-adapters": "^1.1.4",
     "@langchain/openai": "^1.5.10",
     "@supabase/ssr": "^0.12.4",

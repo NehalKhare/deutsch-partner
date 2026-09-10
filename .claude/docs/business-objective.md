@@ -614,6 +614,15 @@ END
 
 Do not create a multi-agent swarm unless later evaluation demonstrates a measurable reason to do so.
 
+Exception, recorded 2026-09-10: the operator-facing product-ops workflow runs
+four tool-using agents inside a LangGraph state graph (product-ops-spec.md).
+The reason is specific and not general: its planner and coder cannot do their
+work on a fixed context — the caller cannot know which files a change touches
+before the plan exists — and its stages pause for days at two human gates,
+which a durable graph checkpoint models and a request loop does not. The
+learner-facing turn remains the explicit state machine above with no agent
+swarm, and this exception does not extend to it.
+
 MODEL SELECTION:
 
 The nodes in this graph do NOT all use the same model. Response generation uses

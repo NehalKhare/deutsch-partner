@@ -14,14 +14,31 @@ import { TIERS, type Tier } from "@/lib/ai/tasks";
  * environment, because availability and pricing move and a stale hardcoded
  * assumption is a production incident rather than a stale comment.
  *
+ * "Live" is not enough: a model can be on OpenRouter and still refused to this
+ * account by its data-policy settings, and a refused primary means every call
+ * silently rides its fallback. Each id is also checked against the account's
+ * own enabled-models list on the date above.
+ *
  * Prices are deliberately absent. They come from the provider's model list
  * with a fetched_at stamp (see pricing.ts); a literal here is a number that
  * goes quietly wrong.
  */
 
-export const MODEL_IDS_VERIFIED_ON = "2026-08-21";
+export const MODEL_IDS_VERIFIED_ON = "2026-09-10";
 
 export type ModelProvider = "openrouter" | "openai";
+
+/**
+ * How much a reasoning-capable model may think before it answers.
+ *
+ * The provider's own vocabulary. A tier that carries one sends it on every
+ * request; a tier that carries none lets the model decide. The cheap and nano
+ * tiers carry "minimal" because their models are reasoning models and their
+ * output ceilings are small: left to themselves they spend the whole ceiling
+ * thinking and return no text at all, which the transport can only report as
+ * a provider failure. Extraction against a closed schema needs no thinking.
+ */
+export type ReasoningEffort = "minimal" | "low" | "medium" | "high";
 
 export interface ModelEntry {
   readonly tier: Tier;
@@ -33,6 +50,8 @@ export interface ModelEntry {
   readonly hardMaxInputTokens: number;
   readonly hardMaxOutputTokens: number;
   readonly contextWindow: number;
+  /** Sent on every request to this tier when set. See ReasoningEffort. */
+  readonly reasoningEffort?: ReasoningEffort;
   /**
    * Vector width, for the embedding tier only. Configurable per the business
    * objective, but not at runtime: the stored column has a fixed width, so
@@ -52,8 +71,12 @@ const DEFAULTS: Readonly<Record<Tier, ModelEntry>> = {
   reasoning: {
     tier: "reasoning",
     provider: "openrouter",
-    modelId: "anthropic/claude-opus-5",
-    fallbacks: ["openai/gpt-5.5"],
+    // Opus 5 is not enabled on this account, so the previous default fell
+    // through to its fallback on every call. Same family and same price one
+    // generation back is the like-for-like replacement; the ladder beneath it
+    // only descends in price.
+    modelId: "anthropic/claude-opus-4.7",
+    fallbacks: ["openai/gpt-5.5", "openai/gpt-5.4"],
     hardMaxInputTokens: 12_000,
     hardMaxOutputTokens: 2_000,
     contextWindow: 1_000_000,
@@ -61,8 +84,12 @@ const DEFAULTS: Readonly<Record<Tier, ModelEntry>> = {
   strong: {
     tier: "strong",
     provider: "openrouter",
-    modelId: "anthropic/claude-sonnet-5",
-    fallbacks: ["openai/gpt-5.4"],
+    // Sonnet 5 is not enabled on this account either; this was being
+    // overridden per environment to gpt-5.4, so the default now says what
+    // production actually runs. The fallback is a quarter of the price and the
+    // first thing to A/B once the conversation eval set exists.
+    modelId: "openai/gpt-5.4",
+    fallbacks: ["google/gemini-3.8-flash"],
     hardMaxInputTokens: 8_000,
     hardMaxOutputTokens: 1_000,
     contextWindow: 1_000_000,
@@ -70,7 +97,7 @@ const DEFAULTS: Readonly<Record<Tier, ModelEntry>> = {
   mid: {
     tier: "mid",
     provider: "openrouter",
-    modelId: "google/gemini-3.7-flash",
+    modelId: "google/gemini-3.8-flash",
     fallbacks: ["openai/gpt-5.4-mini"],
     hardMaxInputTokens: 6_000,
     hardMaxOutputTokens: 1_000,
@@ -80,10 +107,13 @@ const DEFAULTS: Readonly<Record<Tier, ModelEntry>> = {
     tier: "cheap",
     provider: "openrouter",
     modelId: "openai/gpt-5-mini",
-    fallbacks: ["google/gemini-3.1-flash-lite"],
+    // The previous fallback was not enabled on this account, which left the
+    // highest-volume schema-bound tier with no ladder at all.
+    fallbacks: ["openai/gpt-5.4-nano"],
     hardMaxInputTokens: 8_000,
     hardMaxOutputTokens: 600,
     contextWindow: 400_000,
+    reasoningEffort: "minimal",
   },
   nano: {
     tier: "nano",
@@ -93,6 +123,7 @@ const DEFAULTS: Readonly<Record<Tier, ModelEntry>> = {
     hardMaxInputTokens: 2_000,
     hardMaxOutputTokens: 50,
     contextWindow: 400_000,
+    reasoningEffort: "minimal",
   },
   // The token figures describe the text side of each: an embedding call has
   // no completion, and a transcription has no prompt. Embeddings ride

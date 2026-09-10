@@ -29,7 +29,12 @@ Read in this order. Where documents disagree, the precedence below wins.
    Operator-facing EUR spend dashboard: schema, aggregation, views, alerts.
    Implements build-spec.md Phase 17.5. Depends on document 4.
 
-Precedence: 3 > 4 > 5 = 6 > 2 > 1.
+7. product-ops-spec.md
+   Operator-facing AI Product Ops workflow: stages, idempotency, the two human
+   gates, and what the coding agent may touch.
+   Authoritative for: the product-ops workflow. Depends on documents 3 and 4.
+
+Precedence: 3 > 4 > 5 = 6 = 7 > 2 > 1.
 Security beats cost. Cost beats convenience. Neither beats correctness of the
 learning model, which is why disagreements get resolved in the documents rather
 than at the keyboard.

@@ -18,13 +18,19 @@ lib/ai/         everything that talks to a model
 lib/retrieval/  vector + lexical search, fused and ranked
 lib/ingestion/  the corpus pipeline
 lib/scenarios/  scenario practice: quiz grading, roleplay seeding
+lib/product-ops/  the operator workflow: a LangGraph state graph over the
+                stages, four tool-using agents inside them, the trusted
+                validation layer the coder writes through
+lib/github/    five REST calls, for the pull request the worker opens
   │
 learning/       the curriculum, and the engines that move a learner through it
 domain/         Zod schemas and pure rules. No I/O.
 repositories/   the only code that touches the database
   │
-supabase/       25 migrations: 22 tables, Row Level Security, and the
+supabase/       36 migrations: 34 tables, Row Level Security, and the
                 functions that have to be atomic
+scripts/        the offline workers: corpus ingestion, the FX snapshot, and
+                the product-ops coding worker
 scripts/scenarios/  offline Python: parse the scenario dataset, embed it,
                     evaluate retrieval with ragas
 ```
@@ -120,6 +126,9 @@ learner-id argument:
 | `search_knowledge_vector` / `_lexical` | Filter by level before ranking, not after |
 | `search_scenarios` | The scenario corpus's vector search: filter by type and level before ranking |
 | `cost_dashboard` | Operator-only; granted to nobody but the secret key |
+| `advance_product_ops_run` | A stage transition is a compare-and-set: two workers racing must not both win |
+| `record_proposal_review` | The review row, the proposal's status and the plan's approval move together |
+| `product_ops_dashboard` | Operator-only; the board is one query rather than six that can disagree |
 
 None of them is `SECURITY DEFINER`. A migration test fails the build if one
 appears.
@@ -127,6 +136,76 @@ appears.
 Repositories validate every row against the domain schema on the way out.
 Generated database types describe what the schema said at build time; this
 checks what the database actually returned.
+
+## The operator workflow
+
+A second product, on the same stack, reachable only by the `OPERATOR_USER_IDS`
+allowlist: research the market, propose a feature, ask a person, write a PRD,
+plan an implementation, ask a person again, write the code, open a pull
+request.
+
+```
+research → synthesis → human_review → prd → code_plan → plan_review
+         → implementation → verification → pull_request → completed
+```
+
+The pipeline is a LangGraph state graph (`lib/product-ops/graph/`): one node
+per stage, edges from the pure `nextStage` function, the two human gates as
+`interrupt()` calls, and a checkpoint saver over two operator-scope tables so a
+parked graph is resumed by whichever instance handles the operator's decision.
+No model ever chooses the next node. Inside four of the nodes a tool-using
+LangChain agent does the judgement — research, the CPO, the planner, the coder
+(`lib/product-ops/agents/`) — each on the tier its task declares, with a
+middleware stack that bounds it: the run's euro budget, tool and model call
+caps, a fence around every tool result, a progress event per tool call, and
+summarisation of an overlong transcript. `docs/product-ops-agents.md` draws the
+data flow.
+
+Five properties hold it together.
+
+**The orchestrator holds no state outside Postgres.** A node runs exactly one
+stage through `advanceRun` — the idempotency check, the work event, the
+compare-and-set transition — and the graph checkpoints after it. The checkpoint
+carries identifiers and control flow; every artifact is re-read from its row.
+Pausing, resuming, retrying and auditing are therefore the same mechanism
+rather than four, and nothing in the workflow is a long-running request.
+
+**Every stage is idempotent.** Each checks for its own output before doing any
+work — this run's finding hashes, this run's proposal, this proposal's PRD, this
+plan's recorded changes, this branch's pull request — and reports
+`already_done` rather than repeating it. Uniqueness is a database constraint
+in every case, not a check-then-write, because a constraint holds under
+concurrency.
+
+**Who moves a run is a property of its stage.** `stageOwner` answers with one
+of four: the server, a person, the CLI worker, or nobody. The orchestrator
+dispatches on it and the dashboard renders from it, so a run cannot look stuck
+on a screen while something is quietly doing it. The four worker stages are the
+ones that need a working tree, which the server does not have; it defers them
+and the board says so.
+
+**A stage that is running and one that was abandoned are the same stage.** Only
+the clock separates them, so the board carries each run's `updated_at` — every
+transition touches it — and quiet for longer than the slowest stage is reported
+as stalled rather than working. That distinction is what the page's polling is
+bounded by: it asks again only while something is genuinely moving, so a tab
+left open on a run whose drive died stops querying within one stall window
+without any counter or deadline in the browser. A spinner that turns forever
+over dead work is worse than no spinner, because it teaches an operator to
+distrust the only signal that means something is wrong.
+
+**Nothing writes a file without two approvals.** The proposal is approved before
+a PRD exists, and the plan is approved before a file is written. The approved
+plan's file lists become the coding agent's path allowlist, checked in trusted
+code before every write, with a deny-list that overrides the plan regardless —
+`.env*`, migrations, CI, the gateway, the prompt catalogue, the security tests,
+the dependency manifests, `proxy.ts`. The agent has no shell, no way to name a
+command, and no way to name a URL.
+
+> `lib/product-ops/graph/graph.ts`, `lib/product-ops/workflow.ts`,
+> `lib/product-ops/agents/`, `lib/product-ops/apply.ts`,
+> `scripts/product-implement.ts`, `lib/dashboard/product-ops.ts`,
+> `docs/product-ops-agents.md`, `.claude/docs/product-ops-spec.md`
 
 ## Two Supabase clients, deliberately
 
@@ -143,13 +222,13 @@ root, not a default.
 
 ## Testing
 
-**2519 unit and integration tests, 135 test files** — plus 31 Python tests
+**3603 unit and integration tests, 182 test files** — plus 31 Python tests
 over the scenario parser and ingestion plan (`pnpm scenarios:test`).
 
 | Kind | What it runs against |
 | --- | --- |
 | Unit | Pure functions, schemas, prompt assembly, scoring, the graph with fakes |
-| Database | Real Postgres in-process via PGlite — 25 migrations, constraints, RLS, and the functions above |
+| Database | Real Postgres in-process via PGlite — every migration, constraints, RLS, and the functions above |
 | Security | Static gates over the source tree: the four architecture rules, secret exposure, migration hygiene |
 | End to end | Playwright against a production build |
 
@@ -176,6 +255,14 @@ several pointed at real bugs:
 ## What is not built
 
 Stated here so nobody has to discover it by reading the code.
+
+- **Product ops ends at the plan.** Accepting a plan completes the run; the
+  operator copies the plan as Markdown and carries it into their own tools.
+  The implementation, verification and pull-request stages, the coding agent,
+  the apply layer and the CLI worker all exist and are tested, but no review
+  leads into them. Planning runs on the server, reading the checkout it runs
+  beside; a deployment without one fails the planning stage with
+  `no_repository`.
 
 - **No chat model has ever been called.** Every test drives a fake transport;
   the real transports are tested against a fake `fetch`. The embedding
@@ -232,3 +319,43 @@ Stated here so nobody has to discover it by reading the code.
 - **`extraction.errors` and `evaluation.learner_message` overlap.** Both return
   error instances against the same taxonomy. Whether the separate pass earns its
   call is a measurement nobody has taken.
+- **No product-ops run has been executed against a real provider.** The whole
+  pipeline is tested against fakes, end to end and stage by stage, including
+  every idempotency guard and every rejection the apply layer makes. No branch
+  has been pushed and no pull request opened by it.
+- **The coding worker is a git worktree, not a container.** Isolation is the
+  worktree, the path allowlist and the absence of a shell. A container is the
+  documented next step rather than a gap being hidden — and the controls that
+  actually hold in the meantime are the allowlist and the two human gates, not
+  the isolation.
+- **Prompt injection through web results and repository source is mitigated,
+  not prevented.** Both are fenced as untrusted content and neither carries
+  authority over the plan, the allowlist or the deny-list. That is a mitigation
+  by the guardrails' own definition.
+- **The CPO's `search_internal_docs` tool answers "unavailable".** The tool
+  exists and the agent is told about it, but the composition wires no corpus
+  behind it: the retriever wants a learner-shaped context the CPO does not
+  have. Adapting it is the obvious next thing to do.
+- **A plan is approved whole or rejected whole.** The gate does not yet let an
+  operator drop files from the plan's lists before approving, which is the
+  safer version of a quick approval. The graph's gate node is where that
+  decision would be applied.
+- **No agent has run against a real model.** The agents are tested with a fake
+  tool-calling model and the specialists with a fake gateway. Without models
+  supplied, every stage falls back to its single-shot specialist, which is the
+  path the workflow tests exercise.
+- **Checkpoints are never pruned.** A run's checkpoints go with the run, and
+  nothing retires finished runs. A cron over terminal runs older than a month
+  is the missing job.
+- **A feature needing a migration stops at the PRD.** The deny-list refuses
+  `supabase/migrations/**` whatever the plan says, so a schema change is
+  described in the document and written by a person. Per-run operator opt-in is
+  the extension point.
+- **The operator board polls; nothing is pushed.** While a run is moving, the
+  page asks the server again every few seconds. Postgres can push this — a
+  realtime subscription on `ai_run_events` is the obvious version — and the
+  reason it does not is that the polling stops on its own: a run that goes
+  quiet is reported as stalled and no longer asked about. So the cost is a
+  handful of indexed queries per run rather than an open connection per
+  operator, for a page with a handful of operators. It is a deliberate trade at
+  this size and the wrong one at a larger size.

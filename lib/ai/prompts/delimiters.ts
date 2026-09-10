@@ -27,6 +27,16 @@ export const UNTRUSTED_TAGS = [
   // output about learner text: validated JSON, but it quotes the learner's own
   // German verbatim, so it rides inside a fence like everything else that does.
   "answer_analysis",
+  // The product-ops agents' windows on the outside world: what a web search
+  // returned, what an earlier stage stored, what a repository file says, and
+  // what a compiler or test run printed. A comment in a source file can say
+  // "ignore all previous instructions" as easily as a web page can, and a
+  // failing test quotes that file back.
+  "web_results",
+  "market_research",
+  "repo_source",
+  "command_output",
+  "tool_result",
 ] as const;
 
 export type UntrustedTag = (typeof UNTRUSTED_TAGS)[number];

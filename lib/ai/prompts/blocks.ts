@@ -100,7 +100,13 @@ const MACHINE_CAPS: Readonly<Record<BlockId, number>> = {
   response_policy: 0,
   learner_state: 200,
   thread_summary: 400,
-  retrieved_knowledge: 800,
+  // Raised for the product-ops tasks, which are the first machine entries to
+  // declare this block at all: a page of web results or a region of a source
+  // file is the input those calls exist to read, and 800 tokens truncated most
+  // of it away. It stays a per-block truncation limit rather than a share of
+  // any ceiling — messageCapFor excludes sheddable blocks — so the task's own
+  // input ceiling and the shedding order are still what bound a call.
+  retrieved_knowledge: 5000,
   learner_memory: 200,
   recent_messages: 800,
   // Bounded by what the ceiling leaves rather than by a constant: a thread

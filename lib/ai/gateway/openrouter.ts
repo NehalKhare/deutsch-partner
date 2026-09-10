@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import type {
+  Citation,
   CompletionResponse,
   ModelRequest,
   ModelTransport,
@@ -51,15 +52,59 @@ const usageSchema = z
   })
   .loose();
 
+/**
+ * A source the web plugin says it read.
+ *
+ * Parsed leniently and per-item: a shape change in a citation must not lose
+ * the reply that came with it, because the text is the expensive part. The url
+ * is narrowed to http and https here rather than wherever it is eventually
+ * rendered — these end up as links on an operator's page.
+ */
+const annotationSchema = z
+  .object({
+    type: z.string(),
+    url_citation: z
+      .object({
+        url: z.string(),
+        title: z.string().nullish(),
+      })
+      .loose()
+      .optional(),
+  })
+  .loose();
+
+const messageSchema = z
+  .object({
+    content: z.string().nullish(),
+    annotations: z.array(z.unknown()).optional(),
+  })
+  .loose();
+
 const completionSchema = z
   .object({
     model: z.string().optional(),
-    choices: z
-      .array(z.object({ message: z.object({ content: z.string().nullish() }).optional() }).loose())
-      .optional(),
+    choices: z.array(z.object({ message: messageSchema.optional() }).loose()).optional(),
     usage: usageSchema.optional(),
   })
   .loose();
+
+function toCitations(annotations: readonly unknown[] | undefined): readonly Citation[] {
+  if (annotations === undefined) return [];
+
+  const citations: Citation[] = [];
+  for (const raw of annotations) {
+    const parsed = annotationSchema.safeParse(raw);
+    if (!parsed.success) continue;
+    if (parsed.data.type !== "url_citation") continue;
+
+    const cited = parsed.data.url_citation;
+    if (!cited || !/^https?:\/\//i.test(cited.url)) continue;
+
+    citations.push({ url: cited.url, title: cited.title ?? null });
+  }
+
+  return citations;
+}
 
 const streamEventSchema = z
   .object({
@@ -96,6 +141,22 @@ class OpenRouterError extends Error {
   constructor(readonly status: number) {
     super(`OpenRouter request failed with status ${status}`);
     this.name = "OpenRouterError";
+  }
+}
+
+/**
+ * A 200 with no text in it.
+ *
+ * A reasoning model that spends its whole output ceiling thinking returns a
+ * null content and finish_reason "length". That is not a provider outage and
+ * it is not a malformed reply; it is a ceiling met before any answer, and it
+ * gets its own name so the log says so.
+ */
+class EmptyCompletionError extends Error {
+  constructor(readonly finishReason: string | null) {
+    super("OpenRouter returned a completion with no text");
+    this.name =
+      finishReason === "length" ? "ReasoningExhaustedCeiling" : "EmptyCompletion";
   }
 }
 
@@ -149,9 +210,20 @@ export function createOpenRouterTransport(
       // Layer 2 of the ceiling enforcement. Never omitted.
       max_tokens: request.maxOutputTokens,
       stream,
-      // Returns the charged cost for this generation on the response.
+      // Returns the charged cost for this generation on the response, which
+      // for a searching call includes what the results cost. Nothing new has
+      // to be priced: it arrives on the figure the ledger already records.
       usage: { include: true },
       ...(request.structured ? { response_format: { type: "json_object" } } : {}),
+      ...(request.webSearch
+        ? { plugins: [{ id: "web", max_results: request.webSearch.maxResults }] }
+        : {}),
+      // The tier's, from the registry. Never omitted when the tier sets one:
+      // a small-ceiling tier on a reasoning model otherwise thinks its whole
+      // ceiling away and answers nothing.
+      ...(request.reasoningEffort
+        ? { reasoning: { effort: request.reasoningEffort } }
+        : {}),
     });
 
   return {
@@ -166,18 +238,28 @@ export function createOpenRouterTransport(
       if (!response.ok) throw new OpenRouterError(response.status);
 
       const parsed = completionSchema.safeParse(await response.json());
-      const content = parsed.success
-        ? parsed.data.choices?.[0]?.message?.content
-        : undefined;
+      const choice = parsed.success ? parsed.data.choices?.[0] : undefined;
+      const message = choice?.message;
+      const content = message?.content;
 
-      if (!parsed.success || typeof content !== "string") {
+      // No message at all is a shape this transport does not recognise. A
+      // message with no text is a reply the model ran out of room to write.
+      if (!parsed.success || message === undefined) {
         throw new Error("OpenRouter returned a malformed completion");
+      }
+      const finish = (choice as { finish_reason?: unknown } | undefined)?.finish_reason;
+      if (typeof content !== "string") {
+        throw new EmptyCompletionError(typeof finish === "string" ? finish : null);
       }
 
       return {
         text: content,
         usage: toUsage(parsed.data.usage, parsed.data.model ?? request.modelId),
         firstTokenMs: null,
+        // The provider's word for "the ceiling stopped me". The ledger and a
+        // structured caller both need to know that this text is a fragment.
+        truncated: finish === "length",
+        citations: toCitations(message?.annotations),
       } satisfies CompletionResponse;
     },
 
