@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { TrainerAgenda, type AgendaItem } from "@/components/trainer/agenda";
+import { ReplyFeedback } from "@/components/trainer/feedback";
 import { useReadAloud } from "@/components/voice/read-aloud";
 import { SpeakerIcon } from "@/components/voice/speaker-icon";
 import type { SpeechPlayback, SpeechVoice } from "@/components/voice/speech";
@@ -10,7 +11,9 @@ import { RichText } from "@/components/ui/rich-text";
 import { buttonPrimary, field, focusRing } from "@/components/ui/styles";
 import type { CEFRLevel } from "@/domain/cefr";
 import { HISTORY_WINDOW } from "@/domain/conversation";
+import { isDefaultCoaching, type CoachingDials } from "@/domain/trainer-coaching";
 import { MAX_COVERED_SUBJECTS } from "@/domain/trainer-session";
+import { describeDials } from "@/lib/trainer/coaching";
 import { cn } from "@/lib/utils";
 
 /** Shown when a refusal arrives with nothing a learner could act on. */
@@ -44,6 +47,7 @@ const TOOL_LABELS: Readonly<Record<string, string>> = {
   search_knowledge: "Searched the learning material",
   record_review_outcome: "Recorded how that went",
   fetch_simple_german_news: "Fetched today's simple-German news",
+  adjust_coaching: "Adjusted how it coaches you",
 };
 
 const toolLabel = (tool: string) =>
@@ -72,6 +76,29 @@ function ReadAloudToggle({
       <SpeakerIcon speaking={on} />
       Read replies aloud
     </button>
+  );
+}
+
+/**
+ * What the learner's feedback has changed, in one line under the plan.
+ *
+ * Only when something has: a trainer on its defaults has nothing to report,
+ * and a panel that said "standard, standard, standard" would be noise. The
+ * wording is shared with the settings page (describeDials) so the two never
+ * describe the same dial differently.
+ */
+function CoachingNote({ dials }: { readonly dials: CoachingDials | null }) {
+  if (dials === null || isDefaultCoaching(dials)) return null;
+
+  return (
+    <p
+      data-role="coaching"
+      className="rounded-2xl border border-haze/70 bg-dusk/70 px-4 py-3 text-xs text-chalk/55"
+    >
+      <span className="uppercase tracking-[0.14em] text-chalk/45">Tuned for you</span>
+      <br />
+      {describeDials(dials).join(" · ")}
+    </p>
   );
 }
 
@@ -129,6 +156,9 @@ export function TrainerSession({
   const [agenda, setAgenda] = useState<readonly AgendaItem[] | null>(null);
   const [covered, setCovered] = useState<readonly string[]>([]);
   const [complete, setComplete] = useState(false);
+  // How the trainer is coaching this learner, as the last reply or vote left
+  // it. Shown beside the plan so feedback is visibly something that lands.
+  const [coaching, setCoaching] = useState<CoachingDials | null>(null);
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -171,6 +201,7 @@ export function TrainerSession({
             agenda?: AgendaItem[] | null;
             covered?: string[];
             complete?: boolean;
+            coaching?: CoachingDials;
             message?: string;
           }
         | null;
@@ -194,6 +225,7 @@ export function TrainerSession({
       // one means the session is finished, which is a different thing to say.
       if (body.agenda !== null && body.agenda !== undefined) setAgenda(body.agenda);
       if (body.covered) setCovered(body.covered);
+      if (body.coaching) setCoaching(body.coaching);
       // The agenda is finished, and the reply just delivered the recall list.
       // Nothing is left to ask, so the session closes rather than idling with
       // an open box that invites a question the trainer is told not to answer.
@@ -255,8 +287,9 @@ export function TrainerSession({
           a glance, and it should not stretch to whatever height the session
           happens to have. */}
       <aside className="hidden w-56 shrink-0 overflow-y-auto lg:block">
-        <div className="sticky top-0">
+        <div className="sticky top-0 flex flex-col gap-3">
           <TrainerAgenda plan={plan} finished={agenda?.length === 0} />
+          <CoachingNote dials={coaching} />
         </div>
       </aside>
 
@@ -362,6 +395,11 @@ export function TrainerSession({
                         .join(", ")}
                     </p>
                   ) : null}
+
+                  <ReplyFeedback
+                    tools={(entry.steps ?? []).map((step) => step.tool)}
+                    onCoaching={setCoaching}
+                  />
                 </li>
               ),
             )}

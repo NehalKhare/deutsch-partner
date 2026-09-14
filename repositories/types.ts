@@ -27,6 +27,7 @@ export interface QueryBuilder extends PromiseLike<QueryResponse> {
   lte(column: string, value: unknown): QueryBuilder;
   gte(column: string, value: unknown): QueryBuilder;
   lt(column: string, value: unknown): QueryBuilder;
+  gt(column: string, value: unknown): QueryBuilder;
   order(column: string, options?: { ascending?: boolean }): QueryBuilder;
   limit(count: number): QueryBuilder;
   single(): PromiseLike<QueryResponse>;

@@ -58,6 +58,18 @@ export interface AgendaActivity {
 export const GRAMMAR_SLOTS = 2;
 
 /**
+ * How the grammar quota is drawn: one grammar item per `grammarEvery` working
+ * slots, capped at `grammarSlots`. The balanced default is the rule stated on
+ * GRAMMAR_SLOTS; a learner's focus (lib/trainer/coaching.ts) hands in another.
+ */
+export interface AgendaMix {
+  readonly grammarSlots: number;
+  readonly grammarEvery: number;
+}
+
+export const BALANCED_MIX: AgendaMix = { grammarSlots: GRAMMAR_SLOTS, grammarEvery: 3 };
+
+/**
  * How much of one agenda is culture work.
  *
  * One per full sitting: a culture note — du or Sie, register, politeness —
@@ -90,17 +102,21 @@ export function composeMixedAgenda(inputs: {
   readonly culture: readonly AgendaActivity[];
   readonly news: AgendaActivity | null;
   readonly size: number;
+  /** How grammar is rationed; the balanced rule unless a focus says otherwise. */
+  readonly mix?: AgendaMix;
 }): AgendaActivity[] {
   const room = Math.max(0, inputs.size - (inputs.news === null ? 0 : 1));
+  const mix = inputs.mix ?? BALANCED_MIX;
 
-  // One grammar item per three working slots, capped at GRAMMAR_SLOTS: a full
-  // agenda reserves two, a small one stays mostly vocabulary rather than
-  // handing what little room it has to the rules. Culture needs four — a
-  // short sitting has no room for a note that is never review material.
+  // One grammar item per `grammarEvery` working slots, capped at the mix's
+  // slots — balanced: per three, capped at GRAMMAR_SLOTS, so a full agenda
+  // reserves two and a small one stays mostly vocabulary rather than handing
+  // what little room it has to the rules. Culture needs four — a short
+  // sitting has no room for a note that is never review material.
   const grammarQuota = Math.min(
-    GRAMMAR_SLOTS,
+    mix.grammarSlots,
     inputs.grammar.length,
-    Math.floor(room / 3),
+    Math.floor(room / Math.max(1, mix.grammarEvery)),
   );
   const cultureQuota = Math.min(
     CULTURE_SLOTS,

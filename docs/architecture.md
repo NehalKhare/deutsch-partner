@@ -157,9 +157,13 @@ No model ever chooses the next node. Inside four of the nodes a tool-using
 LangChain agent does the judgement — research, the CPO, the planner, the coder
 (`lib/product-ops/agents/`) — each on the tier its task declares, with a
 middleware stack that bounds it: the run's euro budget, tool and model call
-caps, a fence around every tool result, a progress event per tool call, and
-summarisation of an overlong transcript. `docs/product-ops-agents.md` draws the
-data flow.
+caps, a fence around every tool result, a progress event per tool call and per
+model call, and summarisation of an overlong transcript. The board follows a
+working run's timeline live over Server-Sent Events, read forward from
+Postgres rather than from the driving process, which need not be the one
+serving the page. A failed run can be tried again from the stage that
+failed, through the same compare-and-set and under the same euro ceiling.
+`docs/product-ops-agents.md` draws the data flow.
 
 Five properties hold it together.
 
@@ -258,6 +262,9 @@ Stated here so nobody has to discover it by reading the code.
 
 - **Product ops ends at the plan.** Accepting a plan completes the run; the
   operator copies the plan as Markdown and carries it into their own tools.
+  The plan is two documents from two calls: the file lists, which are the
+  coding agent's allowlist, and an engineering breakdown — phased, sized
+  requirements with technical guidance against the current stack.
   The implementation, verification and pull-request stages, the coding agent,
   the apply layer and the CLI worker all exist and are tested, but no review
   leads into them. Planning runs on the server, reading the checkout it runs
@@ -275,6 +282,12 @@ Stated here so nobody has to discover it by reading the code.
   budgets — the run prints its token usage instead. Request-time scenario
   *search* embeds through the gateway and is ledgered, budgeted and cached
   like every other call.
+- **Learner feedback informs a scan; nothing acts on it automatically.** The
+  aggregate of trainer votes is on the product-ops board and enters every
+  scan as an internal finding, so a prompt version that is losing shows up in
+  a proposal a person reviews. No job compares prompt versions, alerts on a
+  rising unhelpful share, or proposes a prompt edit on its own — the prompt
+  layer is on the coding agent's deny-list on purpose.
 - **No golden eval sets.** Every prompt entry declares one; none is written.
   Which tier each task belongs on is the routing document's judgement, unmeasured.
 - **Rate limiting is in-memory.** Per instance, and forgiving on restart. The
@@ -319,10 +332,18 @@ Stated here so nobody has to discover it by reading the code.
 - **`extraction.errors` and `evaluation.learner_message` overlap.** Both return
   error instances against the same taxonomy. Whether the separate pass earns its
   call is a measurement nobody has taken.
-- **No product-ops run has been executed against a real provider.** The whole
-  pipeline is tested against fakes, end to end and stage by stage, including
-  every idempotency guard and every rejection the apply layer makes. No branch
-  has been pushed and no pull request opened by it.
+- **Product-ops has run against a real provider only as far as synthesis.**
+  The first real scans surfaced four failures the fakes could not: a
+  30-second call timeout that the reasoning tier's proposal overran, proposals
+  the 2000-token output ceiling cut off, PRD sections the mid tier's
+  1000-token ceiling cut off, and then the mid-tier model thinking that same
+  ceiling away before answering. All four are handled — per-tier timeouts and
+  same-tier fallthrough on transient errors, a truncation repair, a
+  compact-answer instruction in the CPO prompt, a PRD contract sized to its
+  ceiling, and a bounded reasoning effort on the mid tier — and one real
+  proposal has been reviewed and approved. The
+  stages from planning onward are tested against fakes only. No branch has
+  been pushed and no pull request opened.
 - **The coding worker is a git worktree, not a container.** Isolation is the
   worktree, the path allowlist and the absence of a shell. A container is the
   documented next step rather than a gap being hidden — and the controls that

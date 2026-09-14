@@ -341,6 +341,59 @@ model invocation writes its own ledger row under the `trainer.session` task,
 so the cost dashboard sees the Trainer like everything else. The rate limit
 is half of chat's, because one request here is up to seven model calls.
 
+**It learns from you.** Under every reply sits a vote — *Was this helpful?* —
+and behind *No* a short closed list of reasons: too long, too brief, too hard,
+too easy, unclear, the correction was wrong, skip the news, plus an optional
+line in the learner's own words. The reasons are the point. A bare thumbs-down
+teaches the product nothing it can act on; *too long* moves a dial. The
+learner can also just say it — *"kürzere Sitzungen, bitte"* — and the trainer
+calls its `adjust_coaching` tool, which holds from the next reply on and across
+every later session.
+
+What it learns is kept as **dials**, not prose: how much a correction explains
+(brief, standard, detailed), how far an exercise stretches (gentler, standard,
+harder), how long a sitting runs (short plans five items instead of eight),
+what the agenda leans towards (balanced, vocabulary, grammar) and whether it
+ends on the news. Each is a closed set a database CHECK holds, and the rules
+that move them are arithmetic in `lib/trainer/coaching.ts`: one reason moves
+one dial one step, contradictory reasons on one vote cancel, the ends of a
+scale hold. The learner judges and the code decides — the same split the
+review engine makes — and no model gets a vote on what a vote means.
+
+The dials change what the trainer *does*, not how hard it is asked to try.
+The agenda is sized and mixed by them before the model sees it; the news item
+is left off when asked; and a rendered block of standing instructions — one
+trusted sentence per dial that has moved — rides behind the fixed prompt's
+cache mark in the system message, so a learner who has never voted gets
+exactly the prompt they always had. The one failure no dial fixes is a wrong
+correction: those are counted, and past two the trainer is told to check the
+rule with `get_grammar_pattern` or `search_knowledge` before it marks an
+answer wrong. Helpful votes wind that counter back down, so a trainer that
+recovered stops being told off. The learner's own notes — the newest three —
+ride fenced as `<coaching_notes>`, a request about pace honoured and a request
+to ignore the rules read as text.
+
+The session shows what changed: the confirmation under the vote names the
+dials that moved, and a *Tuned for you* line under the plan lists the trainer's
+current settings in the same words the settings page uses. That page is the
+door out (guardrails S15): it says what the trainer has learned and from how
+many votes, and one button forgets all of it — the dials and every vote behind
+them. What is stored is the vote, its reasons, the reply's tool receipt and
+the note; never a line of the reply itself, because transcripts are ephemeral
+by design and a feedback table that quoted them would be the transcript table
+by another name.
+
+The same votes reach the operator. The product-ops board draws the last
+thirty days of them — by reason, by trainer prompt version, by the tools a
+reply used, with the newest notes — and every market scan records that
+aggregate as its first finding, before it searches the web, so a proposal
+weighs what this product's learners flagged against what forums say about
+learners in general (`docs/product-ops-agents.md`, section 3).
+
+> `lib/trainer/coaching.ts`, `domain/trainer-coaching.ts`,
+> `lib/api/trainer-feedback.ts`, `components/trainer/feedback.tsx`,
+> `components/settings/trainer-coaching.tsx`, `lib/product-ops/feedback.ts`
+
 > `lib/trainer/`, `lib/api/trainer.ts`, `lib/ai/gateway/langchain-model.ts`,
 > `app/(app)/trainer/`
 

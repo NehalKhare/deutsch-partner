@@ -285,6 +285,37 @@ describe("advance_product_ops_run", () => {
     expect(await stageOf(runId)).toBe("synthesis");
   });
 
+  it("clears how a run ended when a retry takes it out of a terminal stage", async () => {
+    const runId = await seedRun("prd");
+    await database.db.query(
+      `select public.advance_product_ops_run(
+         $1, 'prd', 'failed',
+         jsonb_build_object('status', 'failed', 'errorCode', 'timeout'))`,
+      [runId],
+    );
+    const ended = await database.db.query<{ error_code: string | null; completed_at: Date | null; status: string }>(
+      `select error_code, completed_at, status from public.ai_runs where id = $1`,
+      [runId],
+    );
+    expect(ended.rows[0]).toMatchObject({ error_code: "timeout", status: "failed" });
+    expect(ended.rows[0].completed_at).not.toBeNull();
+
+    await database.db.query(
+      `select public.advance_product_ops_run(
+         $1, 'failed', 'prd',
+         jsonb_build_object('status', 'started', 'from', 'failed', 'retry', true))`,
+      [runId],
+    );
+
+    const moving = await database.db.query<{ error_code: string | null; completed_at: Date | null; status: string }>(
+      `select error_code, completed_at, status from public.ai_runs where id = $1`,
+      [runId],
+    );
+    expect(moving.rows[0]).toEqual({ error_code: null, completed_at: null, status: "running" });
+    // Both transitions are on the timeline: the failure is not erased.
+    expect(await eventCount(runId)).toBe(2);
+  });
+
   it("writes no event when the transition is refused", async () => {
     const runId = await seedRun("research");
 

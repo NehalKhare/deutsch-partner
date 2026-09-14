@@ -13,6 +13,35 @@ What you say is never stored. A conversation lives in your browser and dies
 with the tab; the database keeps only what the practice meant — your mistakes,
 your vocabulary, and a per-level score.
 
+## What it does
+
+- **A tutor that talks** (`/chat`). German conversation at your level, streamed,
+  with corrections your level can use, retrieval over a hand-authored knowledge
+  corpus, and long-term memory of your goals and interests. Speak to it and have
+  it read back to you; the speech model first, your device's own voice as a real
+  fallback.
+- **A curriculum, not a model's opinion** (`/curriculum`). Seventy mini-levels,
+  420 words and 86 grammar patterns as data. Progression, mastery, review
+  scheduling and recommendations are pure functions over your own record.
+- **A trainer that runs the drills** (`/trainer`). A tool-using agent that opens
+  a session with an agenda — due words, recurring mistakes, the level's grammar
+  and culture notes, today's simple-German news — quizzes one item at a time,
+  judges the answer, records the outcome through the deterministic review
+  engine, and shows every tool it used.
+- **A trainer that learns from you.** Rate any reply, or just ask for a change,
+  and closed-set dials move: how much it explains, how hard it pushes, how long
+  a sitting runs, what the agenda leans towards, whether it ends on the news.
+  Disputed corrections make it check a rule before it corrects. Everything it
+  learned is on the settings page with a button that forgets it.
+- **Scenarios and comprehensions** (`/scenarios`). Fifty practice items found in
+  your own words by vector search: dialogues played as roleplay, passages
+  answered as a quiz.
+- **Review and progress** (`/review`, `/dashboard`). What is due, what is weak,
+  what keeps going wrong, and the per-level score that decides when you move.
+- **Operator pages** (`/operations`). Euro spend by task and model, and the AI
+  Product Ops board described below — which now opens every scan with what
+  learners said about the trainer.
+
 ## Documentation
 
 | Document | What it answers |
@@ -21,6 +50,7 @@ your vocabulary, and a per-level score.
 | [Architecture](docs/architecture.md) | How the code is laid out and why the boundaries are where they are |
 | [How the pieces work](docs/topics.md) | Plain-language explanations of RAG, prompting, vector search, Next.js and the rest |
 | [Operations](docs/operations.md) | Environment, ingestion, cost, and what to check when something breaks |
+| [Product ops agents](docs/product-ops-agents.md) | The multi-agent workflow: graph, gates, agents, tools, what flows where |
 
 The specifications this was built against are in
 [`.claude/docs/`](.claude/docs/); the four above describe what was actually
@@ -129,16 +159,96 @@ corpus is parsed and embedded by the Python tooling in
 [`scripts/scenarios/`](scripts/scenarios/), which also carries the ragas
 retrieval evaluation.
 
+## Product ops: agents that propose, people that decide
+
+An operator runs a market scan; the pipeline researches, proposes a feature,
+waits for approval, writes a PRD, plans the implementation, and waits again.
+The plan is the deliverable. The stages are nodes of a LangGraph state graph,
+the two human gates are graph interrupts, and the judgement inside a node is
+delegated to a tool-using LangChain agent whose tools are the only doors it has.
+Nothing here writes to the repository from the server; the implementation
+stages exist and are tested but no review leads into them.
+
+```mermaid
+flowchart TD
+    Op(["Operator: Run a scan (brief)"]) --> R
+
+    subgraph Graph["LangGraph state graph — one stage per invocation, checkpointed in Postgres"]
+        direction TB
+        R["research
+Research agent"] --> S["synthesis
+CPO agent"]
+        S --> G1{{"human_review
+interrupt"}}
+        G1 -->|approve| P["prd
+structured call + deterministic render"]
+        G1 -->|reject| X([rejected])
+        P --> C["code_plan
+Planner agent (reads the checkout)"]
+        C --> G2{{"plan_review
+interrupt"}}
+        G2 -->|accept| Done([completed])
+        G2 -->|reject| X
+    end
+
+    subgraph Evidence["What research reads"]
+        FB["learner_feedback_summary()
+votes by reason, prompt version, tool"]
+        Web["OpenRouter web search
+(market_research task only)"]
+    end
+
+    FB -->|"internal finding, by arithmetic"| R
+    FB -->|"read_learner_feedback (fenced)"| R
+    Web -->|"search_market, one finding per query"| R
+
+    subgraph Gateway["lib/ai/gateway — the only model boundary"]
+        Ladder["tier ladder per task
+EUR ledger row per call
+per-run budget from the timeline"]
+    end
+    R -.-> Ladder
+    S -.-> Ladder
+    P -.-> Ladder
+    C -.-> Ladder
+
+    Board["Operator board
+product_ops_dashboard() + feedback panel"] -.->|polls, SSE| Graph
+```
+
+Each agent is `createAgent` over a model the gateway built for the agent's task,
+under a fixed middleware stack: the run's euro budget reconstructed from its own
+timeline, per-run caps on tool and model calls, every tool result fenced as
+untrusted with its delimiter escaped, a progress event per finished call carrying
+the tool's name and outcome and never its arguments, and summarisation of older
+tool output near the input ceiling. What a run records is what the tools wrote,
+never the model's account of what it did.
+
+| Agent | Stage | Tools | Tier |
+| --- | --- | --- | --- |
+| Research | research | `read_learner_feedback`, `search_market` | cheap, with web search |
+| CPO | synthesis | `read_findings`, `list_prior_proposals`, `search_internal_docs` | reasoning |
+| Planner | code_plan | `read_prd`, `list_files`, `read_file`, `search_code` | reasoning |
+| Coder | implementation (unreachable) | `read_file`, `propose_edit` | reasoning |
+
+The learner feedback loop closes here. Every vote under a trainer reply is stored
+with its reasons and the prompt version the reply was written under. A database
+function aggregates them for the operator, the research stage records the
+aggregate as its first finding before it searches the web, and the research agent
+reads the same document — notes fenced as learners' words — so a proposal weighs
+what this product's learners flagged against what forums say about learners in
+general. [The full walkthrough](docs/product-ops-agents.md) has the stage graph,
+the checkpoint shape, the validation layer and the liveness signal.
+
 ## Status
 
-Every phase of the build specification is implemented: 2942 tests across 159
+Every phase of the build specification is implemented: 3976 tests across 199
 files (plus 31 Python tests), typecheck, lint and a production build clean,
-and 29 migrations for the linked project.
+and 40 migrations for the linked project.
 
-**No chat model has ever been called.** Every test drives a fake transport; the
-real transports are written and tested against a fake `fetch`. The embedding
-pipelines have run for real: both corpora — knowledge and scenarios — are
-embedded on the linked project, through OpenRouter, which now carries every
-model call the text product makes (speech alone still goes direct to OpenAI).
-[Architecture](docs/architecture.md#what-is-not-built)
-lists what else is deliberately not built.
+Every model call — chat, the trainer, the product-ops agents, embeddings and
+speech — rides OpenRouter through the one gateway. The embedding pipelines have
+run for real against the linked project, and product ops has run against a real
+provider as far as an approved proposal; the agents and the trainer are tested
+against scripted models. [Architecture](docs/architecture.md#what-is-not-built)
+lists what is deliberately not built.

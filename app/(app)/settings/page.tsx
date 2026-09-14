@@ -1,7 +1,11 @@
 import Link from "next/link";
 
-import { updateSettingsAction } from "@/app/(app)/settings/actions";
+import {
+  resetTrainerCoachingAction,
+  updateSettingsAction,
+} from "@/app/(app)/settings/actions";
 import { SettingsForm } from "@/components/settings/settings-form";
+import { TrainerCoachingSettings } from "@/components/settings/trainer-coaching";
 import { VoiceSourceSetting } from "@/components/settings/voice-source";
 import {
   card,
@@ -17,6 +21,7 @@ import { getMiniLevel } from "@/learning/mini-levels";
 import { requireAuthenticatedUserId } from "@/lib/auth/current-user";
 import { cn } from "@/lib/utils";
 import { createLearnerRepository } from "@/repositories/learner-repository";
+import { createTrainerCoachingRepository } from "@/repositories/trainer-coaching-repository";
 import { createServerSupabaseClient } from "@/lib/supabase/server-client";
 import type { DatabaseClient } from "@/repositories/types";
 
@@ -37,10 +42,12 @@ export default async function SettingsPage() {
   const learnerId = await requireAuthenticatedUserId();
   const supabase = (await createServerSupabaseClient()) as unknown as DatabaseClient;
   const learners = createLearnerRepository(supabase);
+  const coaching = createTrainerCoachingRepository(supabase);
 
-  const [profile, state] = await Promise.all([
+  const [profile, state, coached] = await Promise.all([
     learners.getProfile(learnerId),
     learners.getState(learnerId),
+    coaching.getProfile(learnerId),
   ]);
 
   if (!profile.ok) {
@@ -101,6 +108,20 @@ export default async function SettingsPage() {
       </section>
 
       <section
+        aria-labelledby="trainer-heading"
+        className={cn(card, "flex flex-col gap-3")}
+      >
+        <h2 id="trainer-heading" className={sectionTitle}>
+          How your trainer has adapted
+        </h2>
+        <TrainerCoachingSettings
+          profile={coached.ok ? coached.data : null}
+          action={resetTrainerCoachingAction}
+          initialState={INITIAL_SETTINGS_STATE}
+        />
+      </section>
+
+      <section
         aria-labelledby="device-heading"
         className={cn(card, "flex flex-col gap-4")}
       >
@@ -117,8 +138,9 @@ export default async function SettingsPage() {
         <p className={prose}>
           Your conversations are not. They live in your browser and end with
           the tab. What the product keeps is what the practice meant: your
-          recorded mistakes, your vocabulary progress, and a per-level score
-          that decides when you move up.
+          recorded mistakes, your vocabulary progress, a per-level score that
+          decides when you move up, and the feedback you give your trainer —
+          the votes and any note you add, never the reply they were about.
         </p>
       </section>
     </main>

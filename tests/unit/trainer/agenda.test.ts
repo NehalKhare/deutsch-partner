@@ -290,3 +290,73 @@ describe("the culture slot", () => {
     expect(agenda.at(-1)?.kind).toBe("read_the_news");
   });
 });
+
+describe("the mix a focus hands in", () => {
+  it("gives a grammar focus more of the room without taking all of it", () => {
+    const rules = Array.from({ length: 6 }, (_, index) => ({
+      kind: "grammar_drill" as const,
+      subject: `Rule ${index + 1}`,
+      prompt: "teach it",
+    }));
+
+    const balanced = composeMixedAgenda({
+      vocabulary: vocab(20),
+      grammar: rules,
+      culture: [],
+      news,
+      size: 8,
+    });
+    const leaning = composeMixedAgenda({
+      vocabulary: vocab(20),
+      grammar: rules,
+      culture: [],
+      news,
+      size: 8,
+      mix: { grammarSlots: 4, grammarEvery: 2 },
+    });
+
+    const grammar = (agenda: typeof balanced) =>
+      agenda.filter((item) => item.kind === "grammar_drill").length;
+
+    expect(grammar(balanced)).toBe(2);
+    expect(grammar(leaning)).toBe(3);
+    expect(leaning.filter((item) => item.kind === "recall").length).toBeGreaterThan(0);
+    expect(leaning.at(-1)?.kind).toBe("read_the_news");
+    expect(leaning).toHaveLength(8);
+  });
+
+  it("keeps a single grammar slot for a vocabulary focus, mistakes first", () => {
+    const agenda = composeMixedAgenda({
+      vocabulary: vocab(20),
+      grammar: [mistake, drill],
+      culture: [],
+      news,
+      size: 8,
+      mix: { grammarSlots: 1, grammarEvery: 4 },
+    });
+
+    expect(agenda.filter((item) => item.kind === "recall")).toHaveLength(6);
+    expect(agenda.map((item) => item.subject)).toContain("The dative case");
+    expect(agenda.map((item) => item.subject)).not.toContain(drill.subject);
+  });
+
+  it("is the balanced rule when no mix is given", () => {
+    const explicit = composeMixedAgenda({
+      vocabulary: vocab(20),
+      grammar: [mistake, drill],
+      culture: [],
+      news,
+      size: 8,
+      mix: { grammarSlots: 2, grammarEvery: 3 },
+    });
+    const implicit = composeMixedAgenda({
+      vocabulary: vocab(20),
+      grammar: [mistake, drill],
+      culture: [],
+      news,
+      size: 8,
+    });
+
+    expect(explicit).toEqual(implicit);
+  });
+});

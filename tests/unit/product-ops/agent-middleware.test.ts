@@ -1,14 +1,21 @@
 import { describe, expect, it } from "vitest";
 
-import { ToolMessage } from "@langchain/core/messages";
+import {
+  HumanMessage,
+  SystemMessage,
+  ToolMessage,
+  type BaseMessage,
+  type MessageContent,
+} from "@langchain/core/messages";
 
 import { createTurnBudget } from "@/lib/ai/gateway/budgeter";
 import { ModelBudgetExhausted } from "@/lib/ai/gateway/langchain-model";
 import {
+  cacheMarksMiddleware,
   fencedToolResultsMiddleware,
   progressMiddleware,
   runBudgetMiddleware,
-  type ToolProgress,
+  type AgentProgress,
 } from "@/lib/product-ops/agents/middleware";
 
 /**
@@ -25,6 +32,11 @@ type Hook = {
     request: unknown,
     handler: (request: unknown) => Promise<ToolMessage>,
   ) => Promise<ToolMessage | unknown>;
+  readonly afterModel?: (state: unknown, runtime: unknown) => unknown;
+  readonly wrapModelCall?: (
+    request: Record<string, unknown>,
+    handler: (request: Record<string, unknown>) => Promise<unknown>,
+  ) => Promise<unknown>;
 };
 
 const asHook = (middleware: unknown): Hook => middleware as Hook;
@@ -115,7 +127,7 @@ describe("fencing tool results", () => {
 
 describe("progress", () => {
   it("reports the tool's name and success, and nothing about its arguments or result", async () => {
-    const seen: ToolProgress[] = [];
+    const seen: AgentProgress[] = [];
     const hook = asHook(progressMiddleware((progress) => void seen.push(progress)));
 
     await hook.wrapToolCall?.(
@@ -129,7 +141,7 @@ describe("progress", () => {
   });
 
   it("reports a failed tool call and lets the failure propagate", async () => {
-    const seen: ToolProgress[] = [];
+    const seen: AgentProgress[] = [];
     const hook = asHook(progressMiddleware((progress) => void seen.push(progress)));
 
     await expect(
@@ -139,5 +151,81 @@ describe("progress", () => {
     ).rejects.toThrow("boom");
 
     expect(seen).toEqual([{ tool: "read_file", ok: false }]);
+  });
+});
+
+describe("progress on model calls", () => {
+  it("reports a finished model call as a model call and nothing else", async () => {
+    const seen: AgentProgress[] = [];
+    const hook = asHook(progressMiddleware((progress) => void seen.push(progress)));
+
+    const update = await hook.afterModel?.(
+      { messages: [{ content: "the reply" }] },
+      {},
+    );
+
+    expect(seen).toEqual([{ model: "call" }]);
+    expect(update).toBeUndefined();
+    expect(JSON.stringify(seen)).not.toContain("the reply");
+  });
+
+  it("reports model calls from a node hook, not from the wrapper the framework wraps errors in", () => {
+    // wrapModelCall would turn a 404 or a schema rejection into a
+    // MiddlewareError before the loop could tell them apart.
+    const hook = asHook(progressMiddleware(() => undefined));
+
+    expect(hook.wrapModelCall).toBeUndefined();
+    expect(hook.afterModel).toBeTypeOf("function");
+  });
+});
+
+describe("cache marks", () => {
+  const markOf = (message: BaseMessage) =>
+    typeof message.content === "string"
+      ? undefined
+      : (message.content[0] as { cache_control?: unknown }).cache_control;
+  const plain = (content: MessageContent) =>
+    typeof content === "string"
+      ? content
+      : content.map((part) => ("text" in part ? part.text : "")).join("");
+
+  async function sent(messages: BaseMessage[], systemText = "You are the planner.") {
+    const hook = asHook(cacheMarksMiddleware());
+    let seen: Record<string, unknown> | null = null;
+    await hook.wrapModelCall?.(
+      { systemMessage: new SystemMessage(systemText), messages },
+      async (request) => {
+        seen = request;
+        return {};
+      },
+    );
+    return seen as unknown as { systemMessage: SystemMessage; messages: BaseMessage[] };
+  }
+
+  it("marks the system prompt without changing what it says", async () => {
+    const request = await sent([new HumanMessage("Brief: healthcare German")]);
+
+    expect(markOf(request.systemMessage)).toEqual({ type: "ephemeral" });
+    expect(plain(request.systemMessage.content)).toBe("You are the planner.");
+  });
+
+  it("marks the trusted request and nothing after it", async () => {
+    const request = await sent([
+      new HumanMessage("Brief: healthcare German"),
+      new ToolMessage({ content: "<repo_source>x</repo_source>", tool_call_id: "1", name: "read_file" }),
+      new HumanMessage("a second human turn, if there ever were one"),
+    ]);
+
+    const [brief, tool, later] = request.messages;
+    expect(markOf(brief)).toEqual({ type: "ephemeral" });
+    expect(plain(brief.content)).toBe("Brief: healthcare German");
+    expect(typeof tool.content).toBe("string");
+    expect(markOf(later)).toBeUndefined();
+  });
+
+  it("leaves an empty system prompt alone", async () => {
+    const request = await sent([new HumanMessage("Brief")], "");
+
+    expect(request.systemMessage.content).toBe("");
   });
 });

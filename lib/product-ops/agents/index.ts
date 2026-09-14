@@ -27,6 +27,7 @@ import {
   type PriorProposal,
   type RepositoryBrowser,
 } from "@/lib/product-ops/agents/tools";
+import type { LearnerFeedbackSource } from "@/lib/product-ops/feedback";
 import type { SpecialistDeps } from "@/lib/product-ops/specialist";
 
 /**
@@ -46,7 +47,7 @@ export type {
   AgentOutcome,
   ModelLadderFactory,
 } from "@/lib/product-ops/agents/runtime";
-export type { ToolProgress } from "@/lib/product-ops/agents/middleware";
+export type { AgentProgress, ModelProgress, ToolProgress } from "@/lib/product-ops/agents/middleware";
 
 /**
  * The agent's view of a call context.
@@ -90,6 +91,8 @@ export interface ResearchAgentRequest {
   readonly specialist: SpecialistDeps;
   readonly context: CallContext;
   readonly record: (findings: readonly MarketFinding[]) => Promise<boolean>;
+  /** The learners' own feedback, for the agent to read before it searches. */
+  readonly feedback?: LearnerFeedbackSource;
 }
 
 export interface ResearchAgentReport {
@@ -105,6 +108,7 @@ export async function runResearchAgent(
     specialist: request.specialist,
     context: request.context,
     record: request.record,
+    feedback: request.feedback,
   });
 
   const outcome = await runAgent(deps, {
@@ -115,8 +119,9 @@ export async function runResearchAgent(
     schema: researchSummarySchema,
     message: `Brief: ${request.brief}`,
     context: agentContext(request.context),
-    // One tool call per search, and the model calls that drive them.
-    limits: { toolCalls: MAX_SEARCHES_PER_SCAN, modelCalls: MAX_SEARCHES_PER_SCAN + 3 },
+    // One tool call per search plus the one read of learner feedback, and
+    // the model calls that drive them.
+    limits: { toolCalls: MAX_SEARCHES_PER_SCAN + 1, modelCalls: MAX_SEARCHES_PER_SCAN + 4 },
   });
 
   const report = { searches: toolset.searches(), recorded: toolset.recorded() };
@@ -225,7 +230,13 @@ export async function runPlannerAgent(
     message:
       "Plan the implementation of the PRD. Read it with read_prd, orient in the repository, then answer with the plan.",
     context: agentContext(request.context),
-    limits: { toolCalls: 24, modelCalls: 26 },
+    // Tool calls are local reads and cost nothing; model calls are the cost,
+    // because every turn re-sends the transcript on the reasoning tier. So
+    // the tool allowance is generous — a model that reads six files in one
+    // turn is being frugal, not greedy — and the model-call cap is the tight
+    // one. Twelve turns is a PRD, a couple of listings, two or three batches
+    // of reads, and the answer with room for a repair.
+    limits: { toolCalls: 30, modelCalls: 12 },
   });
   if (outcome.status !== "ok") return outcome;
 

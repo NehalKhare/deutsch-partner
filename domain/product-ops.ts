@@ -369,26 +369,33 @@ export function priorityScoreFor(
  * columns, rendered rather than generated. A model asked to restate what is
  * already stored can only introduce drift.
  */
+/**
+ * Sized to the mid tier. The four sections are generated in one call with a
+ * 1000-token output ceiling, and the first real run's answer was cut off twice
+ * under the looser bounds this had. The contract in the prompt is generated
+ * from these maxima, so tightening them here is what tells the model to be
+ * brief; a full answer at every bound is about 750 tokens.
+ */
 export const prdSectionsSchema = z.strictObject({
   userStories: z
-    .array(nonEmptyTextSchema(300))
+    .array(nonEmptyTextSchema(180))
     .min(1)
-    .max(12)
-    .describe("as a given user, I want a capability, so that an outcome follows"),
+    .max(4)
+    .describe("as a given user, I want a capability, so that an outcome follows; one line each"),
   functionalRequirements: z
-    .array(nonEmptyTextSchema(300))
+    .array(nonEmptyTextSchema(160))
     .min(1)
-    .max(15)
-    .describe("what the system must do, each one testable"),
+    .max(6)
+    .describe("what the system must do, each one testable, one line each"),
   acceptanceCriteria: z
-    .array(nonEmptyTextSchema(300))
+    .array(nonEmptyTextSchema(160))
     .min(1)
-    .max(15)
-    .describe("how a reviewer decides this is finished"),
+    .max(6)
+    .describe("how a reviewer decides this is finished, one line each"),
   nonGoals: z
-    .array(nonEmptyTextSchema(200))
+    .array(nonEmptyTextSchema(120))
     .min(1)
-    .max(8)
+    .max(3)
     .describe("what this deliberately does not do; at least one"),
 });
 
@@ -626,6 +633,37 @@ export function nextStage(
  * reprioritising it are both decisions worth recording that are not decisions
  * to proceed, and an approval aimed at the wrong gate is not one either.
  */
+/**
+ * The stage a failed run failed at, read from its own timeline.
+ *
+ * The run's row says only 'failed'. The work event the stage wrote before the
+ * transition says which stage, and the entry event for 'failed' carries the
+ * same answer as its `from`; the work event is preferred because it is the
+ * one the stage itself wrote. Null for a run whose timeline names no failing
+ * stage — an old row, or one nothing has run — and null is "cannot retry".
+ */
+export function failedStageOf(events: readonly RunEvent[]): ProductOpsStage | null {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event.status !== "failed") continue;
+    if (event.stage !== "failed") return event.stage;
+
+    const from = productOpsStageSchema.safeParse(event.detail.from);
+    if (from.success && from.data !== "failed") return from.data;
+  }
+
+  return null;
+}
+
+/**
+ * Whether a stage is one a retry may return a run to: something has to run
+ * there. A gate waits and a terminal stage ends, and neither can be redone.
+ */
+export function isRetryableStage(stage: ProductOpsStage): boolean {
+  const owner = stageOwner(stage);
+  return owner === "server" || owner === "worker";
+}
+
 export function stageAfterReview(
   stage: ProductOpsStage,
   action: ReviewAction,
@@ -836,6 +874,125 @@ export type PrdRecord = z.infer<typeof prdRecordSchema>;
  * particular list of files — and that list is what the apply layer checks
  * every write against, so it needs an approval of its own to point at.
  */
+// ---------------------------------------------------------------------------
+// The engineering breakdown
+// ---------------------------------------------------------------------------
+
+/**
+ * What an engineering manager adds to a plan that a file list cannot say:
+ * the order to build in, how big each piece is, and where the current stack
+ * is the wrong tool for the job.
+ *
+ * Sized to the reasoning tier's 2000-token ceiling at every bound, because it
+ * is generated in one call: three phases of four requirements, three points
+ * of guidance, short lines throughout. A breakdown that needs more than that
+ * is two proposals.
+ */
+export const T_SHIRT_SIZES = ["xs", "s", "m", "l", "xl", "xxl", "xxxl"] as const;
+
+export const tShirtSizeSchema = z
+  .enum(T_SHIRT_SIZES)
+  .describe(
+    "engineering effort: xs is an hour or two, s a day, m two to three days, l a week, xl two to three weeks, xxl a quarter, xxxl longer than that",
+  );
+
+export type TShirtSize = z.infer<typeof tShirtSizeSchema>;
+
+const requirementIdSchema = z
+  .string()
+  .regex(/^R[1-9]\d?$/)
+  .describe("R1, R2, … numbered in build order across all phases");
+
+export const breakdownRequirementSchema = z.strictObject({
+  id: requirementIdSchema,
+  title: nonEmptyTextSchema(60).describe("one line, the thing that gets built"),
+  description: nonEmptyTextSchema(140).describe(
+    "what is built and how a reviewer knows it is done; one sentence",
+  ),
+  size: tShirtSizeSchema,
+  dependsOn: z
+    .array(requirementIdSchema)
+    .max(4)
+    .describe("ids that must land before this one; empty when it stands alone"),
+});
+
+export type BreakdownRequirement = z.infer<typeof breakdownRequirementSchema>;
+
+export const breakdownPhaseSchema = z.strictObject({
+  name: nonEmptyTextSchema(60),
+  goal: nonEmptyTextSchema(120).describe(
+    "what a learner or an operator can do once this phase ships and nothing else has",
+  ),
+  requirements: z.array(breakdownRequirementSchema).min(1).max(4),
+});
+
+export type BreakdownPhase = z.infer<typeof breakdownPhaseSchema>;
+
+export const technicalGuidanceSchema = z.strictObject({
+  topic: nonEmptyTextSchema(80).describe("the decision, such as transport, storage or runtime"),
+  current: nonEmptyTextSchema(160).describe(
+    "what the codebase does today for this, from the architecture notes supplied; say so if they do not say",
+  ),
+  recommendation: nonEmptyTextSchema(160).describe(
+    "what to do — a named alternative, or keep what is there — and the one reason that decides it",
+  ),
+  pros: z.array(nonEmptyTextSchema(80)).min(1).max(2),
+  cons: z.array(nonEmptyTextSchema(80)).min(1).max(2),
+});
+
+export type TechnicalGuidance = z.infer<typeof technicalGuidanceSchema>;
+
+export const engineeringBreakdownSchema = z
+  .strictObject({
+    summary: nonEmptyTextSchema(240).describe(
+      "the shape of the work in two sentences, as a manager would brief it",
+    ),
+    overallSize: tShirtSizeSchema.describe("the whole thing, all phases together"),
+    phases: z.array(breakdownPhaseSchema).min(1).max(3),
+    technicalGuidance: z.array(technicalGuidanceSchema).min(1).max(3),
+  })
+  .superRefine((breakdown, ctx) => {
+    const ids = breakdown.phases.flatMap((phase) =>
+      phase.requirements.map((requirement) => requirement.id),
+    );
+    const seen = new Set<string>();
+    for (const id of ids) {
+      if (seen.has(id)) {
+        ctx.addIssue({ code: "custom", message: `requirement ${id} appears twice`, path: ["phases"] });
+      }
+      seen.add(id);
+    }
+    for (const phase of breakdown.phases) {
+      for (const requirement of phase.requirements) {
+        for (const dependency of requirement.dependsOn) {
+          if (!seen.has(dependency)) {
+            ctx.addIssue({
+              code: "custom",
+              message: `${requirement.id} depends on ${dependency}, which is not a requirement`,
+              path: ["phases"],
+            });
+          }
+          if (dependency === requirement.id) {
+            ctx.addIssue({
+              code: "custom",
+              message: `${requirement.id} depends on itself`,
+              path: ["phases"],
+            });
+          }
+        }
+      }
+    }
+  });
+
+export type EngineeringBreakdown = z.infer<typeof engineeringBreakdownSchema>;
+
+/** Every requirement, in the order the phases lay them out. */
+export function breakdownRequirements(
+  breakdown: EngineeringBreakdown,
+): readonly BreakdownRequirement[] {
+  return breakdown.phases.flatMap((phase) => phase.requirements);
+}
+
 export const PLAN_STATUSES = ["pending_review", "approved", "rejected"] as const;
 
 export const planStatusSchema = z.enum(PLAN_STATUSES);
@@ -845,6 +1002,12 @@ export const storedPlanSchema = z.object({
   id: z.uuid(),
   proposalId: z.uuid(),
   plan: implementationPlanSchema,
+  /**
+   * The engineering manager's breakdown, written in a second call after the
+   * plan and stored beside it. Null for a plan whose breakdown has not been
+   * written yet, which is what a retry of the planning stage looks for.
+   */
+  breakdown: engineeringBreakdownSchema.nullable(),
   status: planStatusSchema,
   createdAt: databaseTimestampSchema,
   updatedAt: databaseTimestampSchema,

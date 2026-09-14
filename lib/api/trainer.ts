@@ -24,6 +24,14 @@ import {
   trainerSystemPrompt,
 } from "@/lib/ai/prompts/trainer";
 import type { AnswerAnalysis } from "@/domain/trainer-analysis";
+import {
+  defaultCoachingProfile,
+  dialsOf,
+  shouldVerifyBeforeCorrecting,
+  type CoachingDials,
+  type TrainerCoachingProfile,
+} from "@/domain/trainer-coaching";
+import { trainerCoachingBlock } from "@/lib/ai/prompts/trainer";
 import type { TrainerAgendaItem } from "@/lib/trainer/agenda";
 import { runTrainerTurn } from "@/lib/trainer/agent";
 import {
@@ -41,6 +49,7 @@ import type { LearnerErrorRepository } from "@/repositories/learner-error-reposi
 import type { LearnerRepository } from "@/repositories/learner-repository";
 import type { MinedSessionRepository } from "@/repositories/mined-session-repository";
 import type { PerformanceRepository } from "@/repositories/performance-repository";
+import type { TrainerCoachingRepository } from "@/repositories/trainer-coaching-repository";
 import type { VocabularyRepository } from "@/repositories/vocabulary-repository";
 
 /**
@@ -106,6 +115,13 @@ export const TRAINER_MAX_TURN_EUR = 0.05;
 /** The post-session miner's own ceiling: the request's budget is already spent. */
 export const TRAINER_MINER_MAX_EUR = 0.01;
 
+/**
+ * How many of the learner's own notes ride into the coaching block. Three:
+ * the most recent requests are the ones that still stand, and each is a
+ * fenced line the model reads on every invocation of every turn.
+ */
+export const COACHING_NOTES_IN_PROMPT = 3;
+
 export interface TrainerDeps {
   readonly learners: LearnerRepository;
   readonly errors: LearnerErrorRepository;
@@ -127,6 +143,12 @@ export interface TrainerDeps {
   /** The post-session miner's idempotency guard. */
   readonly mined: MinedSessionRepository;
   /**
+   * What the learner's feedback has taught the trainer, and where the
+   * adjust_coaching tool writes. Optional so a composition without it runs
+   * the trainer exactly as before: defaults, no block, no tool writes kept.
+   */
+  readonly coaching?: TrainerCoachingRepository;
+  /**
    * Runs work after the response has gone out — the route hands in Next's
    * after(), tests hand in something synchronous. The learner never waits on
    * anything scheduled here.
@@ -146,7 +168,42 @@ export interface TrainerTurnPayload {
   readonly covered: readonly string[];
   /** The agenda was worked through: this session is over. */
   readonly complete: boolean;
+  /**
+   * How the trainer is coaching this learner after this turn — the dials, as
+   * their feedback and this turn's adjust_coaching calls left them. Shown so
+   * a learner can see what their feedback did.
+   */
+  readonly coaching: CoachingDials;
   readonly costEur: number;
+}
+
+/**
+ * The learner's coaching profile and their recent notes, read for one turn.
+ *
+ * Every failure is a value: an unreadable profile is the default profile and
+ * no notes, so the trainer runs as it did before there was feedback. A
+ * learner whose coaching cannot be read still gets coached.
+ */
+async function readCoaching(
+  repository: TrainerCoachingRepository | undefined,
+  learnerId: string,
+  at: Date,
+): Promise<{ profile: TrainerCoachingProfile; notes: readonly string[] }> {
+  const fallback = { profile: defaultCoachingProfile(learnerId, at), notes: [] };
+  if (repository === undefined) return fallback;
+
+  const [profile, notes] = await Promise.all([
+    repository.getProfile(learnerId).catch(() => null),
+    repository.listRecentNotes(learnerId, COACHING_NOTES_IN_PROMPT).catch(() => null),
+  ]);
+
+  return {
+    profile:
+      profile !== null && profile.ok && profile.data !== null
+        ? profile.data
+        : fallback.profile,
+    notes: notes !== null && notes.ok ? notes.data : [],
+  };
 }
 
 export type TrainerResult =
@@ -203,6 +260,17 @@ export async function handleTrainerTurn(
     },
   });
 
+  // What this learner's feedback has taught the trainer: read once per turn,
+  // rendered once into the system message, and handed to the tools that size
+  // and mix the agenda by it.
+  const coaching = await readCoaching(deps.coaching, identity.learnerId, now());
+  const coachingBlock =
+    trainerCoachingBlock({
+      dials: dialsOf(coaching.profile),
+      verifyBeforeCorrecting: shouldVerifyBeforeCorrecting(coaching.profile),
+      notes: coaching.notes,
+    }) ?? undefined;
+
   const local = createTrainerTools({
     learnerId: identity.learnerId,
     covered: parsed.data.covered,
@@ -215,6 +283,10 @@ export async function handleTrainerTurn(
     learners: deps.learners,
     grammar: deps.grammar,
     retriever: deps.retriever,
+    coaching:
+      deps.coaching === undefined
+        ? undefined
+        : { profile: coaching.profile, repository: deps.coaching },
     logger,
     now,
   });
@@ -263,6 +335,7 @@ export async function handleTrainerTurn(
       {
         models: ladder,
         tools: [...local.tools, ...mcp.tools],
+        coaching: coachingBlock,
         logger,
       },
       { message: parsed.data.message, history: parsed.data.history, analysis },
@@ -282,6 +355,7 @@ export async function handleTrainerTurn(
       covered: local.covered().length,
       complete: local.complete(),
       analysis: findings !== undefined,
+      coached: coachingBlock !== undefined,
       costEur: Number(turn.spentEur().toFixed(8)),
     });
 
@@ -340,6 +414,7 @@ export async function handleTrainerTurn(
         agenda: local.agenda(),
         covered: local.covered(),
         complete: local.complete(),
+        coaching: dialsOf(local.coaching()),
         costEur: turn.spentEur(),
       },
     };

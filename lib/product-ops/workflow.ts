@@ -1,9 +1,13 @@
 import {
+  breakdownRequirements,
+  type StoredPlan,
   branchNameFor,
   isDeniedPath,
   nextStage,
   prdPathFor,
   runSpendEur,
+  failedStageOf,
+  isRetryableStage,
   stageAfterReview,
   stageOwner,
   type EventStatus,
@@ -33,7 +37,9 @@ import {
   type ModelLadderFactory,
   type RepositoryBrowser,
 } from "@/lib/product-ops/agents";
+import { breakDownPlan } from "@/lib/product-ops/breakdown";
 import { synthesiseProposal } from "@/lib/product-ops/cpo";
+import { feedbackFinding, type LearnerFeedbackSource } from "@/lib/product-ops/feedback";
 import { planImplementation, type RepositoryFile } from "@/lib/product-ops/planner";
 import { prdSections, renderPrdDocument } from "@/lib/product-ops/prd";
 import { researchMarket, researchQueries } from "@/lib/product-ops/research";
@@ -78,13 +84,19 @@ import type { StoredFinding } from "@/repositories/product-ops-rows";
  * The persisted daily and global budgets sit above this and are not replaced
  * by it.
  *
- * Starting figures, to be tuned against real traces rather than argued about.
- * An implementation run gets more because a code edit is a reasoning-tier call
- * per file and a verification failure buys one repair pass.
+ * Tuned against the first real trace (2026-09-10), a scan driven to planning:
+ * research 0.06, synthesis 0.13 to 0.26 depending on a repair, the PRD 0.01,
+ * and planning 0.16, then 0.20, then 0.28 across three attempts that each
+ * ended early for a different reason. The planner is the expensive stage —
+ * every tool turn re-sends its transcript on the reasoning tier, at around a
+ * tenth of a euro a turn with a few files in it — and the figure below leaves
+ * a run that has already paid for two false starts room to finish. An implementation run gets more because a code edit is a
+ * reasoning-tier call per file and a verification failure buys one repair
+ * pass. The persisted daily and global budgets remain the ceiling above this.
  */
 export const RUN_BUDGET_EUR: Readonly<Record<RunType, number>> = {
-  manual_market_scan: 0.5,
-  feature_implementation: 1,
+  manual_market_scan: 3,
+  feature_implementation: 5,
 };
 
 /** What a scan looks for when the operator did not say. */
@@ -92,6 +104,9 @@ export const DEFAULT_BRIEF = "German learning for English speakers";
 
 /** How many earlier proposals the CPO is shown, so it does not re-propose one. */
 const RECENT_PROPOSALS = 10;
+
+/** How far back the research stage reads learner feedback. The board's window. */
+export const FEEDBACK_DAYS = 30;
 
 // ---------------------------------------------------------------------------
 // The working tree, as a port
@@ -231,6 +246,13 @@ export interface WorkflowDeps {
   /** The product's own corpus, for the CPO to check what already exists. */
   readonly docs?: InternalDocs;
   /**
+   * What the product's own learners said about the trainer, aggregated. The
+   * research stage records it as an internal finding before the first web
+   * search and hands it to the research agent as a tool. Absent means a scan
+   * that knows only what the web says, which is what every scan was before.
+   */
+  readonly feedback?: LearnerFeedbackSource;
+  /**
    * A read-only view of the repository, for the planner. The server has one
    * wherever it runs beside a checkout; a worker's workspace supplies its own.
    * Absent everywhere means a plan cannot be produced, and the stage says so.
@@ -342,17 +364,46 @@ function asFinding(stored: StoredFinding): MarketFinding {
 // The stages
 // ---------------------------------------------------------------------------
 
+/**
+ * The product's own learners, recorded as the scan's first finding.
+ *
+ * Arithmetic over the operator's aggregate, no model call, before the first
+ * web search — so the CPO reads what this product's learners flagged beside
+ * what the web says about learners in general. Every failure is a value: a
+ * scan whose feedback cannot be read is the scan it always was.
+ */
+async function recordFeedbackFinding(
+  deps: WorkflowDeps,
+  runId: string,
+): Promise<number> {
+  if (deps.feedback === undefined) return 0;
+
+  const summary = await deps.feedback.summary(FEEDBACK_DAYS).catch(() => null);
+  if (summary === null) return 0;
+
+  const finding = feedbackFinding(summary);
+  if (finding === null) return 0;
+
+  const recorded = await deps.runs.recordFindings(runId, [finding]);
+  return recorded.ok ? 1 : 0;
+}
+
 const research: StageRunner = {
   async run({ deps, run, call, specialist, agents }) {
     const existing = await deps.runs.listFindings(run.id);
     if (!existing.ok) return storeBroke(existing.error.kind);
     // The stage's own output, from a previous attempt that landed and then
-    // died before its transition. Nothing to redo.
-    if (existing.data.length > 0) {
+    // died before its transition. Nothing to redo — but only when the web
+    // was actually asked: the internal feedback finding lands before the
+    // first search, and a retry that adopted it alone would be a scan that
+    // never searched.
+    if (existing.data.some((finding) => finding.sourceType !== "internal")) {
       return adopted({ findings: existing.data.length });
     }
 
     const brief = run.brief ?? DEFAULT_BRIEF;
+    const fromFeedback =
+      existing.data.length > 0 ? existing.data.length : await recordFeedbackFinding(deps, run.id);
 
     if (specialist && agents) {
       // The agent chooses its own queries and records findings as it goes,
@@ -366,6 +417,7 @@ const research: StageRunner = {
           const recorded = await deps.runs.recordFindings(run.id, findings);
           return recorded.ok;
         },
+        feedback: deps.feedback,
       });
       if (outcome.status !== "ok") {
         // The reason is the code; the detail says which error class or issue
@@ -378,6 +430,7 @@ const research: StageRunner = {
         agent: "research",
         searches: outcome.value.searches,
         findings: outcome.value.recorded,
+        fromFeedback,
         toolCalls: outcome.toolCalls,
       });
     }
@@ -402,7 +455,11 @@ const research: StageRunner = {
     const recorded = await deps.runs.recordFindings(run.id, found);
     if (!recorded.ok) return storeBroke(recorded.error.kind, costEur);
 
-    return finished(costEur, { queries: queries.length, findings: found.length });
+    return finished(costEur, {
+      queries: queries.length,
+      findings: found.length,
+      fromFeedback,
+    });
   },
 };
 
@@ -451,7 +508,9 @@ const synthesis: StageRunner = {
           internalContext,
           context: call,
         });
-    if (outcome.status !== "ok") return broke(outcome.reason, outcome.costEur);
+    if (outcome.status !== "ok") {
+      return broke(outcome.reason, outcome.costEur, { detail: outcome.detail });
+    }
 
     const saved = await deps.runs.saveProposal(run.id, outcome.value);
     if (!saved.ok) {
@@ -483,7 +542,9 @@ const prd: StageRunner = {
       proposal: proposal.data,
       context: call,
     });
-    if (outcome.status !== "ok") return broke(outcome.reason, outcome.costEur);
+    if (outcome.status !== "ok") {
+      return broke(outcome.reason, outcome.costEur, { detail: outcome.detail });
+    }
 
     // Rendered, not generated: everything but the four judgement sections is
     // a projection of the row a person approved.
@@ -522,6 +583,22 @@ async function plannerContextFrom(
   return files;
 }
 
+/**
+ * What the breakdown compares against: the rules and the architecture notes,
+ * without the tree. The planner already named the files; the manager needs
+ * to know what the system is, not where everything lives.
+ */
+async function architectureNotesFrom(
+  browser: RepositoryBrowser,
+): Promise<readonly RepositoryFile[]> {
+  const files: RepositoryFile[] = [];
+  for (const path of ["AGENTS.md", "docs/architecture.md"]) {
+    const content = await browser.read(path);
+    if (content !== null) files.push({ path, content: content.slice(0, 4_000) });
+  }
+  return files;
+}
+
 const codePlan: StageRunner = {
   async run({ deps, run, call, specialist, logger, agents }, workspace) {
     const proposal = await deps.runs.findProposalForRun(run.id);
@@ -534,13 +611,55 @@ const codePlan: StageRunner = {
 
     const existing = await deps.runs.findPlanForProposal(proposal.data.id);
     if (!existing.ok) return storeBroke(existing.error.kind);
-    if (existing.data !== null) return adopted({ planId: existing.data.id });
+    if (existing.data !== null && existing.data.breakdown !== null) {
+      return adopted({ planId: existing.data.id });
+    }
 
     // Planning only reads. The server's own browser first, then a worker's
     // workspace; a process with neither cannot plan and says so, rather than
     // deferring to a worker this workflow no longer has a stage for.
     const browser = deps.browser ?? workspace?.browser?.() ?? null;
     if (browser === null && !workspace) return broke("no_repository");
+
+    /**
+     * The second half of the stage: the engineering manager's breakdown,
+     * written onto a plan that exists. Its own function so the stage can do
+     * only this half when a previous attempt saved the plan and then failed
+     * here — the plan is the expensive call, and it is not paid for twice.
+     */
+    const writeBreakdown = async (plan: StoredPlan, spentSoFar: number): Promise<StageResult> => {
+      const architecture = browser === null ? [] : await architectureNotesFrom(browser);
+      const breakdown = await breakDownPlan(specialist, {
+        prd: document.data!.document,
+        plan: plan.plan,
+        architecture,
+        context: call,
+      });
+      const costEur = spentSoFar + breakdown.costEur;
+      if (breakdown.status !== "ok") {
+        return broke(breakdown.reason, costEur, {
+          detail: breakdown.detail,
+          planId: plan.id,
+          half: "breakdown",
+        });
+      }
+
+      const saved = await deps.runs.saveBreakdown(plan.id, breakdown.value);
+      if (!saved.ok) return storeBroke(saved.error.kind, costEur);
+
+      await moveProposal(deps, proposal.data!.id, "plan_ready", logger);
+
+      return finished(costEur, {
+        planId: plan.id,
+        requirements: breakdownRequirements(breakdown.value).length,
+        overallSize: breakdown.value.overallSize,
+      });
+    };
+
+    if (existing.data !== null) {
+      // The plan landed on an earlier attempt; only the breakdown is missing.
+      return writeBreakdown(existing.data, 0);
+    }
 
     const outcome =
       agents !== null && browser !== null
@@ -566,7 +685,9 @@ const codePlan: StageRunner = {
           });
         })();
     if (outcome === null) return broke("workspace_unavailable");
-    if (outcome.status !== "ok") return broke(outcome.reason, outcome.costEur);
+    if (outcome.status !== "ok") {
+      return broke(outcome.reason, outcome.costEur, { detail: outcome.detail });
+    }
 
     const writable = [
       ...outcome.value.filesToModify,
@@ -583,16 +704,20 @@ const codePlan: StageRunner = {
     const saved = await deps.runs.savePlan(proposal.data.id, outcome.value);
     if (!saved.ok) return storeBroke(saved.error.kind, outcome.costEur);
 
-    await moveProposal(deps, proposal.data.id, "plan_ready", logger);
+    const result = await writeBreakdown(saved.data, outcome.costEur);
+    if (result.outcome !== "ok") return result;
 
-    return finished(outcome.costEur, {
-      planId: saved.data.id,
-      files: writable.length,
-      // Reported to the reviewer rather than removed from the plan: the person
-      // approving it should see that the model asked for something it may not
-      // have. The apply layer refuses these regardless of the approval.
-      denied: outcome.denied,
-    });
+    return {
+      ...result,
+      detail: {
+        ...result.detail,
+        files: writable.length,
+        // Reported to the reviewer rather than removed from the plan: the
+        // person approving it should see that the model asked for something
+        // it may not have. The apply layer refuses these regardless.
+        denied: outcome.denied,
+      },
+    };
   },
 };
 
@@ -833,11 +958,13 @@ export const nothingRan = (
  * The agents' dependencies for one stage of one run.
  *
  * Progress is where the agents meet the dashboard: every finished tool call
- * becomes a 'progress' event on the run's timeline — the agent and the tool,
- * never the arguments or the result — and touches the run, so the board's
- * liveness signal moves while a planner is still reading its ninth file. A
+ * and every finished model call becomes a 'progress' event on the run's
+ * timeline — the tool's name and whether it worked, or the bare fact of a
+ * model call, never arguments, results or replies — and touches the run, so
+ * the board's liveness signal moves while a planner is still reading its
+ * ninth file and the live feed has something to say while the CPO thinks. A
  * progress row that fails to write is logged and forgotten; it must never
- * fail the tool call it describes.
+ * fail the call it describes.
  */
 function agentDepsFor(
   deps: WorkflowDeps,
@@ -855,7 +982,10 @@ function agentDepsFor(
         runId: run.id,
         stage,
         status: "progress",
-        detail: { tool: progress.tool, ok: progress.ok },
+        detail:
+          "tool" in progress
+            ? { tool: progress.tool, ok: progress.ok }
+            : { model: progress.model },
       });
       if (!recorded.ok) {
         logger.warn("productops.progress_unrecorded", {
@@ -1193,4 +1323,85 @@ export async function applyReview(
     },
     runId: run.data.id,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Trying again
+// ---------------------------------------------------------------------------
+
+export interface RetryRequest {
+  readonly runId: string;
+  readonly operatorIdHash: string;
+}
+
+export type RetryOutcome =
+  /** The run is back at the stage that failed. The caller drives it. */
+  | { readonly status: "retried"; readonly stage: ProductOpsStage }
+  /** Not failed, so nothing to retry. Where it actually stands. */
+  | { readonly status: "not_failed"; readonly stage: ProductOpsStage }
+  /** Failed, but the timeline names no stage a retry could return to. */
+  | { readonly status: "no_stage" }
+  /** Another process moved it first. Where it now stands. */
+  | { readonly status: "raced"; readonly stage: ProductOpsStage }
+  | { readonly status: "unavailable" };
+
+/**
+ * Moves a failed run back to the stage that failed.
+ *
+ * Nothing is redone that does not need redoing: every stage checks for its
+ * own output first, so a retry of the PRD stage after an approval finds the
+ * proposal, the findings and the approval where they were and does only the
+ * PRD again. The run's euro ceiling is unchanged and its timeline is kept —
+ * what the failed attempt cost still counts, and the failure is still there
+ * to read. The move itself is the same compare-and-set as every other
+ * transition, from 'failed', so two operators pressing at once move it once.
+ *
+ * This records the move and nothing more. Driving the run is the caller's,
+ * after the response, exactly as an approval is.
+ */
+export async function retryRun(
+  deps: WorkflowDeps,
+  request: RetryRequest,
+): Promise<RetryOutcome> {
+  const logger = deps.logger ?? nullLogger;
+
+  const loaded = await deps.runs.getRun(request.runId);
+  if (!loaded.ok) return { status: "unavailable" };
+  const run = loaded.data;
+
+  if (run.currentStage !== "failed") {
+    return { status: "not_failed", stage: run.currentStage };
+  }
+
+  const events = await deps.runs.listEvents(run.id);
+  if (!events.ok) return { status: "unavailable" };
+
+  const stage = failedStageOf(events.data);
+  if (stage === null || !isRetryableStage(stage)) return { status: "no_stage" };
+
+  // An operator action on a privileged surface, per guardrails S24. The code
+  // the run stopped with is the one thing worth keeping beside the decision.
+  logger.info("productops.retry_requested", {
+    audit: true,
+    runId: run.id,
+    userIdHash: request.operatorIdHash,
+    stage,
+    errorCode: run.errorCode,
+  });
+
+  const moved = await deps.runs.advanceStage({
+    runId: run.id,
+    from: "failed",
+    to: stage,
+    event: {
+      status: entryStatus(stage),
+      from: "failed",
+      retry: true,
+      requestId: run.requestId,
+    },
+  });
+  if (!moved.ok) return { status: "unavailable" };
+  if (!moved.data.advanced) return { status: "raced", stage: moved.data.stage };
+
+  return { status: "retried", stage };
 }

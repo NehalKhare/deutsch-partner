@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { startTransition, useEffect } from "react";
 
+import { RunLiveFeed } from "@/components/operations/run-live-feed";
 import { PendingButton } from "@/components/ui/pending-button";
 import { buttonQuiet, card, eyebrow } from "@/components/ui/styles";
 import type { BoardRun } from "@/domain/product-ops";
@@ -46,6 +47,7 @@ export function RunsPanel({
   asOf,
   runsWithProposals,
   advance,
+  retry,
   remove,
   intervalMs = POLL_INTERVAL_MS,
 }: {
@@ -56,6 +58,8 @@ export function RunsPanel({
   readonly runsWithProposals: ReadonlySet<string>;
   /** The nudge, for a run only the server can move. */
   readonly advance: (formData: FormData) => Promise<void>;
+  /** Another go, for a run that stopped: back to the stage that failed. */
+  readonly retry: (formData: FormData) => Promise<void>;
   /** Removal, for a run that stopped and left nothing behind. */
   readonly remove: (formData: FormData) => Promise<void>;
   readonly intervalMs?: number;
@@ -105,6 +109,7 @@ export function RunsPanel({
             report={byId.get(run.id) ?? null}
             removable={isRemovable(run, runsWithProposals.has(run.id))}
             advance={advance}
+            retry={retry}
             remove={remove}
           />
         ))}
@@ -148,6 +153,7 @@ function RunCard({
   report,
   removable,
   advance,
+  retry,
   remove,
 }: {
   readonly run: BoardRun;
@@ -155,11 +161,15 @@ function RunCard({
   readonly report: RunReport | null;
   readonly removable: boolean;
   readonly advance: (formData: FormData) => Promise<void>;
+  readonly retry: (formData: FormData) => Promise<void>;
   readonly remove: (formData: FormData) => Promise<void>;
 }) {
   const activity = report?.activity ?? settledActivity(run);
   const explanation = activity === "failed" ? explainErrorCode(run.errorCode) : null;
   const nudgeable = activity === "working" || activity === "stalled";
+  // Every stage is a resume point, so a stopped run is one to try again from
+  // where it stopped — not one to start over.
+  const retryable = activity === "failed";
 
   return (
     <li
@@ -205,6 +215,9 @@ function RunCard({
         </p>
       ) : null}
 
+      {/* Line by line, from the run's own timeline, while it moves. */}
+      <RunLiveFeed runId={run.id} working={activity === "working"} />
+
       {explanation ? (
         <p className="font-display text-sm text-chalk/70">
           {explanation}
@@ -216,7 +229,7 @@ function RunCard({
         </p>
       ) : null}
 
-      {nudgeable || removable ? (
+      {nudgeable || retryable || removable ? (
         <div className="flex flex-wrap gap-2 pt-1">
           {nudgeable ? (
             <form action={advance}>
@@ -224,6 +237,12 @@ function RunCard({
               <PendingButton className={buttonQuiet}>
                 {activity === "stalled" ? "Nudge it on" : "Nudge"}
               </PendingButton>
+            </form>
+          ) : null}
+          {retryable ? (
+            <form action={retry}>
+              <input type="hidden" name="runId" value={run.id} />
+              <PendingButton className={buttonQuiet}>Try again from where it stopped</PendingButton>
             </form>
           ) : null}
           {removable ? (

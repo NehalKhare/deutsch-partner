@@ -31,6 +31,7 @@ const OWNED_TABLES = [
   "assessments",
   "conversation_threads",
   "level_performances",
+  "trainer_coaching_profiles",
 ];
 
 const OPERATOR_TABLES = [

@@ -137,15 +137,19 @@ export function createProductOpsStore(): ProductOpsStore {
       >;
       void requestId;
 
+      // Mirrors the migration: entering a terminal stage stamps the end and
+      // keeps or sets the code; leaving one — a retry — clears both.
+      const terminal = to === "completed" || to === "failed" || to === "rejected";
       runs.set(runId, {
         ...run,
         currentStage: to,
         status: statusForStage(to),
-        errorCode: typeof errorCode === "string" ? errorCode : run.errorCode,
-        completedAt:
-          to === "completed" || to === "failed" || to === "rejected"
-            ? now()
-            : run.completedAt,
+        errorCode: terminal
+          ? typeof errorCode === "string"
+            ? errorCode
+            : run.errorCode
+          : null,
+        completedAt: terminal ? now() : null,
       });
 
       events.push({
@@ -179,6 +183,12 @@ export function createProductOpsStore(): ProductOpsStore {
       if (failing("listEvents")) return fail(repositoryError("unavailable"));
 
       return ok(events.filter((event) => event.runId === runId));
+    },
+
+    async listEventsAfter(runId, afterId) {
+      if (failing("listEventsAfter")) return fail(repositoryError("unavailable"));
+
+      return ok(events.filter((event) => event.runId === runId && event.id > afterId));
     },
 
     async recordFindings(runId, incoming) {
@@ -343,6 +353,8 @@ export function createProductOpsStore(): ProductOpsStore {
         id: index === -1 ? nextId() : plans[index].id,
         proposalId,
         plan,
+        // An upsert writes the plan's own columns and leaves the rest alone.
+        breakdown: index === -1 ? null : plans[index].breakdown,
         // An upsert leaves an approval alone; nothing here re-approves a plan.
         status: index === -1 ? "pending_review" : plans[index].status,
         createdAt: now(),
@@ -353,6 +365,17 @@ export function createProductOpsStore(): ProductOpsStore {
       else plans[index] = record;
 
       return ok(record);
+    },
+
+    async saveBreakdown(planId, breakdown) {
+      if (failing("saveBreakdown")) return fail(repositoryError("unavailable"));
+
+      const index = plans.findIndex((stored) => stored.id === planId);
+      if (index === -1) return fail(repositoryError("not_found"));
+
+      plans[index] = { ...plans[index], breakdown, updatedAt: now() };
+
+      return ok(plans[index]);
     },
 
     async findPlanForProposal(proposalId) {

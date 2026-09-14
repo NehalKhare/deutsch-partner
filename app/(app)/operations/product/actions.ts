@@ -10,10 +10,10 @@ import { limiterFor } from "@/lib/api/rate-limit";
 import { requireAuthenticatedUserId } from "@/lib/auth/current-user";
 import { isOperator } from "@/lib/auth/operator";
 import { driveRunGraph } from "@/lib/product-ops/graph/graph";
-import { DEFAULT_BRIEF, applyReview } from "@/lib/product-ops/workflow";
+import { DEFAULT_BRIEF, applyReview, retryRun } from "@/lib/product-ops/workflow";
 
 /**
- * The operator's five buttons.
+ * The operator's six buttons.
  *
  * Every one of them re-checks the operator allowlist and returns silently on
  * failure. That is not belt and braces over the page's check: an action is its
@@ -152,6 +152,44 @@ export async function advanceRunAction(formData: FormData): Promise<void> {
     runId: runId.data,
     userIdHash: operator,
   });
+
+  after(async () => {
+    await driveRunGraph(workflow, runId.data);
+  });
+
+  refresh();
+}
+
+/**
+ * Tries a failed run again from the stage that failed.
+ *
+ * The counterpart of the nudge for a run that did not stall but stopped: a
+ * provider that timed out on every rung, an answer that would not fit, a
+ * budget that ran out. The run goes back to the stage its timeline says
+ * failed and is driven from there in the background, under the same euro
+ * ceiling and with its history intact. Every stage finds its own earlier
+ * output, so an approval is not asked for twice and a proposal is not
+ * written twice.
+ */
+export async function retryRunAction(formData: FormData): Promise<void> {
+  const operator = await admitOperator();
+  if (operator === null) return;
+
+  const runId = z.uuid().safeParse(formData.get("runId"));
+  if (!runId.success) return;
+
+  const { workflow, logger } = createProductOpsGraph();
+
+  const outcome = await retryRun(workflow, { runId: runId.data, operatorIdHash: operator });
+
+  if (outcome.status !== "retried") {
+    logger.info("productops.retry_refused", {
+      runId: runId.data,
+      reason: outcome.status,
+    });
+    refresh();
+    return;
+  }
 
   after(async () => {
     await driveRunGraph(workflow, runId.data);

@@ -10,6 +10,15 @@ import {
   recordIncorrectUse,
 } from "@/learning/vocabulary-engine";
 import { GENDERS } from "@/domain/vocabulary";
+import {
+  CHALLENGE_LEVELS,
+  EXPLANATION_DEPTHS,
+  PRACTICE_FOCUSES,
+  SESSION_LENGTHS,
+  defaultCoachingProfile,
+  dialsOf,
+  type TrainerCoachingProfile,
+} from "@/domain/trainer-coaching";
 import { MAX_AGENDA_ITEMS, MAX_COVERED_SUBJECTS } from "@/domain/trainer-session";
 import { escapeUntrusted, wrapUntrusted } from "@/lib/ai/prompts/delimiters";
 import { truncateToTokens } from "@/lib/ai/prompts/tokens";
@@ -24,6 +33,11 @@ import {
   type TrainerAgendaItem,
 } from "@/lib/trainer/agenda";
 import {
+  MIX_FOR_FOCUS,
+  agendaSizeFor,
+  applyAdjustment,
+} from "@/lib/trainer/coaching";
+import {
   NEWS_CHOICES,
   NEWS_RETELL_WORDS,
   parseHeadlines,
@@ -36,6 +50,7 @@ import type { GrammarRepository } from "@/repositories/grammar-repository";
 import type { LearnerErrorRepository } from "@/repositories/learner-error-repository";
 import type { LearnerRepository } from "@/repositories/learner-repository";
 import type { PerformanceRepository } from "@/repositories/performance-repository";
+import type { TrainerCoachingRepository } from "@/repositories/trainer-coaching-repository";
 import type { VocabularyRepository } from "@/repositories/vocabulary-repository";
 
 /**
@@ -83,6 +98,16 @@ export interface TrainerToolDeps {
   readonly learners: LearnerRepository;
   readonly grammar: GrammarRepository;
   readonly retriever: GermanLearningRetriever;
+  /**
+   * How this learner wants to be coached, and where a change is written.
+   * The profile decides the agenda's size, mix and whether it ends on the
+   * news; the repository is what adjust_coaching writes to. Absent means a
+   * learner with the defaults and no way to change them from inside a turn.
+   */
+  readonly coaching?: {
+    readonly profile: TrainerCoachingProfile;
+    readonly repository: TrainerCoachingRepository;
+  };
   readonly logger?: Logger;
   readonly now?: () => Date;
 }
@@ -109,10 +134,19 @@ export interface TrainerTools {
   readonly covered: () => readonly string[];
   /** True once an agenda has been worked all the way through. */
   readonly complete: () => boolean;
+  /** The coaching profile as it stands after this request's tool calls. */
+  readonly coaching: () => TrainerCoachingProfile;
 }
 
 /** One request may not grind the review table however chatty the model is. */
 export const MAX_REVIEW_WRITES_PER_REQUEST = 20;
+
+/**
+ * How many times one turn may change the coaching. Two: a learner may ask for
+ * two things in one breath and a model may split them, but a loop that keeps
+ * adjusting is a loop, not a request.
+ */
+export const MAX_COACHING_WRITES_PER_REQUEST = 2;
 
 /** How much fetched or retrieved text a tool may hand the model. */
 const MAX_FENCED_TOKENS = 1200;
@@ -169,6 +203,11 @@ export function createTrainerTools(deps: TrainerToolDeps): TrainerTools {
   const now = deps.now ?? (() => new Date());
   const cited: TrainerSource[] = [];
   let reviewWrites = 0;
+  let coachingWrites = 0;
+  // The learner's standing requests, as read for this request. What the
+  // agenda is sized and mixed by, and what adjust_coaching moves.
+  let coaching: TrainerCoachingProfile =
+    deps.coaching?.profile ?? defaultCoachingProfile(deps.learnerId, now());
 
   // The session, as far as one request can see it: what is already done, the
   // agenda this request planned, and the mapping from what a learner reads
@@ -556,7 +595,10 @@ export function createTrainerTools(deps: TrainerToolDeps): TrainerTools {
           (drill) => drill.kind === "culture_drill",
         );
 
-        const size = Math.min(limit ?? MAX_AGENDA_ITEMS, MAX_AGENDA_ITEMS);
+        // The learner's own ceiling first, then the model's request under
+        // it: a learner who asked for short sittings gets them however many
+        // items the model asks for.
+        const size = Math.min(limit ?? MAX_AGENDA_ITEMS, agendaSizeFor(coaching));
         const notCovered = (activity: AgendaActivity) =>
           !covered.has(activity.subject);
         // A mix rather than a queue: vocabulary interleaved with grammar —
@@ -569,8 +611,11 @@ export function createTrainerTools(deps: TrainerToolDeps): TrainerTools {
             vocabulary: plan.vocabularyActivities.filter(notCovered),
             grammar: [...plan.mistakeActivities, ...grammarDrills].filter(notCovered),
             culture: cultureDrills.filter(notCovered),
-            news: covered.has(NEWS_SUBJECT) ? null : NEWS_ACTIVITY,
+            // The reading item, unless it is done or the learner asked the
+            // sessions to stop ending on it.
+            news: covered.has(NEWS_SUBJECT) || !coaching.news ? null : NEWS_ACTIVITY,
             size,
+            mix: MIX_FOR_FOCUS[coaching.focus],
           });
 
         // The session's promise, kept. The opening call composes the agenda;
@@ -890,6 +935,88 @@ export function createTrainerTools(deps: TrainerToolDeps): TrainerTools {
     },
   );
 
+  /**
+   * The second write, and the one the learner asks for in words. The model
+   * hands over a closed-set partial — which dials, which positions — and the
+   * arithmetic in lib/trainer/coaching.ts applies it; nothing here interprets
+   * a sentence. Persisted as the signed-in learner (RLS applies), capped per
+   * request, and reported back whole so the model knows what now holds. With
+   * no repository wired, the request is honoured for this turn only and the
+   * reply says so, so the model never promises a write that did not happen.
+   */
+  const adjustCoaching = tool(
+    async (request: {
+      explanationDepth?: (typeof EXPLANATION_DEPTHS)[number];
+      challenge?: (typeof CHALLENGE_LEVELS)[number];
+      sessionLength?: (typeof SESSION_LENGTHS)[number];
+      focus?: (typeof PRACTICE_FOCUSES)[number];
+      news?: boolean;
+    }) =>
+      audited("adjust_coaching", async () => {
+        if (coachingWrites >= MAX_COACHING_WRITES_PER_REQUEST) {
+          return JSON.stringify({
+            adjusted: false,
+            reason: "write_limit_reached",
+            coaching: dialsOf(coaching),
+          });
+        }
+        coachingWrites += 1;
+
+        const update = applyAdjustment(coaching, request, now());
+        if (update.changed.length === 0) {
+          return JSON.stringify({
+            adjusted: false,
+            reason: "already_set",
+            coaching: dialsOf(coaching),
+          });
+        }
+
+        if (deps.coaching === undefined) {
+          coaching = update.profile;
+          return JSON.stringify({
+            adjusted: true,
+            persisted: false,
+            coaching: dialsOf(coaching),
+            changed: update.changed.map((change) => change.dial),
+          });
+        }
+
+        const saved = await deps.coaching.repository.upsertProfile(update.profile);
+        if (!saved.ok) return UNAVAILABLE;
+
+        coaching = saved.data;
+        // Which dials moved is audited; the learner's words never are (S24).
+        logger.info("trainer.coaching_adjusted", {
+          audit: true,
+          requestId: deps.requestId,
+          userIdHash: deps.userIdHash,
+          source: "conversation",
+          dials: update.changed.map((change) => change.dial),
+        });
+        return JSON.stringify({
+          adjusted: true,
+          persisted: true,
+          coaching: dialsOf(coaching),
+          changed: update.changed.map((change) => change.dial),
+        });
+      })(),
+    {
+      name: "adjust_coaching",
+      description: TRAINER_TOOL_HELP.adjust_coaching,
+      schema: z
+        .strictObject({
+          explanationDepth: z.enum(EXPLANATION_DEPTHS).optional(),
+          challenge: z.enum(CHALLENGE_LEVELS).optional(),
+          sessionLength: z.enum(SESSION_LENGTHS).optional(),
+          focus: z.enum(PRACTICE_FOCUSES).optional(),
+          news: z.boolean().optional(),
+        })
+        .refine((request) => Object.values(request).some((value) => value !== undefined), {
+          error: "name at least one setting to change",
+        }),
+    },
+  );
+
   return {
     tools: [
       getReviewSession,
@@ -898,10 +1025,12 @@ export function createTrainerTools(deps: TrainerToolDeps): TrainerTools {
       searchKnowledge,
       recordReviewOutcome,
       fetchNews,
+      adjustCoaching,
     ],
     sources: () => [...cited],
     agenda: () => (agenda === null ? null : [...agenda]),
     covered: () => [...covered],
     complete: () => complete,
+    coaching: () => coaching,
   };
 }

@@ -38,6 +38,7 @@ const RUN: BoardRun = {
 };
 
 const advance = vi.fn(async () => {});
+const retry = vi.fn(async () => {});
 const remove = vi.fn(async () => {});
 
 function panel(runs: readonly BoardRun[], withProposals: readonly string[] = []) {
@@ -47,6 +48,7 @@ function panel(runs: readonly BoardRun[], withProposals: readonly string[] = [])
       asOf={AS_OF}
       runsWithProposals={new Set(withProposals)}
       advance={advance}
+      retry={retry}
       remove={remove}
       intervalMs={1_000}
     />,
@@ -147,14 +149,36 @@ describe("what a card offers", () => {
     expect(screen.queryByRole("button", { name: /remove/i })).not.toBeInTheDocument();
   });
 
-  it("carries the run's id on both forms", () => {
+  it("offers to try a stopped run again from where it stopped", () => {
+    panel([{ ...RUN, status: "failed", stage: "failed", errorCode: "timeout" }], [RUN.id]);
+
+    const button = screen.getByRole("button", { name: /try again from where it stopped/i });
+    expect(button.closest("form")?.querySelector('input[name="runId"]')).toHaveAttribute(
+      "value",
+      RUN.id,
+    );
+  });
+
+  it("offers no retry for a run that is moving, waiting or finished", () => {
+    panel([
+      RUN,
+      { ...RUN, id: "b", stage: "human_review", status: "awaiting_review" },
+      { ...RUN, id: "c", stage: "completed", status: "completed" },
+      { ...RUN, id: "d", stage: "rejected", status: "rejected" },
+    ]);
+
+    expect(screen.queryByRole("button", { name: /try again/i })).not.toBeInTheDocument();
+  });
+
+  it("carries the run's id on every form", () => {
     const { container } = panel([
       { ...RUN, status: "failed", stage: "failed" },
     ]);
 
     const inputs = container.querySelectorAll('input[name="runId"]');
-    expect(inputs).toHaveLength(1);
-    expect(inputs[0]).toHaveAttribute("value", RUN.id);
+    // Try again, and remove.
+    expect(inputs).toHaveLength(2);
+    for (const input of inputs) expect(input).toHaveAttribute("value", RUN.id);
   });
 });
 

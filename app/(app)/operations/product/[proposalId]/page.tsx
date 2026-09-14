@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { reviewProposalAction } from "../actions";
+import { retryRunAction, reviewProposalAction } from "../actions";
 import { PlanCopy } from "@/components/operations/plan-copy";
 import { ProposalDecisions } from "@/components/operations/proposal-decisions";
 import { RunActivityPanel } from "@/components/operations/run-activity";
@@ -9,6 +9,7 @@ import { RichText } from "@/components/ui/rich-text";
 import {
   card,
   eyebrow,
+  hairline,
   linkInline,
   page,
   pageTitle,
@@ -17,8 +18,11 @@ import {
   stat,
 } from "@/components/ui/styles";
 import {
+  failedStageOf,
   isDeniedPath,
   stageOwner,
+  type EngineeringBreakdown,
+  type TShirtSize,
   type ProposalReview,
   type StoredProposal,
 } from "@/domain/product-ops";
@@ -29,6 +33,7 @@ import {
   boardRunFrom,
   planMarkdown,
   runReports,
+  sizeLabel,
   timelineEntries,
   workerCommandFor,
 } from "@/lib/dashboard/product-ops";
@@ -78,6 +83,9 @@ export default async function ProposalPage({
   const stage = run.ok ? run.data.currentStage : null;
   const owner = stage === null ? "nobody" : stageOwner(stage);
   const timeline = events?.ok ? timelineEntries(events.data) : [];
+  // Where a failed run stopped, so the decision panel can offer to try again
+  // from there and say where "there" is.
+  const failedAt = events?.ok ? failedStageOf(events.data) : null;
   const spentEur = timeline.reduce((total, entry) => total + entry.costEur, 0);
 
   // Approving hands work back to the server for three background stages, so
@@ -201,7 +209,17 @@ export default async function ProposalPage({
               ? "Accepted. This is the run's deliverable; copy it below."
               : "Not yet accepted. Read it, copy it if you want it, then decide below."}
           </p>
-          <PlanCopy markdown={planMarkdown(proposal.data.title, plan.data.plan)} />
+          <PlanCopy
+            markdown={planMarkdown(proposal.data.title, plan.data.plan, plan.data.breakdown)}
+          />
+          {plan.data.breakdown ? (
+            <Breakdown breakdown={plan.data.breakdown} />
+          ) : (
+            <p className="font-display text-xs text-chalk/40">
+              The engineering breakdown has not been written yet. If the run
+              stopped, trying it again writes only this half.
+            </p>
+          )}
           <PlanFiles label="Files to modify" paths={plan.data.plan.filesToModify} />
           <PlanFiles label="Files to create" paths={plan.data.plan.filesToCreate} />
           <PlanFiles label="Tests" paths={plan.data.plan.tests} />
@@ -334,6 +352,12 @@ export default async function ProposalPage({
         priorityScore={proposal.data.priorityScore}
         stage={stage}
         review={reviewProposalAction}
+        run={
+          run.ok
+            ? { id: run.data.id, errorCode: run.data.errorCode, failedAt: failedAt }
+            : null
+        }
+        retry={retryRunAction}
       />
     </main>
   );
@@ -372,6 +396,100 @@ function Prose({ proposal }: { readonly proposal: StoredProposal }) {
         </div>
       ) : null}
     </section>
+  );
+}
+
+/**
+ * The engineering manager's half of the plan: phases as tables, then the
+ * guidance as now-versus-recommendation cards. Rendered from the stored
+ * document, never from model text as HTML.
+ */
+function Breakdown({ breakdown }: { readonly breakdown: EngineeringBreakdown }) {
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1">
+        <h3 className={eyebrow}>Engineering breakdown</h3>
+        <p className={cn(prose, "text-sm")}>{breakdown.summary}</p>
+        <p className="font-display text-xs text-chalk/50">
+          Overall size <SizeBadge size={breakdown.overallSize} />
+        </p>
+      </div>
+
+      {breakdown.phases.map((phase, index) => (
+        <div key={phase.name} className="flex flex-col gap-2 overflow-x-auto">
+          <h4 className="font-display text-sm font-semibold text-chalk">
+            Phase {index + 1}: {phase.name}
+          </h4>
+          <p className={cn(prose, "text-sm")}>{phase.goal}</p>
+          <table className="w-full text-left font-display text-xs">
+            <thead className="text-chalk/45">
+              <tr>
+                <th className="py-1 pr-3 font-medium">ID</th>
+                <th className="py-1 pr-3 font-medium">Requirement</th>
+                <th className="py-1 pr-3 font-medium">Size</th>
+                <th className="py-1 pr-3 font-medium">Depends on</th>
+              </tr>
+            </thead>
+            <tbody>
+              {phase.requirements.map((requirement) => (
+                <tr key={requirement.id} className={cn("border-t align-top", hairline)}>
+                  <td className="py-2 pr-3 font-mono text-chalk/60">{requirement.id}</td>
+                  <td className="py-2 pr-3">
+                    <p className="text-chalk">{requirement.title}</p>
+                    <p className="mt-0.5 text-chalk/60">{requirement.description}</p>
+                  </td>
+                  <td className="py-2 pr-3">
+                    <SizeBadge size={requirement.size} />
+                  </td>
+                  <td className="py-2 pr-3 font-mono text-chalk/60">
+                    {requirement.dependsOn.length === 0 ? "—" : requirement.dependsOn.join(", ")}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
+
+      <div className="flex flex-col gap-2">
+        <h4 className="font-display text-sm font-semibold text-chalk">Technical guidance</h4>
+        <ul className="grid gap-2 md:grid-cols-2">
+          {breakdown.technicalGuidance.map((guidance) => (
+            <li key={guidance.topic} className={cn(card, "flex flex-col gap-1.5 p-3.5")}>
+              <p className="font-display text-sm font-semibold text-chalk">{guidance.topic}</p>
+              <p className={cn(prose, "text-sm")}>
+                <span className="text-chalk/45">Now: </span>
+                {guidance.current}
+              </p>
+              <p className={cn(prose, "text-sm")}>
+                <span className="text-chalk/45">Recommendation: </span>
+                {guidance.recommendation}
+              </p>
+              <div className="grid gap-1 sm:grid-cols-2">
+                <ul className="font-display text-xs text-chalk/60">
+                  {guidance.pros.map((pro) => (
+                    <li key={pro}>+ {pro}</li>
+                  ))}
+                </ul>
+                <ul className="font-display text-xs text-chalk/60">
+                  {guidance.cons.map((con) => (
+                    <li key={con}>− {con}</li>
+                  ))}
+                </ul>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+function SizeBadge({ size }: { readonly size: TShirtSize }) {
+  return (
+    <span className="rounded-full border border-haze px-2 py-0.5 font-display text-[0.65rem] font-semibold uppercase tracking-wider text-apricot">
+      {sizeLabel(size)}
+    </span>
   );
 }
 

@@ -62,12 +62,21 @@ export const RATE_LIMITS = {
   // the agent loop makes up to seven, plus whatever its tools fetch. The euro
   // budgets bound the spend; this bounds how fast a learner can reach them.
   trainer: { limit: 10, windowMs: 60_000 },
+  // A vote on a reply: two small writes and no model call, so the bound is
+  // about a held-down button rather than about cost. A learner cannot have
+  // more replies to rate than the trainer limit above let them receive, so
+  // this is generous and still finite.
+  trainer_feedback: { limit: 30, windowMs: 60_000 },
   // The tightest quota in the product, and the only one that is not a
   // learner's. One press of "run a market scan" is a web-searching call per
   // query and then a reasoning-tier proposal, so a held-down button is the
   // most expensive thing anyone can do here. An operator has no reason to
   // exceed this and every reason not to (guardrails S7).
   product_ops: { limit: 5, windowMs: 60_000 },
+  // Following a run: one open stream per run per operator, and the browser
+  // reconnects on its own when one closes. A read of two small tables a
+  // second, so the quota is about a misbehaving client and not about cost.
+  product_ops_events: { limit: 30, windowMs: 60_000 },
 } as const satisfies Record<string, RateLimitRule>;
 
 export type RateLimitScope = keyof typeof RATE_LIMITS;

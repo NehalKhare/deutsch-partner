@@ -20,4 +20,5 @@ export * from "@/domain/product-ops";
 export * from "@/domain/recommendation";
 export * from "@/domain/retrieval";
 export * from "@/domain/scenario";
+export * from "@/domain/trainer-coaching";
 export * from "@/domain/vocabulary";

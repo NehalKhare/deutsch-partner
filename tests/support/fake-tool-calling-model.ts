@@ -91,6 +91,32 @@ export class UnavailableModel extends BaseChatModel<BaseChatModelCallOptions> {
   }
 }
 
+/**
+ * A model whose every call runs out of time: the client's own TimeoutError,
+ * as the OpenAI SDK raises it once its retry is spent. The moment, not the
+ * model — which is what the ladder's fallthrough keys on.
+ */
+export class TimeoutModel extends BaseChatModel<BaseChatModelCallOptions> {
+  invocations = 0;
+
+  constructor() {
+    super({});
+  }
+
+  _llmType(): string {
+    return "timeout";
+  }
+
+  override bindTools(): this {
+    return this;
+  }
+
+  async _generate(): Promise<ChatResult> {
+    this.invocations += 1;
+    throw Object.assign(new Error("Request timed out."), { name: "TimeoutError" });
+  }
+}
+
 /** An assistant turn that calls one tool. */
 export function toolCallMessage(
   name: string,

@@ -15,6 +15,10 @@ import {
 } from "@/lib/ai/prompts/product-ops-agents";
 import type { UntrustedTag } from "@/lib/ai/prompts/delimiters";
 import type { Applier, ApplyOutcome } from "@/lib/product-ops/apply";
+import {
+  feedbackForAgent,
+  type LearnerFeedbackSource,
+} from "@/lib/product-ops/feedback";
 import { researchMarket } from "@/lib/product-ops/research";
 import type { SpecialistDeps } from "@/lib/product-ops/specialist";
 
@@ -37,14 +41,24 @@ import type { SpecialistDeps } from "@/lib/product-ops/specialist";
 /** How many paths a listing returns. Enough to orient, not a whole tree. */
 export const MAX_LISTED_PATHS = 200;
 
-/** How much of one file the planner or coder is shown. */
+/** How much of one file the coder is shown: it needs anchors, so most of it. */
 export const MAX_READ_CHARS = 24_000;
+
+/**
+ * How much of one file the planner is shown. Less, and on purpose: a plan
+ * names files, and the top of a file — its imports, its exports, its shape —
+ * is what names it. Every read stays in the transcript for every later turn
+ * on the reasoning tier, so a whole file read for a plan is paid for on every
+ * turn that follows.
+ */
+export const MAX_PLANNER_READ_CHARS = 8_000;
 
 /** How many lines a code search returns. */
 export const MAX_SEARCH_HITS = 50;
 
 /** The fence each tool's results belong in. */
 export const TOOL_FENCES: Readonly<Record<ProductOpsToolName, UntrustedTag>> = {
+  read_learner_feedback: "learner_feedback",
   search_market: "web_results",
   read_findings: "market_research",
   list_prior_proposals: "market_research",
@@ -68,6 +82,10 @@ export interface ResearchToolDeps {
   readonly context: CallContext;
   /** Stores findings. The unique hash per run makes a repeat a no-op. */
   readonly record: (findings: readonly MarketFinding[]) => Promise<boolean>;
+  /** The learners' own feedback, aggregated. Absent means the tool answers "unavailable". */
+  readonly feedback?: LearnerFeedbackSource;
+  /** How far back the feedback tool looks. */
+  readonly feedbackDays?: number;
 }
 
 export interface ResearchToolset {
@@ -77,8 +95,11 @@ export interface ResearchToolset {
   searches(): number;
 }
 
+/** The research tool's default window, matching the operator's board. */
+const DEFAULT_FEEDBACK_DAYS = 30;
+
 /**
- * The research agent's one tool.
+ * The research agent's two tools.
  *
  * search_market is the existing web-grounded extraction call: one query, one
  * finding, on the task route that alone may search. It records what it finds
@@ -86,10 +107,34 @@ export interface ResearchToolset {
  * return removed — so the run's output is the rows the searches produced and
  * never the model's discipline about a second call. What the agent adds is
  * choosing the queries and deciding when it has enough.
+ *
+ * read_learner_feedback is the product's own learners, aggregated: no search,
+ * no cost, and a fence of its own because the notes in it are learners'
+ * words. It is what lets a scan start from what this product's learners
+ * flagged rather than from what the web says about learners in general.
  */
 export function researchTools(deps: ResearchToolDeps): ResearchToolset {
   let recorded = 0;
   let searches = 0;
+
+  const readFeedback = tool(
+    async () => {
+      if (!deps.feedback) return refuse("unavailable");
+      try {
+        const summary = await deps.feedback.summary(
+          deps.feedbackDays ?? DEFAULT_FEEDBACK_DAYS,
+        );
+        return summary === null ? refuse("unavailable") : answer(feedbackForAgent(summary));
+      } catch {
+        return refuse("unavailable");
+      }
+    },
+    {
+      name: "read_learner_feedback",
+      description: PRODUCT_OPS_TOOL_HELP.read_learner_feedback,
+      schema: z.strictObject({}),
+    },
+  );
 
   const searchMarket = tool(
     async ({ query }) => {
@@ -120,7 +165,7 @@ export function researchTools(deps: ResearchToolDeps): ResearchToolset {
   );
 
   return {
-    tools: [searchMarket],
+    tools: [readFeedback, searchMarket],
     recorded: () => recorded,
     searches: () => searches,
   };
@@ -265,8 +310,8 @@ export function plannerTools(deps: PlannerToolDeps): readonly StructuredToolInte
         if (content === null) return refuse("file_missing");
         return answer({
           path,
-          truncated: content.length > MAX_READ_CHARS,
-          content: content.slice(0, MAX_READ_CHARS),
+          truncated: content.length > MAX_PLANNER_READ_CHARS,
+          content: content.slice(0, MAX_PLANNER_READ_CHARS),
         });
       } catch {
         return refuse("unreadable");

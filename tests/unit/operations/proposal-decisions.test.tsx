@@ -16,18 +16,26 @@ import { PRODUCT_OPS_STAGES } from "@/domain/product-ops";
 
 const PROPOSAL_ID = "5a2b3c4d-1e2f-4a3b-8c4d-5e6f7a8b9c0d";
 
-function renderPanel(stage: Parameters<typeof ProposalDecisions>[0]["stage"]) {
+const RUN_ID = "3f0f1d3a-0b1e-4c2a-8a1a-9a1b2c3d4e5f";
+
+function renderPanel(
+  stage: Parameters<typeof ProposalDecisions>[0]["stage"],
+  run?: Parameters<typeof ProposalDecisions>[0]["run"],
+) {
   const review = vi.fn(async () => {});
+  const retry = vi.fn(async () => {});
   const rendered = render(
     <ProposalDecisions
       proposalId={PROPOSAL_ID}
       priorityScore={78}
       stage={stage}
       review={review}
+      run={run}
+      retry={retry}
     />,
   );
 
-  return { ...rendered, review };
+  return { ...rendered, review, retry };
 }
 
 describe("at the proposal gate", () => {
@@ -143,5 +151,39 @@ describe("the priority override", () => {
     renderPanel("human_review");
 
     expect(screen.getByText(/deliberate override/i)).toBeInTheDocument();
+  });
+});
+
+describe("after a failure", () => {
+  it("says where the run stopped and why, and offers to try again from there", () => {
+    renderPanel("failed", { id: RUN_ID, errorCode: "timeout", failedAt: "prd" });
+
+    expect(screen.getByText(/stopped while drafting the prd/i)).toBeInTheDocument();
+    expect(screen.getByText(/ran out of time/i)).toBeInTheDocument();
+    const button = screen.getByRole("button", { name: /try again from drafting the prd/i });
+    expect(button.closest("form")?.querySelector('input[name="runId"]')).toHaveAttribute(
+      "value",
+      RUN_ID,
+    );
+  });
+
+  it("offers no retry when the timeline names no stage to return to", () => {
+    renderPanel("failed", { id: RUN_ID, errorCode: "unavailable", failedAt: null });
+
+    expect(screen.queryByRole("button", { name: /try again/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/stopped/i)).toBeInTheDocument();
+  });
+
+  it("offers neither approval at a failed run", () => {
+    renderPanel("failed", { id: RUN_ID, errorCode: "timeout", failedAt: "prd" });
+
+    expect(screen.queryByRole("button", { name: /approve/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /accept the plan/i })).not.toBeInTheDocument();
+  });
+
+  it("offers no retry at a gate, where nothing has failed", () => {
+    renderPanel("human_review", { id: RUN_ID, errorCode: null, failedAt: null });
+
+    expect(screen.queryByRole("button", { name: /try again/i })).not.toBeInTheDocument();
   });
 });

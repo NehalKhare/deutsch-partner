@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import {
   eventStatusSchema,
+  engineeringBreakdownSchema,
   implementationPlanSchema,
   marketFindingSchema,
   operatorIdHashSchema,
@@ -37,6 +38,7 @@ import {
   type RunEvent,
   type RunType,
   type StageTransition,
+  type EngineeringBreakdown,
   type StoredPlan,
   type StoredProposal,
 } from "@/domain/product-ops";
@@ -99,7 +101,10 @@ const MAX_FINDINGS_PER_RUN = 60;
  * here so that a run which somehow loops cannot turn a page render into an
  * unbounded query.
  */
-const MAX_EVENTS_PER_RUN = 200;
+// Raised from 200 once model calls joined tool calls as progress rows: a full
+// run through planning writes a few hundred, and a truncated timeline would
+// under-count the run's spend, which is reconstructed from these rows.
+const MAX_EVENTS_PER_RUN = 1000;
 const MAX_CHANGES_PER_PLAN = 200;
 const MAX_REVIEWS_PER_PROPOSAL = 100;
 /** How many earlier proposals the CPO is shown, newest first. */
@@ -160,6 +165,13 @@ export interface ProductOpsRepository {
 
   listEvents(runId: string): Promise<RepositoryResult<RunEvent[]>>;
 
+  /**
+   * The timeline after a given row, oldest first. What a live feed reads on
+   * each tick, so that following a run costs one indexed range scan rather
+   * than the whole timeline again.
+   */
+  listEventsAfter(runId: string, afterId: number): Promise<RepositoryResult<RunEvent[]>>;
+
   recordFindings(
     runId: string,
     findings: readonly MarketFinding[],
@@ -213,6 +225,16 @@ export interface ProductOpsRepository {
   findPlanForProposal(
     proposalId: string,
   ): Promise<RepositoryResult<StoredPlan | null>>;
+
+  /**
+   * Writes the engineering breakdown onto a plan that exists. Separate from
+   * savePlan because it is written by a separate call, and a retry of the
+   * planning stage may have only this half left to do.
+   */
+  saveBreakdown(
+    planId: string,
+    breakdown: EngineeringBreakdown,
+  ): Promise<RepositoryResult<StoredPlan>>;
 
   listCodeChanges(planId: string): Promise<RepositoryResult<CodeChangeRecord[]>>;
 
@@ -472,6 +494,23 @@ export function createProductOpsRepository(
       return decodeRows(outcome, eventFromRow);
     },
 
+    async listEventsAfter(runId, afterId) {
+      const id = decodeInput(runId, z.uuid());
+      if (!id.ok) return id;
+      const after = decodeInput(afterId, z.number().int().min(0));
+      if (!after.ok) return after;
+
+      const outcome = await client
+        .from(EVENTS)
+        .select("*")
+        .eq("run_id", id.data)
+        .gt("id", after.data)
+        .order("id", { ascending: true })
+        .limit(MAX_EVENTS_PER_RUN);
+
+      return decodeRows(outcome, eventFromRow);
+    },
+
     async recordFindings(runId, findings) {
       const id = decodeInput(runId, z.uuid());
       if (!id.ok) return id;
@@ -689,6 +728,23 @@ export function createProductOpsRepository(
       if (!rows.ok) return rows;
 
       return ok(rows.data[0] ?? null);
+    },
+
+    async saveBreakdown(planId, breakdown) {
+      const id = decodeInput(planId, z.uuid());
+      if (!id.ok) return id;
+
+      const parsed = decodeInput(breakdown, engineeringBreakdownSchema);
+      if (!parsed.ok) return parsed;
+
+      const outcome = await client
+        .from(PLANS)
+        .update({ breakdown: parsed.data })
+        .eq("id", id.data)
+        .select("*")
+        .single();
+
+      return decodeRow(outcome, planFromRow);
     },
 
     async listCodeChanges(planId) {

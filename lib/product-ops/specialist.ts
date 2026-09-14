@@ -219,9 +219,13 @@ export async function runSpecialist<T>(
       // The ceiling cut the reply off. Valid JSON that does not finish is no
       // object, and the parser would only say so less precisely; the repair
       // for it is to ask for less, not for the same thing again.
+      // The count says which kind of cut-off this was: output at the ceiling
+      // with a short visible answer means the model thought the ceiling away.
       logger.warn("productops.output_truncated", {
-        prompt: entry.name,
+        promptName: entry.name,
         attempt,
+        tier: outcome.data.tier,
+        outputTokens: outcome.data.outputTokens,
         requestId: request.context.requestId,
       });
 
@@ -253,7 +257,7 @@ export async function runSpecialist<T>(
     // Issue paths only, capped, and never the payload: the reply can quote a
     // web page back, and a log is not where that goes.
     logger.warn("productops.output_invalid", {
-      prompt: entry.name,
+      promptName: entry.name,
       attempt,
       reason: parsed.reason,
       issues: parsed.issues.slice(0, 8).join(", "),

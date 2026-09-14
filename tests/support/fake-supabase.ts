@@ -72,6 +72,7 @@ export function createFakeSupabase(resultsByTable: Record<string, FakeResult>) {
       "lte",
       "gte",
       "lt",
+      "gt",
       "neq",
       "order",
       "limit",

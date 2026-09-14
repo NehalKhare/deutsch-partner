@@ -422,3 +422,89 @@ describe("a turn the server refused", () => {
     );
   });
 });
+
+describe("what the learner's feedback has changed", () => {
+  it("offers a vote under every reply and none under the learner's own lines", async () => {
+    server.use(http.post(TRAINER_ENDPOINT, () => HttpResponse.json(REPLY)));
+    const { container } = render(<TrainerSession />);
+
+    await sendMessage();
+
+    await waitFor(() => {
+      expect(container.querySelectorAll("[data-role='feedback']")).toHaveLength(1);
+    });
+    expect(
+      container.querySelector("[data-role='assistant'] [data-role='feedback']"),
+    ).toBeInTheDocument();
+    expect(
+      container.querySelector("[data-role='user'] [data-role='feedback']"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows how the trainer is tuned once a reply says it is", async () => {
+    server.use(
+      http.post(TRAINER_ENDPOINT, () =>
+        HttpResponse.json({
+          ...REPLY,
+          coaching: {
+            explanationDepth: "brief",
+            challenge: "standard",
+            sessionLength: "short",
+            focus: "balanced",
+            news: true,
+          },
+        }),
+      ),
+    );
+    const { container } = render(<TrainerSession />);
+
+    await sendMessage();
+
+    await waitFor(() => {
+      expect(container.querySelector("[data-role='coaching']")).toHaveTextContent(
+        /brief explanations · shorter sessions/,
+      );
+    });
+  });
+
+  it("says nothing about tuning for a trainer on its defaults", async () => {
+    server.use(
+      http.post(TRAINER_ENDPOINT, () =>
+        HttpResponse.json({
+          ...REPLY,
+          coaching: {
+            explanationDepth: "standard",
+            challenge: "standard",
+            sessionLength: "standard",
+            focus: "balanced",
+            news: true,
+          },
+        }),
+      ),
+    );
+    const { container } = render(<TrainerSession />);
+
+    await sendMessage();
+
+    await waitFor(() => {
+      expect(screen.getByText(/richtig!/i)).toBeInTheDocument();
+    });
+    expect(container.querySelector("[data-role='coaching']")).not.toBeInTheDocument();
+  });
+
+  it("labels the coaching tool's receipt in plain words", async () => {
+    server.use(
+      http.post(TRAINER_ENDPOINT, () =>
+        HttpResponse.json({
+          ...REPLY,
+          steps: [{ tool: "adjust_coaching", summary: "1 setting changed from now on" }],
+        }),
+      ),
+    );
+    render(<TrainerSession />);
+
+    await sendMessage();
+
+    expect(await screen.findByText(/adjusted how it coaches you/i)).toBeInTheDocument();
+  });
+});

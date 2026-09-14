@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  failedStageOf,
   PRODUCT_OPS_STAGES,
   REVIEW_ACTIONS,
   branchNameFor,
@@ -19,9 +20,11 @@ import type {
 import type { ModelCallSpec } from "@/lib/ai/gateway/call-spec";
 import type { TaskId } from "@/lib/ai/tasks";
 import {
+  FEEDBACK_DAYS,
   RUN_BUDGET_EUR,
   advanceRun,
   applyReview,
+  retryRun,
   type Workspace,
 } from "@/lib/product-ops/workflow";
 import { researchQueries } from "@/lib/product-ops/research";
@@ -92,12 +95,44 @@ const PLAN: ImplementationPlan = {
   risks: ["The vocabulary may be too specialised."],
 };
 
+const BREAKDOWN = {
+  summary: "Ship the vocabulary set first, then the scenario pack on top of it.",
+  overallSize: "l",
+  phases: [
+    {
+      name: "Vocabulary",
+      goal: "A learner can drill the clinical terms.",
+      requirements: [
+        { id: "R1", title: "Clinical vocabulary set", description: "Twenty terms with articles and plurals in the vocabulary table.", size: "s", dependsOn: [] },
+        { id: "R2", title: "Module card", description: "The module appears on the curriculum page.", size: "xs", dependsOn: ["R1"] },
+      ],
+    },
+    {
+      name: "Scenarios",
+      goal: "A learner can rehearse a handover.",
+      requirements: [
+        { id: "R3", title: "Handover scenario", description: "One scenario using the set.", size: "m", dependsOn: ["R1"] },
+      ],
+    },
+  ],
+  technicalGuidance: [
+    {
+      topic: "Scenario storage",
+      current: "Scenarios live in Postgres with pgvector embeddings, ingested offline.",
+      recommendation: "Keep it; one more scenario is one more row.",
+      pros: ["No new moving part"],
+      cons: ["Offline ingestion is a manual step"],
+    },
+  ],
+};
+
 /** What each task's reply looks like on the wire: one JSON object. */
 const REPLIES: Readonly<Record<string, unknown>> = {
   "productops.market_research": { findings: [FINDING] },
   "productops.proposal_synthesis": PROPOSAL,
   "productops.prd_sections": SECTIONS,
   "productops.code_plan": PLAN,
+  "productops.plan_breakdown": BREAKDOWN,
 };
 
 interface Dispatch {
@@ -536,6 +571,94 @@ describe("the planning stage", () => {
     // Pending, not approved. Nothing but a person may approve a file list.
     expect(store.plans[0].status).toBe("pending_review");
     expect(store.proposals[0].status).toBe("plan_ready");
+  });
+
+  it("writes the engineering breakdown beside the plan, in a second call", async () => {
+    const store = createProductOpsStore();
+    const runId = await seedRunAt(store, "code_plan");
+    const proposal = await seedProposal(store, runId);
+    await seedPrd(store, proposal.id);
+    const { gateway, dispatches } = fakeGateway();
+
+    const result = await advanceRun(
+      { runs: store.repository, gateway, workspace: fakeWorkspace() },
+      runId,
+    );
+
+    expect(result.status).toBe("advanced");
+    expect(dispatches.map((call) => call.task)).toEqual([
+      "productops.code_plan",
+      "productops.plan_breakdown",
+    ]);
+    expect(store.plans[0].breakdown).toEqual(BREAKDOWN);
+    // The second call reads the PRD and the file plan as fenced knowledge,
+    // never as the message, which is capped.
+    const breakdownCall = dispatches[1];
+    expect(breakdownCall.system).toContain("Files to modify");
+    expect(breakdownCall.system).toContain("Medical German");
+    // Both calls are billed to the stage.
+    expect(result.costEur).toBeCloseTo(0.002, 10);
+  });
+
+  it("keeps the plan and fails the stage when only the breakdown fails", async () => {
+    const store = createProductOpsStore();
+    const runId = await seedRunAt(store, "code_plan");
+    const proposal = await seedProposal(store, runId);
+    await seedPrd(store, proposal.id);
+    const { gateway } = fakeGateway({ fail: new Set(["productops.plan_breakdown"]) });
+
+    const result = await advanceRun(
+      { runs: store.repository, gateway, workspace: fakeWorkspace() },
+      runId,
+    );
+
+    expect(result.status).toBe("failed");
+    expect(store.plans).toHaveLength(1);
+    expect(store.plans[0].breakdown).toBeNull();
+    // Not yet: the proposal moves to plan_ready only once both halves exist.
+    expect(store.proposals[0].status).not.toBe("plan_ready");
+    expect(
+      store.events.some((event) => JSON.stringify(event.detail).includes("breakdown")),
+    ).toBe(true);
+  });
+
+  it("writes only the missing half when the plan already exists", async () => {
+    const store = createProductOpsStore();
+    const runId = await seedRunAt(store, "code_plan");
+    const proposal = await seedProposal(store, runId);
+    await seedPrd(store, proposal.id);
+    await store.repository.savePlan(proposal.id, PLAN);
+    const { gateway, dispatches } = fakeGateway();
+
+    const result = await advanceRun(
+      { runs: store.repository, gateway, workspace: fakeWorkspace() },
+      runId,
+    );
+
+    expect(result.status).toBe("advanced");
+    // The expensive call is not paid for twice.
+    expect(dispatches.map((call) => call.task)).toEqual(["productops.plan_breakdown"]);
+    expect(store.plans[0].breakdown).toEqual(BREAKDOWN);
+    expect(store.proposals[0].status).toBe("plan_ready");
+  });
+
+  it("adopts a plan that already has its breakdown", async () => {
+    const store = createProductOpsStore();
+    const runId = await seedRunAt(store, "code_plan");
+    const proposal = await seedProposal(store, runId);
+    await seedPrd(store, proposal.id);
+    const saved = await store.repository.savePlan(proposal.id, PLAN);
+    if (!saved.ok) throw new Error("no plan");
+    await store.repository.saveBreakdown(saved.data.id, BREAKDOWN as never);
+    const { gateway, dispatches } = fakeGateway();
+
+    const result = await advanceRun(
+      { runs: store.repository, gateway, workspace: fakeWorkspace() },
+      runId,
+    );
+
+    expect(result.outcome).toBe("already_done");
+    expect(dispatches).toEqual([]);
   });
 
   it("fails a plan whose every path the apply layer would refuse", async () => {
@@ -1090,5 +1213,271 @@ describe("the stage graph", () => {
         stage,
       ).toContain(seen.get(stage));
     }
+  });
+});
+
+describe("trying a failed run again", () => {
+  /** A scan whose research fails, so the run stands at 'failed'. */
+  async function failedAtResearch(store: ProductOpsStore) {
+    const runId = await seedRunAt(store, "research");
+    const broken = fakeGateway({ fail: new Set(["productops.market_research"]) });
+
+    const result = await advanceRun({ runs: store.repository, gateway: broken.gateway }, runId);
+    expect(result.status).toBe("failed");
+    expect(store.runs.get(runId)?.currentStage).toBe("failed");
+
+    return runId;
+  }
+
+  it("reads the failing stage off the timeline", async () => {
+    const store = createProductOpsStore();
+    const runId = await failedAtResearch(store);
+
+    expect(failedStageOf(store.events.filter((event) => event.runId === runId))).toBe(
+      "research",
+    );
+  });
+
+  it("names no stage for a timeline that never failed", () => {
+    expect(failedStageOf([])).toBeNull();
+  });
+
+  it("moves the run back to the stage that failed and clears how it ended", async () => {
+    const store = createProductOpsStore();
+    const runId = await failedAtResearch(store);
+
+    const outcome = await retryRun(
+      { runs: store.repository, gateway: fakeGateway().gateway },
+      { runId, operatorIdHash: "hash-operator" },
+    );
+
+    expect(outcome).toEqual({ status: "retried", stage: "research" });
+    const run = store.runs.get(runId);
+    expect(run?.currentStage).toBe("research");
+    expect(run?.status).toBe("running");
+    expect(run?.errorCode).toBeNull();
+    expect(run?.completedAt).toBeNull();
+  });
+
+  it("marks the retry on the timeline and keeps the failure that came before", async () => {
+    const store = createProductOpsStore();
+    const runId = await failedAtResearch(store);
+    const before = store.events.filter((event) => event.runId === runId).length;
+
+    await retryRun(
+      { runs: store.repository, gateway: fakeGateway().gateway },
+      { runId, operatorIdHash: "hash-operator" },
+    );
+
+    const events = store.events.filter((event) => event.runId === runId);
+    expect(events).toHaveLength(before + 1);
+    expect(events.at(-1)).toMatchObject({
+      stage: "research",
+      status: "started",
+      detail: { from: "failed", retry: true },
+    });
+    expect(events.some((event) => event.status === "failed")).toBe(true);
+  });
+
+  it("then runs the stage again, and only that stage", async () => {
+    const store = createProductOpsStore();
+    const runId = await failedAtResearch(store);
+    const working = fakeGateway();
+    const deps = { runs: store.repository, gateway: working.gateway };
+
+    await retryRun(deps, { runId, operatorIdHash: "hash-operator" });
+    const result = await advanceRun(deps, runId);
+
+    expect(result.status).toBe("advanced");
+    expect(store.runs.get(runId)?.currentStage).toBe("synthesis");
+    expect(working.dispatches.every((call) => call.task === "productops.market_research")).toBe(true);
+  });
+
+  it("keeps the failed attempt's cost against the run's ceiling", async () => {
+    const store = createProductOpsStore();
+    const runId = await failedAtResearch(store);
+    // A failed attempt that had already spent the whole ceiling.
+    await store.repository.recordEvent({
+      runId,
+      stage: "research",
+      status: "failed",
+      detail: { costEur: 100 },
+    });
+    const deps = { runs: store.repository, gateway: fakeGateway().gateway };
+
+    await retryRun(deps, { runId, operatorIdHash: "hash-operator" });
+    const result = await advanceRun(deps, runId);
+
+    expect(result.status).toBe("failed");
+    expect(store.runs.get(runId)?.errorCode).toBe("run_budget");
+  });
+
+  it("refuses a run that has not failed, and says where it stands", async () => {
+    const store = createProductOpsStore();
+    const runId = await seedRunAt(store, "human_review");
+
+    const outcome = await retryRun(
+      { runs: store.repository, gateway: fakeGateway().gateway },
+      { runId, operatorIdHash: "hash-operator" },
+    );
+
+    expect(outcome).toEqual({ status: "not_failed", stage: "human_review" });
+    expect(store.runs.get(runId)?.currentStage).toBe("human_review");
+  });
+
+  it("refuses a failed run whose timeline names no stage to return to", async () => {
+    const store = createProductOpsStore();
+    const runId = await seedRunAt(store, "failed");
+
+    const outcome = await retryRun(
+      { runs: store.repository, gateway: fakeGateway().gateway },
+      { runId, operatorIdHash: "hash-operator" },
+    );
+
+    expect(outcome).toEqual({ status: "no_stage" });
+  });
+
+  it("records the retry as an audit event under the operator's pseudonym", async () => {
+    const store = createProductOpsStore();
+    const runId = await failedAtResearch(store);
+    const logged: Array<{ event: string; fields: Record<string, unknown> }> = [];
+    const logger = {
+      debug: () => undefined,
+      info: (event: string, fields: Record<string, unknown> = {}) => void logged.push({ event, fields }),
+      warn: () => undefined,
+      error: () => undefined,
+    };
+
+    await retryRun(
+      { runs: store.repository, gateway: fakeGateway().gateway, logger },
+      { runId, operatorIdHash: "hash-operator" },
+    );
+
+    expect(logged.find((line) => line.event === "productops.retry_requested")?.fields).toMatchObject({
+      audit: true,
+      runId,
+      userIdHash: "hash-operator",
+      stage: "research",
+    });
+  });
+});
+
+describe("what the research stage learns from the product's own learners", () => {
+  const AT = new Date("2026-09-14T12:00:00.000Z");
+  const summary = (votes: number) => ({
+    generatedAt: AT,
+    window: { from: new Date("2026-08-15T12:00:00.000Z"), to: AT, days: 30 },
+    totals: { votes, helpful: Math.floor(votes / 2), unhelpful: Math.ceil(votes / 2), learners: 3, noted: 1 },
+    byReason: [{ reason: "too_long" as const, count: 3 }],
+    byPromptVersion: [{ promptVersion: 11, votes, helpful: Math.floor(votes / 2), unhelpful: Math.ceil(votes / 2) }],
+    byTool: [],
+    recentNotes: [],
+  });
+
+  it("records the feedback as the first finding and still asks the web", async () => {
+    const store = createProductOpsStore();
+    const runId = await seedRunAt(store, "research");
+    const { gateway, dispatches } = fakeGateway();
+    const asked: number[] = [];
+
+    const result = await advanceRun(
+      {
+        runs: store.repository,
+        gateway,
+        feedback: {
+          async summary(days) {
+            asked.push(days);
+            return summary(20);
+          },
+        },
+      },
+      runId,
+    );
+
+    expect(result.status).toBe("advanced");
+    expect(asked).toEqual([FEEDBACK_DAYS]);
+    // Every web query still ran; the feedback finding sits beside them.
+    expect(dispatches).toHaveLength(researchQueries("healthcare German").length);
+    const kinds = store.findings.map((row) => (row.finding as { sourceType: string }).sourceType);
+    expect(kinds[0]).toBe("internal");
+    expect(kinds.filter((kind) => kind !== "internal").length).toBeGreaterThan(0);
+    // The stage says so on its own timeline event.
+    expect(
+      store.events.some((event) => JSON.stringify(event.detail).includes('"fromFeedback":1')),
+    ).toBe(true);
+  });
+
+  it("records nothing from a handful of votes", async () => {
+    const store = createProductOpsStore();
+    const runId = await seedRunAt(store, "research");
+    const { gateway } = fakeGateway();
+
+    const result = await advanceRun(
+      { runs: store.repository, gateway, feedback: { summary: async () => summary(2) } },
+      runId,
+    );
+
+    expect(result.status).toBe("advanced");
+    expect(
+      store.findings.some((row) => (row.finding as { sourceType: string }).sourceType === "internal"),
+    ).toBe(false);
+    expect(
+      store.events.some((event) => JSON.stringify(event.detail).includes('"fromFeedback":0')),
+    ).toBe(true);
+  });
+
+  it("is the scan it always was when the feedback cannot be read", async () => {
+    const store = createProductOpsStore();
+    const runId = await seedRunAt(store, "research");
+    const { gateway } = fakeGateway();
+
+    const result = await advanceRun(
+      {
+        runs: store.repository,
+        gateway,
+        feedback: {
+          async summary() {
+            throw new Error("down");
+          },
+        },
+      },
+      runId,
+    );
+
+    expect(result.status).toBe("advanced");
+    expect(store.findings.length).toBeGreaterThan(0);
+  });
+
+  it("does not adopt a run that recorded only its feedback and then died", async () => {
+    // The internal finding lands before the first search. A retry that saw
+    // one finding and called the stage done would be a scan that never
+    // asked the web anything.
+    const store = createProductOpsStore();
+    const runId = await seedRunAt(store, "research");
+    const failing = fakeGateway({ fail: new Set(["productops.market_research"]) });
+    const feedback = { summary: async () => summary(20) };
+
+    const first = await advanceRun(
+      { runs: store.repository, gateway: failing.gateway, feedback },
+      runId,
+    );
+    expect(first.status).toBe("failed");
+    expect(store.findings).toHaveLength(1);
+
+    const run = store.runs.get(runId);
+    if (run) store.runs.set(runId, { ...run, currentStage: "research", status: "running" });
+
+    const working = fakeGateway();
+    const second = await advanceRun(
+      { runs: store.repository, gateway: working.gateway, feedback },
+      runId,
+    );
+
+    expect(second.outcome).toBe("ok");
+    expect(working.dispatches.length).toBeGreaterThan(0);
+    // And the feedback finding was not written a second time.
+    expect(
+      store.findings.filter((row) => (row.finding as { sourceType: string }).sourceType === "internal"),
+    ).toHaveLength(1);
   });
 });

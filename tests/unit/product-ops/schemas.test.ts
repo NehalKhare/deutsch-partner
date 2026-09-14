@@ -4,6 +4,8 @@ import {
   PRODUCT_OPS_STAGES,
   branchNameFor,
   codeEditSchema,
+  breakdownRequirements,
+  engineeringBreakdownSchema,
   implementationPlanSchema,
   marketFindingSchema,
   nextStage,
@@ -310,6 +312,99 @@ describe("implementation plans", () => {
         filesToCreate: [],
       }).success,
     ).toBe(false);
+  });
+});
+
+describe("the engineering breakdown", () => {
+  const breakdown = {
+  summary: "Ship the vocabulary set first, then the scenario pack on top of it.",
+  overallSize: "l",
+  phases: [
+    {
+      name: "Vocabulary",
+      goal: "A learner can drill the clinical terms.",
+      requirements: [
+        { id: "R1", title: "Clinical vocabulary set", description: "Twenty terms with articles and plurals in the vocabulary table.", size: "s", dependsOn: [] },
+        { id: "R2", title: "Module card", description: "The module appears on the curriculum page.", size: "xs", dependsOn: ["R1"] },
+      ],
+    },
+    {
+      name: "Scenarios",
+      goal: "A learner can rehearse a handover.",
+      requirements: [
+        { id: "R3", title: "Handover scenario", description: "One scenario using the set.", size: "m", dependsOn: ["R1"] },
+      ],
+    },
+  ],
+  technicalGuidance: [
+    {
+      topic: "Scenario storage",
+      current: "Scenarios live in Postgres with pgvector embeddings, ingested offline.",
+      recommendation: "Keep it; one more scenario is one more row.",
+      pros: ["No new moving part"],
+      cons: ["Offline ingestion is a manual step"],
+    },
+  ],
+};
+
+  it("accepts a phased, sized breakdown", () => {
+    expect(engineeringBreakdownSchema.safeParse(breakdown).success).toBe(true);
+  });
+
+  it("rejects a dependency on a requirement that does not exist", () => {
+    const broken = structuredClone(breakdown);
+    broken.phases[1].requirements[0].dependsOn = ["R9"];
+
+    expect(engineeringBreakdownSchema.safeParse(broken).success).toBe(false);
+  });
+
+  it("rejects the same requirement id twice", () => {
+    const broken = structuredClone(breakdown);
+    broken.phases[1].requirements[0].id = "R1";
+
+    expect(engineeringBreakdownSchema.safeParse(broken).success).toBe(false);
+  });
+
+  it("rejects a size outside the t-shirt range", () => {
+    expect(
+      engineeringBreakdownSchema.safeParse({ ...breakdown, overallSize: "huge" }).success,
+    ).toBe(false);
+  });
+
+  it("stays inside the reasoning tier's output ceiling at every bound", () => {
+    // Three phases of four requirements, three points of guidance, all lines
+    // at their maxima: about 1650 tokens of JSON by the four-characters rule.
+    // The contract is generated from these bounds, so this is the whole
+    // answer's worst case, and it has to leave the ceiling some room.
+    const full = {
+      summary: "s".repeat(240),
+      overallSize: "xxl",
+      phases: Array.from({ length: 3 }, (_, phase) => ({
+        name: "n".repeat(60),
+        goal: "g".repeat(120),
+        requirements: Array.from({ length: 4 }, (_, index) => ({
+          id: `R${phase * 4 + index + 1}`,
+          title: "t".repeat(60),
+          description: "d".repeat(140),
+          size: "m",
+          dependsOn: index === 0 ? [] : [`R${phase * 4 + index}`],
+        })),
+      })),
+      technicalGuidance: Array.from({ length: 3 }, () => ({
+        topic: "t".repeat(80),
+        current: "c".repeat(160),
+        recommendation: "r".repeat(160),
+        pros: ["p".repeat(80), "p".repeat(80)],
+        cons: ["c".repeat(80), "c".repeat(80)],
+      })),
+    };
+
+    expect(engineeringBreakdownSchema.safeParse(full).success).toBe(true);
+    expect(JSON.stringify(full).length / 4).toBeLessThan(2000 * 0.85);
+  });
+
+  it("lists every requirement in phase order", () => {
+    expect(breakdownRequirements(breakdown as never).map((r) => r.id)).toEqual(["R1", "R2", "R3"]);
   });
 });
 

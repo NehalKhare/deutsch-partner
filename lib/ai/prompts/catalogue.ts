@@ -8,6 +8,7 @@ import {
   codeEditSchema,
   implementationPlanSchema,
   marketFindingSchema,
+  engineeringBreakdownSchema,
   prdSectionsSchema,
   productProposalSchema,
 } from "@/domain/product-ops";
@@ -417,7 +418,9 @@ const ENTRIES: readonly PromptCatalogEntry[] = [
     name: "productops.prd_sections",
     register: "machine",
     // Version 1: only the sections a document cannot be rendered from.
-    version: 1,
+    // Version 2: the contract shrank to fit the mid tier's 1000-token ceiling,
+    // which the first real run overran twice.
+    version: 2,
     task: "productops.prd_sections",
     tier: routeFor("productops.prd_sections").tier,
     purpose:
@@ -442,6 +445,21 @@ const ENTRIES: readonly PromptCatalogEntry[] = [
     safetyRules: PRODUCT_OPS_SAFETY,
     blocks: PRODUCT_OPS_BLOCKS,
     evalSet: "golden/productops-code-plan",
+  },
+  {
+    name: "productops.plan_breakdown",
+    register: "machine",
+    // Version 1: the engineering manager's breakdown of an approved PRD.
+    version: 1,
+    task: "productops.plan_breakdown",
+    tier: routeFor("productops.plan_breakdown").tier,
+    purpose:
+      "Breaks an approved PRD into phased, sized requirements and gives technical guidance against the current stack, as an engineering manager would.",
+    inputSchema: z.strictObject({ brief: nonEmptyTextSchema(2000) }),
+    outputContract: engineeringBreakdownSchema,
+    safetyRules: PRODUCT_OPS_SAFETY,
+    blocks: PRODUCT_OPS_BLOCKS,
+    evalSet: "golden/productops-plan-breakdown",
   },
   {
     name: "productops.code_edit",

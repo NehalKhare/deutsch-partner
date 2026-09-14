@@ -40,7 +40,28 @@ export const TRAINER_TASK: TaskId = "trainer.session";
 
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 const PROVIDER = "openrouter";
-const CALL_TIMEOUT_MS = 30_000;
+
+/**
+ * How long one model call may take before the client gives up on it.
+ *
+ * Per tier, because the tiers are not alike: a reasoning-tier call with a
+ * 2000-token ceiling routinely thinks for the better part of a minute before
+ * its first byte, and a 30-second cut-off there turned every long proposal
+ * into a timeout that walked off the end of the ladder. The small tiers stay
+ * short — a cheap call that takes half a minute is a call that has hung. The
+ * ceiling is the call spec's own maximum, so nothing here may wait longer than
+ * a chat call could.
+ */
+export const CALL_TIMEOUT_MS: Readonly<Record<Tier, number>> = {
+  reasoning: 90_000,
+  strong: 45_000,
+  mid: 30_000,
+  cheap: 30_000,
+  nano: 30_000,
+  embedding: 30_000,
+  stt: 30_000,
+  tts: 30_000,
+};
 
 /** Which catalogue prompt this model is speaking for, stamped on ledger rows. */
 export interface PromptIdentity {
@@ -315,6 +336,32 @@ export function isModelUnavailableError(error: unknown): boolean {
 }
 
 /**
+ * True for the failure that means "not this time": the client's own timeout,
+ * a connection that never opened, the provider's rate limit or one of its
+ * server errors. None of them says anything about the request, and every one
+ * of them is what a same-tier fallback is for — the routing document's first
+ * rule of fallback. The SDK has already retried once by the time one of these
+ * surfaces, so trying the same candidate again would be a third paid wait.
+ *
+ * A 404 is deliberately not here: that is the model, not the moment, and
+ * isModelUnavailableError owns it. Nor is a 4xx about the request itself —
+ * a bad payload fails the same way on every rung.
+ */
+export function isTransientModelError(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false;
+  const { name, status } = error as { name?: unknown; status?: unknown };
+  if (
+    name === "TimeoutError" ||
+    name === "APIConnectionTimeoutError" ||
+    name === "APIConnectionError" ||
+    name === "AbortError"
+  ) {
+    return true;
+  }
+  return typeof status === "number" && (status === 408 || status === 429 || status >= 500);
+}
+
+/**
  * The tier's whole ladder — the primary first, then the registry's same-tier
  * fallbacks, each a ready model with its own ledger callback. The caller
  * tries them in order when one is unavailable; every attempt still writes
@@ -355,7 +402,7 @@ export function createTrainerModelLadder(
       // reasoning model otherwise spends every agent turn thinking and emits
       // neither a tool call nor an answer.
       ...(effort ? { reasoning: { effort } } : {}),
-      timeout: CALL_TIMEOUT_MS,
+      timeout: CALL_TIMEOUT_MS[route.tier],
       maxRetries: 1,
       configuration: {
         baseURL: OPENROUTER_BASE_URL,

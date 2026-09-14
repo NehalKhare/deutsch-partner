@@ -27,6 +27,14 @@ export const UNTRUSTED_TAGS = [
   // output about learner text: validated JSON, but it quotes the learner's own
   // German verbatim, so it rides inside a fence like everything else that does.
   "answer_analysis",
+  // What a learner wrote about how they want to be coached, rendered into
+  // the Trainer's system message behind the fixed prompt. Their own words,
+  // so a fence: a request about pace is honoured, a request to ignore the
+  // rules is text.
+  "coaching_notes",
+  // The same words, aggregated for the product-ops research agent: counts
+  // are arithmetic, but the notes beside them are learners' text.
+  "learner_feedback",
   // The product-ops agents' windows on the outside world: what a web search
   // returned, what an earlier stage stored, what a repository file says, and
   // what a compiler or test run printed. A comment in a source file can say

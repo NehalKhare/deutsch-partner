@@ -143,3 +143,84 @@ describe("any other vendor", () => {
     }
   });
 });
+
+describe("the learner's coaching block", () => {
+  const COACHING = "How this learner wants to be coached:\n- Keep corrections brief.";
+
+  it("rides behind the fixed prompt's cache mark on an anthropic candidate", async () => {
+    const model = new FakeToolCallingModel([new AIMessage("Gern!")]);
+    await runTrainerTurn(
+      { models: [{ model, cacheMarks: true }], tools: [], coaching: COACHING },
+      { message: "Weiter", history: [] },
+    );
+
+    const [system] = model.seen[0];
+    expect(system).toBeInstanceOf(SystemMessage);
+    expect(Array.isArray(system.content)).toBe(true);
+    const parts = system.content as Array<{ text?: string; cache_control?: unknown }>;
+    // Two parts: the shared prefix, marked, then this learner's block, not.
+    expect(parts).toHaveLength(2);
+    expect(parts[0].cache_control).toEqual({ type: "ephemeral" });
+    expect(parts[0].text).toContain("Deutsch Partner");
+    // The fixed prompt mentions the block by name; the block itself is the
+    // heading with its colon, and that lives only in the second part.
+    expect(parts[0].text).not.toContain("wants to be coached:");
+    expect(parts[1].cache_control).toBeUndefined();
+    expect(parts[1].text).toBe(COACHING);
+  });
+
+  it("is joined onto the fixed prompt for a candidate without cache marks", async () => {
+    const model = new FakeToolCallingModel([new AIMessage("Gern!")]);
+    await runTrainerTurn(
+      { models: [{ model, cacheMarks: false }], tools: [], coaching: COACHING },
+      { message: "Weiter", history: [] },
+    );
+
+    const [system] = model.seen[0];
+    expect(textOf(system)).toContain("Deutsch Partner");
+    expect(textOf(system)).toContain(COACHING);
+    expect(textOf(system).indexOf("Deutsch Partner")).toBeLessThan(
+      textOf(system).indexOf("wants to be coached:"),
+    );
+  });
+
+  it("leaves the system message exactly as it was when there is no block", async () => {
+    const model = new FakeToolCallingModel([new AIMessage("Gern!")]);
+    await runTrainerTurn(
+      { models: [{ model, cacheMarks: true }], tools: [] },
+      { message: "Weiter", history: [] },
+    );
+
+    const [system] = model.seen[0];
+    expect(system.content).toHaveLength(1);
+    expect(textOf(system)).not.toContain("wants to be coached:");
+  });
+});
+
+describe("the coaching receipt", () => {
+  it("counts the settings that changed and says how long they hold", async () => {
+    const adjust = tool(
+      async () =>
+        JSON.stringify({
+          adjusted: true,
+          persisted: true,
+          coaching: {},
+          changed: ["explanationDepth", "news"],
+        }),
+      { name: "adjust_coaching", description: "scripted", schema: z.object({}) },
+    );
+    const model = new FakeToolCallingModel([
+      toolCallMessage("adjust_coaching", {}),
+      new AIMessage("Done."),
+    ]);
+
+    const outcome = await runTrainerTurn(
+      { models: [{ model, cacheMarks: false }], tools: [adjust] },
+      { message: "Kürzer bitte", history: [] },
+    );
+
+    expect(outcome.ok && outcome.data.steps).toEqual([
+      { tool: "adjust_coaching", summary: "2 settings changed from now on" },
+    ]);
+  });
+});

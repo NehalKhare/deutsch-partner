@@ -31,6 +31,7 @@ const getRun = vi.fn();
 const findProposalForRun = vi.fn();
 const deleteRun = vi.fn();
 const applyReview = vi.fn();
+const retryRun = vi.fn();
 const driveRun = vi.fn(async (_deps: unknown, _runId: unknown) => ({}));
 const refresh = vi.fn();
 const scheduled: Array<() => Promise<unknown>> = [];
@@ -77,15 +78,20 @@ vi.mock("@/lib/product-ops/workflow", async () => {
   return {
     ...actual,
     applyReview: (deps: unknown, request: unknown) => applyReview(deps, request),
+    retryRun: (deps: unknown, request: unknown) => retryRun(deps, request),
   };
 });
 vi.mock("@/lib/product-ops/graph/graph", () => ({
   driveRunGraph: (deps: unknown, runId: unknown) => driveRun(deps, runId),
 }));
 
-const { advanceRunAction, removeRunAction, reviewProposalAction, startScanAction } = await import(
-  "@/app/(app)/operations/product/actions"
-);
+const {
+  advanceRunAction,
+  removeRunAction,
+  retryRunAction,
+  reviewProposalAction,
+  startScanAction,
+} = await import("@/app/(app)/operations/product/actions");
 
 function form(fields: Record<string, string>): FormData {
   const data = new FormData();
@@ -340,5 +346,55 @@ describe("removing a run", () => {
     await removeRunAction(form({ runId: "nope" }));
 
     expect(getRun).not.toHaveBeenCalled();
+  });
+});
+
+describe("trying a run again", () => {
+  beforeEach(() => {
+    resetRateLimiters();
+    currentUser.mockResolvedValue(OPERATOR);
+    retryRun.mockReset();
+    retryRun.mockResolvedValue({ status: "retried", stage: "prd" });
+  });
+
+  it("is a silent no-op for a learner who is not an operator", async () => {
+    currentUser.mockResolvedValue(LEARNER);
+
+    await retryRunAction(form({ runId: RUN }));
+
+    expect(retryRun).not.toHaveBeenCalled();
+    expect(scheduled).toEqual([]);
+  });
+
+  it("moves the run back under the operator's pseudonym and drives it after the response", async () => {
+    await retryRunAction(form({ runId: RUN }));
+
+    expect(retryRun).toHaveBeenCalledWith(expect.anything(), {
+      runId: RUN,
+      operatorIdHash: HASH,
+    });
+    expect(driveRun).not.toHaveBeenCalled();
+    expect(scheduled).toHaveLength(1);
+
+    await scheduled[0]();
+    expect(driveRun).toHaveBeenCalledWith(expect.anything(), RUN);
+  });
+
+  it("drives nothing when the run could not be moved, and says why in the log", async () => {
+    retryRun.mockResolvedValue({ status: "not_failed", stage: "prd" });
+
+    await retryRunAction(form({ runId: RUN }));
+
+    expect(scheduled).toEqual([]);
+    expect(refresh).toHaveBeenCalled();
+    expect(logged.find((line) => line.event === "productops.retry_refused")?.fields).toMatchObject({
+      reason: "not_failed",
+    });
+  });
+
+  it("refuses a run id that is not an id", async () => {
+    await retryRunAction(form({ runId: "again-please" }));
+
+    expect(retryRun).not.toHaveBeenCalled();
   });
 });

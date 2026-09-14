@@ -11,6 +11,7 @@ import {
   type SettingsFormState,
 } from "@/lib/settings/input";
 import { createLearnerRepository } from "@/repositories/learner-repository";
+import { createTrainerCoachingRepository } from "@/repositories/trainer-coaching-repository";
 import { createServerSupabaseClient } from "@/lib/supabase/server-client";
 import type { DatabaseClient } from "@/repositories/types";
 
@@ -72,4 +73,39 @@ export async function updateSettingsAction(
   revalidatePath("/dashboard");
 
   return SETTINGS_SAVED;
+}
+
+/**
+ * Forgets what the trainer learned from this learner's feedback.
+ *
+ * The dials and every vote behind them, as the signed-in learner, so RLS
+ * decides whose rows those are. Guardrails S15 asks for exactly this door,
+ * and S24 asks that walking through it be audited — which rows, never what
+ * the votes said.
+ */
+export async function resetTrainerCoachingAction(
+  _previous: SettingsFormState,
+  _formData: FormData,
+): Promise<SettingsFormState> {
+  const learnerId = await requireAuthenticatedUserId();
+
+  const supabase = (await createServerSupabaseClient()) as unknown as DatabaseClient;
+  const coaching = createTrainerCoachingRepository(supabase);
+
+  const cleared = await coaching.reset(learnerId);
+  if (!cleared.ok) {
+    return settingsError("We could not clear that just now. Please try again.");
+  }
+
+  actionLogger().info("trainer.coaching_reset", {
+    audit: true,
+    userIdHash: pseudonymOrUnavailable(learnerId),
+  });
+
+  refresh();
+
+  return {
+    status: "saved",
+    message: "Forgotten. Your next session starts from the defaults.",
+  };
 }

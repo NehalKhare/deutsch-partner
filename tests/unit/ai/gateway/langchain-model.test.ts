@@ -6,7 +6,9 @@ import {
   TrainerBudgetExhausted,
   createTrainerChatModel,
   createTrainerModelLadder,
+  CALL_TIMEOUT_MS,
   isModelUnavailableError,
+  isTransientModelError,
 } from "@/lib/ai/gateway/langchain-model";
 import { routeFor } from "@/lib/ai/tasks";
 import { parseEnv } from "@/lib/env/schema";
@@ -414,5 +416,46 @@ describe("the euro ceiling", () => {
     await handler.handleLLMError(new TrainerBudgetExhausted(0), "run-1");
 
     expect(rows).toHaveLength(0);
+  });
+});
+
+describe("what counts as a passing failure", () => {
+  it("recognises the client's own timeout and a connection that never opened", () => {
+    expect(isTransientModelError(Object.assign(new Error("timed out"), { name: "TimeoutError" }))).toBe(true);
+    expect(
+      isTransientModelError(Object.assign(new Error("x"), { name: "APIConnectionTimeoutError" })),
+    ).toBe(true);
+    expect(isTransientModelError(Object.assign(new Error("x"), { name: "APIConnectionError" }))).toBe(true);
+  });
+
+  it("recognises the provider's rate limit and its server errors", () => {
+    expect(isTransientModelError(Object.assign(new Error("429"), { status: 429 }))).toBe(true);
+    expect(isTransientModelError(Object.assign(new Error("502"), { status: 502 }))).toBe(true);
+    expect(isTransientModelError(Object.assign(new Error("408"), { status: 408 }))).toBe(true);
+  });
+
+  it("leaves a missing model, a bad request and a spent budget to their own handlers", () => {
+    expect(isTransientModelError(Object.assign(new Error("404"), { status: 404 }))).toBe(false);
+    expect(isTransientModelError(Object.assign(new Error("400"), { status: 400 }))).toBe(false);
+    expect(isTransientModelError(new TrainerBudgetExhausted(0.05))).toBe(false);
+    expect(isTransientModelError("boom")).toBe(false);
+    expect(isTransientModelError(null)).toBe(false);
+  });
+});
+
+describe("how long a call may take", () => {
+  it("gives the reasoning tier the longest window and the small tiers a short one", () => {
+    // A 2000-token reasoning answer routinely takes the better part of a
+    // minute; a cheap call that takes half a minute has hung.
+    expect(CALL_TIMEOUT_MS.reasoning).toBeGreaterThan(CALL_TIMEOUT_MS.cheap);
+    expect(CALL_TIMEOUT_MS.reasoning).toBeGreaterThanOrEqual(60_000);
+    expect(CALL_TIMEOUT_MS.cheap).toBeLessThanOrEqual(30_000);
+  });
+
+  it("never waits longer than a chat call is allowed to", () => {
+    // The call spec caps every gateway timeout at two minutes.
+    for (const timeout of Object.values(CALL_TIMEOUT_MS)) {
+      expect(timeout).toBeLessThanOrEqual(120_000);
+    }
   });
 });

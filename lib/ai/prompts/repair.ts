@@ -38,3 +38,19 @@ export function truncationRepairInstruction(): string {
     "Return the same JSON object, shorter: fewer list items and briefer text in each field. Nothing else.",
   ].join("\n");
 }
+
+/**
+ * The retry instruction for an agent run that ended without an answer.
+ *
+ * Different again: the model did not produce a malformed object, it produced
+ * prose and stopped. Naming the problem as "(root)" tells it nothing. What
+ * helps is saying which tool the answer goes through, because that is the one
+ * thing it did not do.
+ */
+export function missingAnswerRepairInstruction(answerTool: string): string {
+  return [
+    "",
+    "Your previous turn ended without an answer: it did not call the answer tool.",
+    `Call the ${answerTool} tool now, with the complete answer as its arguments. Do not reply in prose.`,
+  ].join("\n");
+}

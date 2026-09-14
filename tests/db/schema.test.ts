@@ -49,6 +49,8 @@ const EXPECTED_TABLES = [
   "pull_requests",
   "recommendations",
   "scenarios",
+  "trainer_coaching_profiles",
+  "trainer_feedback",
   "trainer_mined_sessions",
   "vocabulary_items",
 ];

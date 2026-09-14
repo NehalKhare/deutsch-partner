@@ -114,6 +114,10 @@ The orchestrator dispatches on it and the dashboard renders from it, so a run ca
 appear stuck to an operator while something is quietly working on it.
 
   server     research, synthesis, prd, code_plan
+             (research also reads the learner feedback aggregate — the
+             learner_feedback_summary function, operator scope — and records
+             it as an internal finding by arithmetic before any web search;
+             fewer than five votes in the window records nothing)
   operator   human_review, plan_review
   worker     implementation, verification, pull_request  (unreachable, see S1)
   nobody     completed, failed, rejected
@@ -125,13 +129,22 @@ orchestrator, which runs any stage it is given the means to.
 
 The timeline records three kinds of row and they must not be confusable: an ENTRY event,
 written by the transition with status 'started'; a WORK event, written by the stage
-with its own outcome; and a PROGRESS event, written for each tool call an agent
-finishes inside a stage, carrying the tool's name and whether it worked and never its
-arguments or its result. Without the first distinction, arriving at the verification
+with its own outcome; and a PROGRESS event, written for each tool call and each model
+call an agent finishes inside a stage, carrying the tool's name and whether it worked —
+or the bare fact of a model call — and never arguments, results or replies. Without the first distinction, arriving at the verification
 stage would be indistinguishable from having verified, and the idempotency guard would
 skip the project's gate on every run that reached it normally. A progress event also
 touches the run's updated_at, which is what lets the board tell a slow planner from a
 dead process.
+
+A failed run is not the end of it. An operator may try it again: the orchestrator reads
+the failing stage off the run's own timeline, moves the run from 'failed' back to that
+stage through the same compare-and-set, and drives it from there. The timeline keeps the
+failure and gains a 'started' entry marked as a retry; the run's error code and
+completion time are cleared by the transition function, because a run that is moving
+has not ended. The euro ceiling is the run's, unchanged — what the failed attempt cost
+still counts — and every stage's idempotency guard (section 4) is what makes the retry
+do only the failed work. Retrying is an audit event.
 
 ==================================================
 4. IDEMPOTENCY
@@ -205,7 +218,7 @@ to distrust the one signal that means something is wrong.
 6. MODEL CALLS
 ==================================================
 
-Six tasks. Each is added to the routing table in lib/ai/tasks.ts with a tier and both
+Seven tasks. Each is added to the routing table in lib/ai/tasks.ts with a tier and both
 ceilings before any code calls it, per model-routing-and-cost-control.md section 4.
 
   TASK                            TIER        IN      OUT
@@ -214,6 +227,7 @@ ceilings before any code calls it, per model-routing-and-cost-control.md section
   productops.proposal_synthesis   reasoning    12000    2000
   productops.prd_sections         mid           6000    1000
   productops.code_plan            reasoning    12000    2000
+  productops.plan_breakdown       reasoning    12000    2000
   productops.code_edit            reasoning    12000    2000
   productops.context_summary      cheap         8000     400
 
@@ -240,6 +254,16 @@ without evaluation evidence is what the cost document forbids.
 
 code_plan and code_edit are the hardest reasoning in the product and run off any hot
 path.
+
+plan_breakdown is the second call of the planning stage: the engineering manager's view
+of the approved PRD — requirements in build order and in phases, a t-shirt size on each
+and on the whole, and technical guidance that names where the current stack is the wrong
+tool and weighs both sides. Same judgement, same profile and same tier as code_plan; a
+second call because the file lists and this do not fit one 2000-token answer, and a
+second document because the file lists are the coding agent's allowlist and this is a
+plan a person staffs. It reads the PRD, the file plan and the architecture notes as
+fenced knowledge, never a source file. Stored beside the plan; a retry of the stage
+writes only the half that is missing.
 
 THE BINDING CONSTRAINT: the reasoning tier's hardMaxOutputTokens is 2000, and a task's
 ceilings must fit inside the tier's. 2000 tokens is therefore the maximum any model call
@@ -268,6 +292,7 @@ Untrusted, per guardrails section 9, and each with its own delimiter tag:
   web_results        search results and their citations
   market_research    stored findings, on the way back into a later prompt
   repo_source        source files the coding agent reads
+  learner_feedback   the learners' trainer votes, aggregated, with their notes
 
 That third one matters and is easy to miss. A comment in a file the coding agent reads
 can say "ignore all previous instructions". Repository source is external content and
@@ -410,7 +435,9 @@ find the pull request for a head, open one, add labels.
 
   - A per-run euro accumulator caps a whole run, in addition to the four persisted
     budget scopes. A research-to-proposal run and an implementation run get separate
-    ceilings. The starting figures are to be tuned against real traces.
+    ceilings. The figures were first tuned against a real trace on 2026-09-10, when a
+    scan reached planning and the planner's re-sent transcript on the reasoning tier
+    proved the expensive stage; they remain figures to tune, not to argue about.
   - The accumulator is DURABLE, and it is reconstructed rather than stored: each stage
     records what it cost on its own timeline event, and the next invocation sums them.
     An in-process accumulator would cap one stage invocation and call it a run, which
@@ -422,6 +449,14 @@ find the pull request for a head, open one, add labels.
     reported as working, and a run that stops moving becomes stalled by the database's
     clock — so a tab left open on a run whose drive died stops querying within one
     stall window, whatever the browser believes.
+  - A working run's card also follows its timeline live, over Server-Sent Events from
+    an operator-only route that reads the run's events forward from the last id the
+    browser saw. The frames are the timeline entries the detail page renders and
+    nothing else — no tool arguments, results or model replies ever reached the
+    timeline, so none can reach the feed. The stream ends when the run leaves the
+    server's hands, and the browser's own reconnection carries the last id. Postgres is
+    the channel on purpose: the process driving a run is not necessarily the one
+    serving the operator, and the timeline is the one place every row lands.
   - Operator spend appears on the existing cost dashboard, broken down by the tasks in
     section 6. Making this feature's cost visible in the place all other cost is visible
     is the point.
@@ -438,12 +473,18 @@ task, with this middleware stack and no other:
 
   runBudgetMiddleware          the run's euro budget, reconstructed from its events and
                                handed down as the turn; throws before the next model call
-  toolCallLimitMiddleware      per-run cap on tool calls
+  cacheMarksMiddleware         prompt-cache breakpoints on the system prompt and the
+                               trusted request, for a candidate whose provider reads them
+                               (the registry decides); the tool transcript is not marked
+  toolCallLimitMiddleware      per-run cap on tool calls; a batch over the cap is trimmed
+                               and told so, not fatal — the model-call cap is the hard bound
   modelCallLimitMiddleware     per-run cap on model calls, above the tool cap
   fencedToolResultsMiddleware  every tool result wrapped in its untrusted tag with the
                                delimiter escaped
-  progressMiddleware           one progress event per finished tool call: name and
-                               outcome only
+  progressMiddleware           one progress event per finished tool call (name and
+                               outcome only) and one per finished model call (the
+                               fact of it only), the latter from a node hook so the
+                               framework wraps no error the loop has to read
   summarizationMiddleware      older tool output folded at 70% of the input ceiling,
                                billed to productops.context_summary
 

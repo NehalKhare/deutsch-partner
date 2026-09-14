@@ -56,6 +56,7 @@ export const TASK_IDS = [
   "productops.proposal_synthesis",
   "productops.prd_sections",
   "productops.code_plan",
+  "productops.plan_breakdown",
   "productops.code_edit",
   "productops.context_summary",
 ] as const;
@@ -221,6 +222,19 @@ const ROUTES: Readonly<Record<TaskId, TaskRoute>> = {
    * approves before anything is written.
    */
   "productops.code_plan": {
+    tier: "reasoning",
+    maxInputTokens: 12_000,
+    maxOutputTokens: 2000,
+  },
+  /**
+   * The engineering manager's half of the plan: the PRD broken into phased,
+   * sized requirements, with technical guidance against the current stack.
+   * The same judgement as the plan and the same profile — rare, offline, a
+   * person reads it — so the same tier. A second call rather than a bigger
+   * one, because the plan's file lists and this do not fit one 2000-token
+   * answer together.
+   */
+  "productops.plan_breakdown": {
     tier: "reasoning",
     maxInputTokens: 12_000,
     maxOutputTokens: 2000,

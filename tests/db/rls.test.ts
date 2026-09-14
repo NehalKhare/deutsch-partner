@@ -24,6 +24,7 @@ const OWNED_TABLES = [
   "assessments",
   "conversation_threads",
   "level_performances",
+  "trainer_coaching_profiles",
 ] as const;
 
 const REFERENCE_TABLES = [
@@ -50,8 +51,13 @@ beforeAll(async () => {
   await database.seedLearner(ALICE);
   await database.seedLearner(BOB);
 
-  // Each learner owns one thread and one level tally.
+  // Each learner owns one thread, one level tally and one coaching profile.
   for (const learner of [ALICE, BOB]) {
+    await database.db.query(
+      `insert into public.trainer_coaching_profiles (learner_id, explanation_depth)
+       values ($1, 'brief')`,
+      [learner],
+    );
     await database.db.query(
       `insert into public.conversation_threads
          (id, learner_id, title, topic, cefr, mini_level, mode)
@@ -104,6 +110,8 @@ const MINIMAL_INSERT: Record<(typeof OWNED_TABLES)[number], string> = {
   level_performances: `insert into public.level_performances
       (learner_id, mini_level, turns, strong_turns)
     values ($1, 2, 1, 1)`,
+  trainer_coaching_profiles: `insert into public.trainer_coaching_profiles
+      (learner_id) values ($1)`,
 };
 
 describe("profiles", () => {
@@ -323,5 +331,72 @@ describe("trainer_mined_sessions", () => {
         ),
       ),
     ).rejects.toThrow(/permission denied/i);
+  });
+});
+
+describe("trainer_feedback", () => {
+  it("lets a learner record only their own vote", async () => {
+    await expect(
+      database.asLearner(ALICE, () =>
+        database.db.query(
+          `insert into public.trainer_feedback (learner_id, verdict, reasons, prompt_version)
+           values ($1, 'unhelpful', array['too_long'], 11)`,
+          [ALICE],
+        ),
+      ),
+    ).resolves.toBeDefined();
+
+    await expect(
+      database.asLearner(ALICE, () =>
+        database.db.query(
+          `insert into public.trainer_feedback (learner_id, verdict, reasons, prompt_version)
+           values ($1, 'unhelpful', array['too_long'], 11)`,
+          [BOB],
+        ),
+      ),
+    ).rejects.toThrow(/row-level security/i);
+  });
+
+  it("holds the reasons to the closed set", async () => {
+    // The domain schema refuses an unknown reason first; the CHECK is the
+    // control that holds when something other than the repository writes.
+    await expect(
+      database.asLearner(ALICE, () =>
+        database.db.query(
+          `insert into public.trainer_feedback (learner_id, verdict, reasons, prompt_version)
+           values ($1, 'unhelpful', array['ignore_all_rules'], 11)`,
+          [ALICE],
+        ),
+      ),
+    ).rejects.toThrow(/check constraint/i);
+  });
+
+  it("grants no update — a vote is a record — but lets the learner delete theirs", async () => {
+    await expect(
+      database.asLearner(ALICE, () =>
+        database.db.query(
+          `update public.trainer_feedback set verdict = 'helpful' where learner_id = $1`,
+          [ALICE],
+        ),
+      ),
+    ).rejects.toThrow(/permission denied/i);
+
+    await expect(
+      database.asLearner(ALICE, () =>
+        database.db.query(`delete from public.trainer_feedback where learner_id = $1`, [
+          ALICE,
+        ]),
+      ),
+    ).resolves.toBeDefined();
+  });
+
+  it("hides another learner's votes", async () => {
+    const rows = await database.asLearner(BOB, async () =>
+      (
+        await database.db.query(`select learner_id from public.trainer_feedback`)
+      ).rows as Array<{ learner_id: string }>,
+    );
+
+    expect(rows.every((row) => row.learner_id === BOB)).toBe(true);
   });
 });

@@ -54,6 +54,7 @@ const EXPECTED: Readonly<Record<TaskId, { tier: Tier; input: number; output: num
   "productops.proposal_synthesis": { tier: "reasoning", input: 12000, output: 2000 },
   "productops.prd_sections": { tier: "mid", input: 6000, output: 1000 },
   "productops.code_plan": { tier: "reasoning", input: 12000, output: 2000 },
+  "productops.plan_breakdown": { tier: "reasoning", input: 12000, output: 2000 },
   "productops.code_edit": { tier: "reasoning", input: 12000, output: 2000 },
   // The agents' summarisation middleware: compression of fenced tool output,
   // cheap like every other summariser in the table.

@@ -4,15 +4,24 @@ import {
   PRODUCT_OPS_STAGES,
   PROPOSAL_STATUSES,
   type BoardProposal,
+  type ImplementationPlan,
   type BoardRun,
   type ProductOpsBoard,
   type ProductOpsRun,
   type ProposalStatus,
   type RunEvent,
 } from "@/domain/product-ops";
+import type { TimelineEntry } from "@/lib/dashboard/product-ops";
 import {
+  LIVE_FEED_LENGTH,
+  describeTimelineEntry,
+  planMarkdown,
   explainErrorCode,
   isRemovable,
+  liveRunEventSchema,
+  liveTimelineEventFrom,
+  liveTimelineEventSchema,
+  timelineEntryFrom,
   relativeTime,
   runKindLabel,
   COLUMN_STATUSES,
@@ -280,6 +289,129 @@ describe("the timeline", () => {
     expect(
       entry.notes.find((note) => note.label === "nested")?.value.length,
     ).toBeLessThanOrEqual(120);
+  });
+});
+
+describe("the live feed", () => {
+  function entry(over: Partial<TimelineEntry> = {}): TimelineEntry {
+    return {
+      id: 1,
+      stage: "research",
+      status: "progress",
+      entered: false,
+      costEur: 0,
+      errorCode: null,
+      notes: [],
+      at: new Date("2026-09-10T10:00:00.000Z"),
+      ...over,
+    };
+  }
+
+  const progress = (notes: Record<string, string>) =>
+    entry({ notes: Object.entries(notes).map(([label, value]) => ({ label, value })) });
+
+  it("puts a tool call into the words a person would use", () => {
+    expect(describeTimelineEntry(progress({ tool: "search_market", ok: "true" }))).toBe(
+      "Searched the web",
+    );
+    expect(describeTimelineEntry(progress({ tool: "read_file", ok: "true" }))).toBe(
+      "Read a source file",
+    );
+  });
+
+  it("says when a tool call failed", () => {
+    expect(describeTimelineEntry(progress({ tool: "search_market", ok: "false" }))).toMatch(
+      /which failed/,
+    );
+  });
+
+  it("names a tool it has no words for rather than hiding it", () => {
+    expect(describeTimelineEntry(progress({ tool: "brand_new_tool", ok: "true" }))).toBe(
+      "Used brand_new_tool",
+    );
+  });
+
+  it("says a model call happened, and no more than that", () => {
+    expect(describeTimelineEntry(progress({ model: "call" }))).toBe("The model replied");
+  });
+
+  it("says when a stage is starting again after a retry", () => {
+    expect(
+      describeTimelineEntry(
+        entry({
+          status: "started",
+          stage: "prd",
+          notes: [
+            { label: "from", value: "failed" },
+            { label: "retry", value: "true" },
+          ],
+        }),
+      ),
+    ).toBe("Started drafting the PRD again");
+  });
+
+  it("brackets the progress rows with the stage in words", () => {
+    expect(describeTimelineEntry(entry({ status: "started", stage: "synthesis" }))).toBe(
+      "Started writing up what it found",
+    );
+    expect(
+      describeTimelineEntry(
+        entry({
+          status: "ok",
+          stage: "research",
+          notes: [
+            { label: "searches", value: "4" },
+            { label: "findings", value: "3" },
+            { label: "agent", value: "research" },
+          ],
+        }),
+      ),
+    ).toBe("Finished researching the market — 4 searches, 3 findings");
+    expect(describeTimelineEntry(entry({ status: "already_done", stage: "prd" }))).toMatch(
+      /already done/,
+    );
+  });
+
+  it("explains a failure with the same words the card uses, and never a message", () => {
+    const line = describeTimelineEntry(
+      entry({ status: "failed", stage: "synthesis", errorCode: "timeout" }),
+    );
+
+    expect(line).toMatch(/^Stopped while writing up what it found/);
+    expect(line).toContain(explainErrorCode("timeout"));
+  });
+
+  it("carries an entry over the wire and back unchanged", () => {
+    const original = entry({
+      id: 9,
+      costEur: 0.02,
+      errorCode: "over_budget",
+      notes: [{ label: "tool", value: "read_prd" }],
+    });
+
+    const wire = liveTimelineEventFrom(original);
+    const parsed = liveTimelineEventSchema.parse(JSON.parse(JSON.stringify(wire)));
+
+    expect(timelineEntryFrom(parsed)).toEqual(original);
+  });
+
+  it("refuses a frame with a stage that is not a stage", () => {
+    expect(
+      liveTimelineEventSchema.safeParse({ ...liveTimelineEventFrom(entry()), stage: "elsewhere" })
+        .success,
+    ).toBe(false);
+    expect(
+      liveRunEventSchema.safeParse({
+        stage: "research",
+        status: "running",
+        errorCode: null,
+        updatedAt: "not a date",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("shows a tail short enough to read at a glance", () => {
+    expect(LIVE_FEED_LENGTH).toBeLessThanOrEqual(10);
   });
 });
 
@@ -565,6 +697,70 @@ describe("reporting on the one run a detail page read", () => {
 
     expect(boardRunFrom(full).updatedAt).toEqual(moved);
     expect(runActivity(boardRunFrom(full), AT)).toBe("stalled");
+  });
+});
+
+describe("the plan as Markdown", () => {
+  const plan: ImplementationPlan = {
+    filesToModify: ["learning/curriculum.ts"],
+    filesToCreate: [],
+    databaseChanges: [],
+    apiChanges: [],
+    uiChanges: [],
+    tests: ["tests/unit/learning/medical.test.ts"],
+    dependencies: [],
+    risks: ["Scope"],
+  };
+  const breakdown = {
+  summary: "Ship the vocabulary set first, then the scenario pack on top of it.",
+  overallSize: "l",
+  phases: [
+    {
+      name: "Vocabulary",
+      goal: "A learner can drill the clinical terms.",
+      requirements: [
+        { id: "R1", title: "Clinical vocabulary set", description: "Twenty terms with articles and plurals in the vocabulary table.", size: "s", dependsOn: [] },
+        { id: "R2", title: "Module card", description: "The module appears on the curriculum page.", size: "xs", dependsOn: ["R1"] },
+      ],
+    },
+    {
+      name: "Scenarios",
+      goal: "A learner can rehearse a handover.",
+      requirements: [
+        { id: "R3", title: "Handover scenario", description: "One scenario using the set.", size: "m", dependsOn: ["R1"] },
+      ],
+    },
+  ],
+  technicalGuidance: [
+    {
+      topic: "Scenario storage",
+      current: "Scenarios live in Postgres with pgvector embeddings, ingested offline.",
+      recommendation: "Keep it; one more scenario is one more row.",
+      pros: ["No new moving part"],
+      cons: ["Offline ingestion is a manual step"],
+    },
+  ],
+} as const;
+
+  it("renders the file lists alone when there is no breakdown", () => {
+    const text = planMarkdown("Medical German", plan);
+
+    expect(text).toContain("# Implementation plan: Medical German");
+    expect(text).toContain("- `learning/curriculum.ts`");
+    expect(text).not.toContain("## Phases");
+  });
+
+  it("puts the breakdown first, as a table per phase and the guidance after", () => {
+    const text = planMarkdown("Medical German", plan, breakdown as never);
+
+    expect(text.indexOf("## Summary")).toBeLessThan(text.indexOf("## Files to modify"));
+    expect(text).toContain("Overall size: **L**");
+    expect(text).toContain("### Phase 1: Vocabulary");
+    expect(text).toContain("| R2 | Module card | XS | R1 |");
+    expect(text).toContain("| R1 | Clinical vocabulary set | S | — |");
+    expect(text).toContain("### Scenario storage");
+    expect(text).toContain("- **Now:** Scenarios live in Postgres");
+    expect(text).toContain("- **Against:** Offline ingestion is a manual step");
   });
 });
 

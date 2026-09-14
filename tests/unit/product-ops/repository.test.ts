@@ -661,6 +661,30 @@ describe("the timeline", () => {
     expect(column).toBe("id");
     expect(options).toMatchObject({ ascending: true });
   });
+
+  it("reads the timeline after a row by a range on the id, for the live feed", async () => {
+    // The feed asks on every tick, so each ask is an indexed range and not
+    // the whole timeline again. Same order as the full read, for the same
+    // reason.
+    const fake = createFakeSupabase({ ai_run_events: { data: [] } });
+
+    await createProductOpsRepository(fake.client).listEventsAfter(RUN_ID, 41);
+
+    expect(fake.methodArgs("ai_run_events", "gt")).toEqual([["id", 41]]);
+    expect(fake.methodArgs("ai_run_events", "eq")).toEqual([["run_id", RUN_ID]]);
+    const [[column, options]] = fake.methodArgs("ai_run_events", "order");
+    expect(column).toBe("id");
+    expect(options).toMatchObject({ ascending: true });
+  });
+
+  it("refuses a negative or fractional cursor before querying", async () => {
+    const fake = createFakeSupabase({ ai_run_events: { data: [] } });
+
+    const outcome = await createProductOpsRepository(fake.client).listEventsAfter(RUN_ID, -1);
+
+    expect(outcome.ok).toBe(false);
+    expect(fake.calls).toHaveLength(0);
+  });
 });
 
 describe("the artifacts", () => {
@@ -768,6 +792,129 @@ describe("the artifacts", () => {
     const [[values, options]] = fake.methodArgs("implementation_plans", "upsert");
     expect(options).toMatchObject({ onConflict: "proposal_id" });
     expect(values).toMatchObject({ files_to_modify: ["learning/curriculum.ts"] });
+  });
+
+  it("writes the breakdown onto the plan it belongs to, by id", async () => {
+    const fake = createFakeSupabase({
+      implementation_plans: {
+        data: {
+          id: PLAN_ID,
+          proposal_id: PROPOSAL_ID,
+          files_to_modify: ["learning/curriculum.ts"],
+          files_to_create: [],
+          database_changes: [],
+          api_changes: [],
+          ui_changes: [],
+          tests: [],
+          dependencies: [],
+          risks: [],
+          breakdown: {
+  summary: "Ship the vocabulary set first, then the scenario pack on top of it.",
+  overallSize: "l",
+  phases: [
+    {
+      name: "Vocabulary",
+      goal: "A learner can drill the clinical terms.",
+      requirements: [
+        { id: "R1", title: "Clinical vocabulary set", description: "Twenty terms with articles and plurals in the vocabulary table.", size: "s", dependsOn: [] },
+        { id: "R2", title: "Module card", description: "The module appears on the curriculum page.", size: "xs", dependsOn: ["R1"] },
+      ],
+    },
+    {
+      name: "Scenarios",
+      goal: "A learner can rehearse a handover.",
+      requirements: [
+        { id: "R3", title: "Handover scenario", description: "One scenario using the set.", size: "m", dependsOn: ["R1"] },
+      ],
+    },
+  ],
+  technicalGuidance: [
+    {
+      topic: "Scenario storage",
+      current: "Scenarios live in Postgres with pgvector embeddings, ingested offline.",
+      recommendation: "Keep it; one more scenario is one more row.",
+      pros: ["No new moving part"],
+      cons: ["Offline ingestion is a manual step"],
+    },
+  ],
+},
+          status: "pending_review",
+          created_at: "2026-09-10T10:00:00.000Z",
+          updated_at: "2026-09-10T10:00:00.000Z",
+        },
+      },
+    });
+
+    const result = await createProductOpsRepository(fake.client).saveBreakdown(
+      PLAN_ID,
+      {
+  summary: "Ship the vocabulary set first, then the scenario pack on top of it.",
+  overallSize: "l",
+  phases: [
+    {
+      name: "Vocabulary",
+      goal: "A learner can drill the clinical terms.",
+      requirements: [
+        { id: "R1", title: "Clinical vocabulary set", description: "Twenty terms with articles and plurals in the vocabulary table.", size: "s", dependsOn: [] },
+        { id: "R2", title: "Module card", description: "The module appears on the curriculum page.", size: "xs", dependsOn: ["R1"] },
+      ],
+    },
+    {
+      name: "Scenarios",
+      goal: "A learner can rehearse a handover.",
+      requirements: [
+        { id: "R3", title: "Handover scenario", description: "One scenario using the set.", size: "m", dependsOn: ["R1"] },
+      ],
+    },
+  ],
+  technicalGuidance: [
+    {
+      topic: "Scenario storage",
+      current: "Scenarios live in Postgres with pgvector embeddings, ingested offline.",
+      recommendation: "Keep it; one more scenario is one more row.",
+      pros: ["No new moving part"],
+      cons: ["Offline ingestion is a manual step"],
+    },
+  ],
+} as never,
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.breakdown?.overallSize).toBe("l");
+    expect(fake.methodArgs("implementation_plans", "eq")).toEqual([["id", PLAN_ID]]);
+    const [[values]] = fake.methodArgs("implementation_plans", "update");
+    expect(values).toMatchObject({ breakdown: expect.objectContaining({ overallSize: "l" }) });
+  });
+
+  it("reads a plan written before the breakdown existed as one without a breakdown", async () => {
+    const fake = createFakeSupabase({
+      implementation_plans: {
+        data: [
+          {
+            id: PLAN_ID,
+            proposal_id: PROPOSAL_ID,
+            files_to_modify: ["learning/curriculum.ts"],
+            files_to_create: [],
+            database_changes: [],
+            api_changes: [],
+            ui_changes: [],
+            tests: [],
+            dependencies: [],
+            risks: [],
+            status: "pending_review",
+            created_at: "2026-09-10T10:00:00.000Z",
+            updated_at: "2026-09-10T10:00:00.000Z",
+          },
+        ],
+      },
+    });
+
+    const result = await createProductOpsRepository(fake.client).findPlanForProposal(PROPOSAL_ID);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data?.breakdown).toBeNull();
   });
 
   it("refuses a plan that touches no file at all", async () => {

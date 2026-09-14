@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import "server-only";
@@ -48,13 +49,21 @@ import {
 } from "@/lib/ai/gateway/langchain-model";
 import { loadMcpTools } from "@/lib/trainer/mcp";
 import type { TrainerDeps } from "@/lib/api/trainer";
+import type { TrainerFeedbackDeps } from "@/lib/api/trainer-feedback";
 import type { WorkflowDeps } from "@/lib/product-ops/workflow";
+import {
+  FEEDBACK_WINDOW_DAYS,
+  createLearnerFeedbackRepository,
+  type LearnerFeedbackRepository,
+} from "@/lib/dashboard/learner-feedback";
+import type { LearnerFeedbackSource } from "@/lib/product-ops/feedback";
 import { createLocalRepositoryBrowser } from "@/lib/product-ops/browser";
 import { createConversationRepository } from "@/repositories/conversation-repository";
 import { createEmbeddingCache } from "@/repositories/ingestion-repository";
 import { createGrammarRepository } from "@/repositories/grammar-repository";
 import { createLearnerErrorRepository } from "@/repositories/learner-error-repository";
 import { createMinedSessionRepository } from "@/repositories/mined-session-repository";
+import { createTrainerCoachingRepository } from "@/repositories/trainer-coaching-repository";
 import { createLearnerRepository } from "@/repositories/learner-repository";
 import { createPerformanceRepository } from "@/repositories/performance-repository";
 import {
@@ -197,7 +206,31 @@ export function createVoiceProviders(): VoiceProviders | null {
  */
 export interface ProductOpsReader {
   readonly runs: ProductOpsRepository;
+  /** What the product's own learners said about the trainer, aggregated. */
+  readonly feedback: LearnerFeedbackRepository;
   readonly logger: Logger;
+}
+
+/**
+ * The aggregate as the research stage reads it: a value or null, never a
+ * throw, because a scan whose feedback cannot be read is still a scan.
+ */
+function feedbackSource(
+  feedback: LearnerFeedbackRepository,
+  logger: Logger,
+): LearnerFeedbackSource {
+  return {
+    async summary(days) {
+      const outcome = await feedback
+        .summary({ days: Math.min(days, FEEDBACK_WINDOW_DAYS * 12) })
+        .catch(() => null);
+      if (outcome === null || !outcome.ok) {
+        logger.warn("productops.feedback_unavailable", {});
+        return null;
+      }
+      return outcome.data;
+    },
+  };
 }
 
 function productOpsLogger(env: AppEnv): Logger {
@@ -213,6 +246,7 @@ export function createProductOpsReader(): ProductOpsReader {
 
   return {
     runs: createProductOpsRepository(client),
+    feedback: createLearnerFeedbackRepository(client),
     logger: productOpsLogger(env),
   };
 }
@@ -231,6 +265,7 @@ export function createProductOpsGraph(): ProductOpsGraph {
   const logger = productOpsLogger(env);
   const client = createSecretKeySupabaseClient() as unknown as DatabaseClient;
   const runs = createProductOpsRepository(client);
+  const feedback = createLearnerFeedbackRepository(client);
 
   // The agents' models: the same ledger and budget discipline the Trainer's
   // loop gets, keyed by the product-ops task each agent runs as.
@@ -238,12 +273,17 @@ export function createProductOpsGraph(): ProductOpsGraph {
 
   return {
     runs,
+    feedback,
     logger,
     workflow: {
       runs,
       gateway: createGateway(client, env, logger),
       models: (context) => createTaskModelLadder({ env, accounting, logger }, context),
       browser: repositoryBrowserOrNull() ?? undefined,
+      // The learners' own feedback, as the scan's first finding and the
+      // research agent's first read. The same secret-key client: the
+      // function's execute right is revoked from authenticated.
+      feedback: feedbackSource(feedback, logger),
       logger,
     },
   };
@@ -472,9 +512,38 @@ export async function createTrainerGraph(): Promise<{
       loadMcp: (identity) => loadMcpTools(env, identity, logger),
       // The learner's own client again: the guard row is theirs, RLS applies.
       mined: createMinedSessionRepository(learnerClient),
+      // And again: what their feedback taught the trainer is theirs to read,
+      // change through the adjust_coaching tool, and reset.
+      coaching: createTrainerCoachingRepository(learnerClient),
       // Post-response work rides Next's after(). The callback form, so the
       // work does not even start until the response has gone out.
       schedule: (work) => after(work),
+      logger,
+    },
+  };
+}
+
+/**
+ * The feedback endpoint's dependencies: the learner's own client and nothing
+ * else. No model, no accounting — a vote is two writes under RLS, and the
+ * composition says so by having nothing else to wire.
+ */
+export async function createTrainerFeedbackGraph(): Promise<{
+  readonly logger: Logger;
+  readonly deps: TrainerFeedbackDeps;
+}> {
+  const env = serverEnv();
+  const logger = createLogger({
+    base: { service: "trainer", environment: env.NODE_ENV },
+  });
+  const learnerClient =
+    (await createServerSupabaseClient()) as unknown as DatabaseClient;
+
+  return {
+    logger,
+    deps: {
+      coaching: createTrainerCoachingRepository(learnerClient),
+      newId: () => randomUUID(),
       logger,
     },
   };

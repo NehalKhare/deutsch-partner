@@ -97,8 +97,9 @@ const RECORDED: Readonly<Record<string, string>> = {
   // wrote valid JSON and the ceiling cut it off mid-array.
   "productops.market_research@2": "b9782c34",
   "productops.proposal_synthesis@1": "acba729e",
-  "productops.prd_sections@1": "bde28746",
+  "productops.prd_sections@2": "18dbec01",
   "productops.code_plan@1": "4f387e2a",
+  "productops.plan_breakdown@1": "c3890202",
   "productops.code_edit@1": "74c5f47f",
 };
 
@@ -239,7 +240,15 @@ describe("the trainer's prompt", () => {
     // another exercise — and a record must name the subject exactly as the
     // agenda does, because the tool now applies a record naming anything
     // else (a closed item, a learner's sentence) to the open item instead.
-    "trainer.session@10": "b5a6a8b8",
+    // Version 11: the trainer learns from feedback. A new rules block tells
+    // it that the learner can steer the coaching — brief or detailed
+    // explanations, gentler or harder exercises, shorter sessions, a focus,
+    // no news — through a new adjust_coaching tool when asked in words, and
+    // to follow the standing requests rendered behind this fixed text. The
+    // rendered block itself is caller data, outside this lock, like the
+    // catalogue's learner-state block. (Version 10 closed items on the first
+    // correct answer and named records by the agenda's subject.)
+    "trainer.session@11": "afda6e81",
   };
 
   it("matches its recorded fingerprint", () => {
@@ -262,9 +271,12 @@ describe("the product-ops agents' prompts", () => {
     // findings as it goes; the CPO reads findings and prior proposals through
     // tools; the planner reads the repository itself; the coder edits through
     // the validation layer, one file per call.
-    "productops.agent.research@1": "29be1b72",
-    "productops.agent.cpo@1": "78564528",
-    "productops.agent.planner@1": "ba6a7234",
+    // Research version 2: every scan opens with read_learner_feedback — the
+    // product's own learners, aggregated — before the first web search, so
+    // first-party evidence frames the queries.
+    "productops.agent.research@2": "d2d7943a",
+    "productops.agent.cpo@2": "b07db6e8",
+    "productops.agent.planner@2": "48be8e35",
     "productops.agent.coder@1": "9c299bef",
   };
 

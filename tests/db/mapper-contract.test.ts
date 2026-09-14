@@ -15,6 +15,10 @@ import {
   levelPerformanceRowSchema,
   profileFromRow,
   profileRowSchema,
+  trainerCoachingProfileFromRow,
+  trainerCoachingProfileRowSchema,
+  trainerFeedbackFromRow,
+  trainerFeedbackRowSchema,
   vocabularyItemFromRow,
   vocabularyItemRowSchema,
 } from "@/repositories/rows";
@@ -52,6 +56,8 @@ const CONTRACTS: ReadonlyArray<[string, string, ZodObject]> = [
   ["learner_memories", "learner_memories", learnerMemoryRowSchema],
   ["conversation_threads", "conversation_threads", conversationThreadRowSchema],
   ["level_performances", "level_performances", levelPerformanceRowSchema],
+  ["trainer_coaching_profiles", "trainer_coaching_profiles", trainerCoachingProfileRowSchema],
+  ["trainer_feedback", "trainer_feedback", trainerFeedbackRowSchema],
 ];
 
 describe.each(CONTRACTS)("%s", (_label, table, schema) => {
@@ -155,6 +161,57 @@ describe("round trip through real Postgres", () => {
 
     expect(progress).toMatchObject({ status: "new", exposureCount: 0 });
     expect(progress.nextReviewAt).toBeNull();
+  });
+
+  it("decodes a coaching profile with the database's own defaults applied", async () => {
+    await database.db.query(
+      `insert into public.trainer_coaching_profiles (learner_id, focus) values ($1, 'grammar')`,
+      [ALICE],
+    );
+
+    const row = (
+      await database.db.query(
+        `select * from public.trainer_coaching_profiles where learner_id = $1`,
+        [ALICE],
+      )
+    ).rows[0];
+
+    const profile = trainerCoachingProfileFromRow.parse(row);
+
+    expect(profile).toMatchObject({
+      learnerId: ALICE,
+      focus: "grammar",
+      explanationDepth: "standard",
+      news: true,
+      disputedCorrections: 0,
+    });
+    expect(profile.updatedAt).toBeInstanceOf(Date);
+  });
+
+  it("decodes a vote including its text array columns", async () => {
+    await database.db.query(
+      `insert into public.trainer_feedback
+         (learner_id, verdict, reasons, note, tools, prompt_version)
+       values ($1, 'unhelpful', array['too_long','unclear'], 'shorter please',
+               array['get_review_session'], 11)`,
+      [ALICE],
+    );
+
+    const row = (
+      await database.db.query(
+        `select * from public.trainer_feedback where learner_id = $1`,
+        [ALICE],
+      )
+    ).rows[0];
+
+    expect(trainerFeedbackFromRow.parse(row)).toMatchObject({
+      learnerId: ALICE,
+      verdict: "unhelpful",
+      reasons: ["too_long", "unclear"],
+      note: "shorter please",
+      tools: ["get_review_session"],
+      promptVersion: 11,
+    });
   });
 
   it("decodes a thread as the schema stores it", async () => {

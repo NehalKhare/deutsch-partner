@@ -5,12 +5,19 @@ import { newLearnerVocabulary } from "@/learning/vocabulary-engine";
 import { gatewayOk } from "@/lib/ai/gateway/errors";
 import { createLogger } from "@/lib/observability/logger";
 import { NEWS_RETELL_WORDS } from "@/lib/trainer/news";
+import { SHORT_SESSION_ITEMS } from "@/lib/trainer/coaching";
 import {
+  MAX_COACHING_WRITES_PER_REQUEST,
   MAX_REVIEW_WRITES_PER_REQUEST,
   createTrainerTools,
   type TrainerToolDeps,
 } from "@/lib/trainer/tools";
+import {
+  defaultCoachingProfile,
+  type TrainerCoachingProfile,
+} from "@/domain/trainer-coaching";
 import type { VocabularyItem } from "@/domain/vocabulary";
+import type { TrainerCoachingRepository } from "@/repositories/trainer-coaching-repository";
 import { server } from "../../msw/server";
 
 /**
@@ -1008,5 +1015,188 @@ describe("the culture note on the agenda", () => {
     expect(upserts).toHaveLength(0);
     expect(resolved).toEqual([]);
     expect(tools.covered()).toContain("Firm but polite complaint");
+  });
+});
+
+describe("how the learner's coaching shapes the tools", () => {
+  const LATER = new Date("2026-08-24T12:00:00.000Z");
+
+  function coached(
+    over: Partial<TrainerCoachingProfile> = {},
+    repository: Partial<TrainerCoachingRepository> = {},
+  ) {
+    const saved: TrainerCoachingProfile[] = [];
+    const profile: TrainerCoachingProfile = {
+      ...defaultCoachingProfile(LEARNER, LATER),
+      ...over,
+    };
+    const coachingRepository = {
+      upsertProfile: async (next: TrainerCoachingProfile) => {
+        saved.push(next);
+        return ok(next);
+      },
+      ...repository,
+    } as unknown as TrainerCoachingRepository;
+    return { coaching: { profile, repository: coachingRepository }, saved };
+  }
+
+  it("plans a short sitting when the learner asked for one, whatever the model asks", async () => {
+    const { deps } = fakeDeps();
+    const { coaching } = coached({ sessionLength: "short" });
+    // Twenty due words, so a standard agenda would fill all eight slots.
+    const many = Array.from({ length: 20 }, (_, index) => ({
+      ...newLearnerVocabulary(LEARNER, `${String(index).padStart(8, "0")}-0000-4000-8000-000000000000`),
+      exposureCount: 4,
+      masteryScore: 0.4,
+      nextReviewAt: new Date("2026-08-01T00:00:00.000Z"),
+      status: "learning" as const,
+    }));
+    const words = many.map((record, index) => ({
+      id: record.vocabularyItemId,
+      lemma: `Wort${index}`,
+      word: `Wort${index}`,
+      englishTranslation: `word ${index}`,
+    }));
+    const tools = createTrainerTools({
+      ...deps,
+      coaching,
+      vocabulary: {
+        ...deps.vocabulary,
+        listForLearner: async () => ok(many),
+        findByIds: async () => ok(words),
+      } as unknown as TrainerToolDeps["vocabulary"],
+    });
+
+    await toolNamed(tools, "get_review_session").invoke({ limit: 8 });
+
+    expect(tools.agenda()).toHaveLength(SHORT_SESSION_ITEMS);
+    expect(tools.agenda()?.at(-1)?.kind).toBe("read_the_news");
+  });
+
+  it("leaves the news off the agenda when the learner asked it to stop", async () => {
+    const { deps } = fakeDeps();
+    const { coaching } = coached({ news: false });
+    const tools = createTrainerTools({ ...deps, coaching });
+
+    await toolNamed(tools, "get_review_session").invoke({});
+
+    expect(tools.agenda()?.map((line) => line.kind)).not.toContain("read_the_news");
+    expect(tools.agenda()?.length).toBeGreaterThan(0);
+  });
+
+  it("changes a dial when asked, persists it, and reports every setting", async () => {
+    const { deps, logged } = fakeDeps();
+    const { coaching, saved } = coached();
+    const tools = createTrainerTools({ ...deps, coaching });
+
+    const result = await toolNamed(tools, "adjust_coaching").invoke({
+      explanationDepth: "brief",
+      news: false,
+    });
+
+    expect(JSON.parse(result as string)).toEqual({
+      adjusted: true,
+      persisted: true,
+      coaching: {
+        explanationDepth: "brief",
+        challenge: "standard",
+        sessionLength: "standard",
+        focus: "balanced",
+        news: false,
+      },
+      changed: ["explanationDepth", "news"],
+    });
+    expect(saved).toHaveLength(1);
+    expect(saved[0]).toMatchObject({ learnerId: LEARNER, explanationDepth: "brief" });
+    expect(tools.coaching().explanationDepth).toBe("brief");
+
+    // Audited by dial, never by what the learner said.
+    const audit = logged.find((line) => line.event === "trainer.coaching_adjusted");
+    expect(audit).toMatchObject({ audit: true, dials: ["explanationDepth", "news"] });
+  });
+
+  it("applies the change to the rest of this request", async () => {
+    const { deps } = fakeDeps();
+    const { coaching } = coached();
+    const tools = createTrainerTools({ ...deps, coaching });
+
+    await toolNamed(tools, "adjust_coaching").invoke({ news: false });
+    await toolNamed(tools, "get_review_session").invoke({});
+
+    expect(tools.agenda()?.map((line) => line.kind)).not.toContain("read_the_news");
+  });
+
+  it("says when nothing changed rather than claiming a write", async () => {
+    const { deps } = fakeDeps();
+    const { coaching, saved } = coached({ challenge: "harder" });
+    const tools = createTrainerTools({ ...deps, coaching });
+
+    const result = await toolNamed(tools, "adjust_coaching").invoke({ challenge: "harder" });
+
+    expect(JSON.parse(result as string)).toMatchObject({
+      adjusted: false,
+      reason: "already_set",
+    });
+    expect(saved).toHaveLength(0);
+  });
+
+  it("refuses an empty request and an unknown setting", async () => {
+    const { deps } = fakeDeps();
+    const { coaching } = coached();
+    const tools = createTrainerTools({ ...deps, coaching });
+
+    await expect(toolNamed(tools, "adjust_coaching").invoke({})).rejects.toThrow();
+    await expect(
+      toolNamed(tools, "adjust_coaching").invoke({ learnerId: "someone-else" } as never),
+    ).rejects.toThrow();
+    await expect(
+      toolNamed(tools, "adjust_coaching").invoke({ challenge: "impossible" } as never),
+    ).rejects.toThrow();
+  });
+
+  it("caps how often one request may adjust", async () => {
+    const { deps } = fakeDeps();
+    const { coaching, saved } = coached();
+    const tools = createTrainerTools({ ...deps, coaching });
+    const adjust = toolNamed(tools, "adjust_coaching");
+
+    await adjust.invoke({ news: false });
+    await adjust.invoke({ news: true });
+    const third = await adjust.invoke({ challenge: "harder" });
+
+    expect(JSON.parse(third as string)).toMatchObject({
+      adjusted: false,
+      reason: "write_limit_reached",
+    });
+    expect(saved).toHaveLength(MAX_COACHING_WRITES_PER_REQUEST);
+    expect(tools.coaching().challenge).toBe("standard");
+  });
+
+  it("honours the request for this turn only when there is nowhere to keep it", async () => {
+    const { deps } = fakeDeps();
+    const tools = createTrainerTools({ ...deps, coaching: undefined });
+
+    const result = await toolNamed(tools, "adjust_coaching").invoke({ sessionLength: "short" });
+
+    expect(JSON.parse(result as string)).toMatchObject({
+      adjusted: true,
+      persisted: false,
+      changed: ["sessionLength"],
+    });
+    expect(tools.coaching().sessionLength).toBe("short");
+  });
+
+  it("is a value, not a throw, when the write fails", async () => {
+    const { deps } = fakeDeps();
+    const { coaching } = coached({}, {
+      upsertProfile: (async () => fail()) as unknown as TrainerCoachingRepository["upsertProfile"],
+    });
+    const tools = createTrainerTools({ ...deps, coaching });
+
+    const result = await toolNamed(tools, "adjust_coaching").invoke({ news: false });
+
+    expect(JSON.parse(result as string)).toEqual({ error: "unavailable" });
+    // Nothing moved: a change the model was told failed must not quietly hold.
+    expect(tools.coaching().news).toBe(true);
   });
 });

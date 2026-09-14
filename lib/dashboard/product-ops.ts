@@ -1,7 +1,13 @@
+import { z } from "zod";
+
 import {
+  productOpsStageSchema,
+  eventStatusSchema,
   stageOwner,
   type BoardProposal,
+  type EngineeringBreakdown,
   type ImplementationPlan,
+  type TShirtSize,
   type BoardRun,
   type ProductOpsBoard,
   type ProductOpsRun,
@@ -212,6 +218,120 @@ export function timelineEntries(
       at: event.createdAt,
     };
   });
+}
+
+// ---------------------------------------------------------------------------
+// The live feed
+// ---------------------------------------------------------------------------
+
+/**
+ * One timeline entry as it crosses the wire to the browser.
+ *
+ * The event stream sends exactly what the detail page already renders — the
+ * timeline entry, notes included — and nothing the timeline does not carry.
+ * The browser validates every frame against this before trusting a field of
+ * it: the stream is server-owned, but a schema at the edge is what makes
+ * "the feed shows only what the timeline shows" a property rather than a habit.
+ */
+export const liveTimelineEventSchema = z.object({
+  id: z.number().int(),
+  stage: productOpsStageSchema,
+  status: eventStatusSchema,
+  entered: z.boolean(),
+  costEur: z.number(),
+  errorCode: z.string().nullable(),
+  notes: z.array(z.object({ label: z.string(), value: z.string() })),
+  at: z.iso.datetime(),
+});
+
+export type LiveTimelineEvent = z.infer<typeof liveTimelineEventSchema>;
+
+/** Where the run now stands, sent whenever the row moves. */
+export const liveRunEventSchema = z.object({
+  stage: productOpsStageSchema,
+  status: z.string(),
+  errorCode: z.string().nullable(),
+  updatedAt: z.iso.datetime(),
+});
+
+export type LiveRunEvent = z.infer<typeof liveRunEventSchema>;
+
+export function liveTimelineEventFrom(entry: TimelineEntry): LiveTimelineEvent {
+  return { ...entry, notes: [...entry.notes], at: entry.at.toISOString() };
+}
+
+export function timelineEntryFrom(event: LiveTimelineEvent): TimelineEntry {
+  return { ...event, at: new Date(event.at) };
+}
+
+/** How many lines of a run's feed to show. The tail, not the transcript. */
+export const LIVE_FEED_LENGTH = 8;
+
+/**
+ * Each tool, in the words a person watching would use.
+ *
+ * The tool names are the agents' vocabulary. A feed that printed
+ * `search_market ok` would be a log, and a log is what the timeline on the
+ * detail page already is. An unknown tool is named as itself, so a new tool
+ * shows up rather than vanishing.
+ */
+const TOOL_PHRASES: Readonly<Record<string, string>> = {
+  search_market: "Searched the web",
+  read_findings: "Read the research findings",
+  list_prior_proposals: "Checked what has already been proposed",
+  search_internal_docs: "Looked through the internal docs",
+  read_prd: "Read the PRD",
+  list_files: "Listed files in the repository",
+  read_file: "Read a source file",
+  search_code: "Searched the code",
+  propose_edit: "Proposed an edit",
+};
+
+/** A note, as a short aside: "4 searches, 3 findings". */
+function asideFrom(notes: TimelineEntry["notes"]): string {
+  const counts = notes
+    .filter((note) => /^\d+$/.test(note.value))
+    .map((note) => `${note.value} ${note.label}`);
+
+  return counts.length === 0 ? "" : ` — ${counts.join(", ")}`;
+}
+
+/**
+ * One line of the feed for one timeline entry.
+ *
+ * Progress rows are the bulk of it and are what the feed exists for: a tool
+ * call named in words, or a model call, so that a minute spent waiting on the
+ * reasoning tier reads as a minute the model spent rather than a minute in
+ * which nothing happened. Stage rows bracket them.
+ */
+export function describeTimelineEntry(entry: TimelineEntry): string {
+  switch (entry.status) {
+    case "started":
+      // A retry's entry row carries the mark; the line says so, because a
+      // stage starting twice is the one thing a timeline reader would ask about.
+      return entry.notes.some((note) => note.label === "retry" && note.value === "true")
+        ? `Started ${stagePhrase(entry.stage)} again`
+        : `Started ${stagePhrase(entry.stage)}`;
+    case "progress": {
+      const tool = entry.notes.find((note) => note.label === "tool")?.value;
+      const ok = entry.notes.find((note) => note.label === "ok")?.value !== "false";
+      if (tool !== undefined) {
+        const phrase = TOOL_PHRASES[tool] ?? `Used ${tool}`;
+        return ok ? phrase : `${phrase}, which failed`;
+      }
+      return "The model replied";
+    }
+    case "ok":
+      return `Finished ${stagePhrase(entry.stage)}${asideFrom(entry.notes)}`;
+    case "already_done":
+      return `Found ${stagePhrase(entry.stage)} already done`;
+    case "skipped":
+      return `Skipped ${stagePhrase(entry.stage)}`;
+    case "failed":
+      return `Stopped while ${stagePhrase(entry.stage)}. ${explainErrorCode(entry.errorCode) ?? ""}`.trim();
+    case "rejected":
+      return "Rejected";
+  }
 }
 
 /** Whether this run is one a worker invocation would move. */
@@ -456,6 +576,8 @@ const ERROR_EXPLANATIONS: Readonly<Record<string, string>> = {
   invalid_output:
     "The model's reply did not match the required structure, twice. Usually a one-off; run it again.",
   model_unavailable: "No model on the tier answered. A provider outage, or the tier has no endpoint for this account.",
+  timeout:
+    "Every model on the tier ran out of time or came back with a passing error. Usually the provider's moment, not yours; nudge it to try again.",
   over_budget: "The run reached its euro ceiling before this stage could finish.",
   run_budget: "The run reached its euro ceiling before this stage could start.",
   tool_limit: "The agent used up its tool-call allowance without finishing.",
@@ -523,7 +645,11 @@ export function isRemovable(run: BoardRun, hasProposal: boolean): boolean {
  * plan a person accepted and not a restatement. The workflow ends at the
  * plan; this is its deliverable.
  */
-export function planMarkdown(title: string, plan: ImplementationPlan): string {
+export function planMarkdown(
+  title: string,
+  plan: ImplementationPlan,
+  breakdown: EngineeringBreakdown | null = null,
+): string {
   const list = (items: readonly string[]) =>
     items.length === 0 ? "- none" : items.map((item) => `- ${item}`).join("\n");
   const paths = (items: readonly string[]) =>
@@ -532,6 +658,7 @@ export function planMarkdown(title: string, plan: ImplementationPlan): string {
   return [
     `# Implementation plan: ${title}`,
     "",
+    ...(breakdown === null ? [] : [...breakdownMarkdown(breakdown), ""]),
     "## Files to modify",
     paths(plan.filesToModify),
     "",
@@ -557,4 +684,61 @@ export function planMarkdown(title: string, plan: ImplementationPlan): string {
     list(plan.risks),
     "",
   ].join("\n");
+}
+
+/** A size, as it is written on the card and in the Markdown. */
+export function sizeLabel(size: TShirtSize): string {
+  return size.toUpperCase();
+}
+
+/**
+ * The engineering manager's half, as Markdown: a table per phase, then the
+ * guidance. Deterministic from the stored document, like the rest.
+ */
+export function breakdownMarkdown(breakdown: EngineeringBreakdown): readonly string[] {
+  const lines: string[] = [
+    "## Summary",
+    breakdown.summary,
+    "",
+    `Overall size: **${sizeLabel(breakdown.overallSize)}**`,
+    "",
+    "## Phases",
+  ];
+
+  breakdown.phases.forEach((phase, index) => {
+    lines.push(
+      "",
+      `### Phase ${index + 1}: ${phase.name}`,
+      "",
+      phase.goal,
+      "",
+      "| ID | Requirement | Size | Depends on |",
+      "| --- | --- | --- | --- |",
+      ...phase.requirements.map(
+        (requirement) =>
+          `| ${requirement.id} | ${requirement.title} | ${sizeLabel(requirement.size)} | ${
+            requirement.dependsOn.length === 0 ? "—" : requirement.dependsOn.join(", ")
+          } |`,
+      ),
+      "",
+      ...phase.requirements.map(
+        (requirement) => `- **${requirement.id}** — ${requirement.description}`,
+      ),
+    );
+  });
+
+  lines.push("", "## Technical guidance");
+  for (const guidance of breakdown.technicalGuidance) {
+    lines.push(
+      "",
+      `### ${guidance.topic}`,
+      "",
+      `- **Now:** ${guidance.current}`,
+      `- **Recommendation:** ${guidance.recommendation}`,
+      `- **For:** ${guidance.pros.join("; ")}`,
+      `- **Against:** ${guidance.cons.join("; ")}`,
+    );
+  }
+
+  return lines;
 }

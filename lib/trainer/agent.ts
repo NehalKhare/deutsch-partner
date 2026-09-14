@@ -108,6 +108,14 @@ function summarize(tool: string | undefined, content: unknown): string {
         : "";
     case "get_grammar_pattern":
       return typeof parsed.name === "string" ? parsed.name : "";
+    case "adjust_coaching": {
+      if (parsed.adjusted !== true) {
+        return parsed.reason === "already_set" ? "already set that way" : "";
+      }
+      const changed = Array.isArray(parsed.changed) ? parsed.changed.length : 0;
+      const kept = parsed.persisted === false ? " for this session" : " from now on";
+      return `${changed} setting${changed === 1 ? "" : "s"} changed${kept}`;
+    }
     default:
       return "";
   }
@@ -120,9 +128,13 @@ function summarize(tool: string | undefined, content: unknown): string {
  * inside the cache's five-minute lifetime — and this loop re-sends the same
  * prefix on every one of its up-to-seven invocations per turn.
  */
-const cacheMarked = (text: string): MessageContent => [
-  { type: "text", text, cache_control: { type: "ephemeral" } },
-];
+const cacheMarkedPart = (text: string) => ({
+  type: "text" as const,
+  text,
+  cache_control: { type: "ephemeral" },
+});
+
+const cacheMarked = (text: string): MessageContent => [cacheMarkedPart(text)];
 
 function toLangChainHistory(
   history: readonly TranscriptMessage[],
@@ -149,11 +161,42 @@ export interface TrainerCandidate {
   readonly cacheMarks: boolean;
 }
 
+/**
+ * The system message: the fixed prompt, then the learner's coaching block.
+ *
+ * Two parts rather than one string, because the cache breakpoint sits between
+ * them. The fixed text is shared by every trainer session in the product and
+ * is what the prefix cache serves; the coaching block is this learner's and
+ * changes when their feedback does, so it rides behind the mark where a
+ * change costs only its own tokens. On a provider without cache marks the
+ * two are simply joined.
+ */
+export function trainerSystemMessage(
+  coaching: string | undefined,
+  marked: boolean,
+): SystemMessage | string {
+  const fixed = trainerSystemPrompt();
+  if (!marked) return coaching === undefined ? fixed : `${fixed}\n\n${coaching}`;
+
+  return new SystemMessage({
+    content: [
+      cacheMarkedPart(fixed),
+      ...(coaching === undefined ? [] : [{ type: "text" as const, text: coaching }]),
+    ],
+  });
+}
+
 export async function runTrainerTurn(
   deps: {
     /** The tier's ladder: the primary first, same-tier fallbacks after. */
     readonly models: readonly TrainerCandidate[];
     readonly tools: StructuredToolInterface[];
+    /**
+     * The learner's rendered coaching block, when they have one: standing
+     * requests from their feedback, appended to the system message behind
+     * the fixed prompt's cache mark. Absent for a learner with the defaults.
+     */
+    readonly coaching?: string;
     readonly logger?: Logger;
   },
   turn: {
@@ -193,9 +236,7 @@ export async function runTrainerTurn(
     const agent = createAgent({
       model: candidate.model,
       tools: deps.tools,
-      systemPrompt: marked
-        ? new SystemMessage({ content: cacheMarked(trainerSystemPrompt()) })
-        : trainerSystemPrompt(),
+      systemPrompt: trainerSystemMessage(deps.coaching, marked),
     });
 
     try {

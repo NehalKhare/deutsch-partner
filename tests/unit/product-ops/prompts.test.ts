@@ -52,12 +52,13 @@ const EXPECTED_TIERS: Readonly<Record<string, string>> = {
   "productops.proposal_synthesis": "reasoning",
   "productops.prd_sections": "mid",
   "productops.code_plan": "reasoning",
+  "productops.plan_breakdown": "reasoning",
   "productops.code_edit": "reasoning",
   "productops.context_summary": "cheap",
 };
 
 describe("the routing table", () => {
-  it("carries all six product-ops tasks", () => {
+  it("carries all seven product-ops tasks", () => {
     expect([...PRODUCT_OPS_TASKS].sort()).toEqual(
       Object.keys(EXPECTED_TIERS).sort(),
     );

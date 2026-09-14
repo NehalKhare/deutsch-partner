@@ -1,6 +1,12 @@
 import { notFound } from "next/navigation";
 
-import { advanceRunAction, removeRunAction, startScanAction } from "./actions";
+import {
+  advanceRunAction,
+  removeRunAction,
+  retryRunAction,
+  startScanAction,
+} from "./actions";
+import { FeedbackPanel } from "@/components/operations/feedback-panel";
 import { ProposalBoard } from "@/components/operations/proposal-board";
 import { RunsPanel } from "@/components/operations/runs-panel";
 import { PendingButton } from "@/components/ui/pending-button";
@@ -18,6 +24,7 @@ import {
 import { createProductOpsReader } from "@/lib/api/composition";
 import { requireAuthenticatedUserId } from "@/lib/auth/current-user";
 import { isOperator } from "@/lib/auth/operator";
+import { FEEDBACK_WINDOW_DAYS } from "@/lib/dashboard/learner-feedback";
 import { boardTotals } from "@/lib/dashboard/product-ops";
 import { cn } from "@/lib/utils";
 
@@ -45,8 +52,11 @@ export default async function ProductOpsPage() {
   const learnerId = await requireAuthenticatedUserId();
   if (!isOperator(learnerId)) notFound();
 
-  const { runs } = createProductOpsReader();
-  const board = await runs.board(BOARD_LIMIT);
+  const { runs, feedback } = createProductOpsReader();
+  const [board, learnerFeedback] = await Promise.all([
+    runs.board(BOARD_LIMIT),
+    feedback.summary({ days: FEEDBACK_WINDOW_DAYS }),
+  ]);
 
   if (!board.ok) {
     return (
@@ -109,6 +119,25 @@ export default async function ProductOpsPage() {
         </p>
       </section>
 
+      <section aria-labelledby="feedback-heading" className="flex flex-col gap-3">
+        <div className="flex flex-col gap-1">
+          <h2 id="feedback-heading" className={sectionTitle}>
+            What learners say about the trainer
+          </h2>
+          <p className="text-sm text-chalk/55">
+            The last {FEEDBACK_WINDOW_DAYS} days of votes under trainer replies. Every
+            scan records this as its first finding, before it searches the web.
+          </p>
+        </div>
+        {learnerFeedback.ok ? (
+          <FeedbackPanel summary={learnerFeedback.data} />
+        ) : (
+          <p className={cn(card, "text-sm text-chalk/70")}>
+            Learner feedback could not be read.
+          </p>
+        )}
+      </section>
+
       <section aria-labelledby="runs-heading" className="flex flex-col gap-3">
         <h2 id="runs-heading" className={sectionTitle}>
           Runs
@@ -118,6 +147,7 @@ export default async function ProductOpsPage() {
           asOf={board.data.generatedAt}
           runsWithProposals={runsWithProposals}
           advance={advanceRunAction}
+          retry={retryRunAction}
           remove={removeRunAction}
         />
       </section>

@@ -19,6 +19,7 @@ export * from "@/repositories/performance-repository";
 export * from "@/repositories/ingestion-repository";
 export * from "@/repositories/result";
 export * from "@/repositories/retrieval-repository";
+export * from "@/repositories/trainer-coaching-repository";
 export * from "@/repositories/types";
 export * from "@/repositories/usage-repository";
 export * from "@/repositories/vocabulary-repository";

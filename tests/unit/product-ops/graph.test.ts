@@ -12,6 +12,7 @@ import {
   driveRunGraph,
 } from "@/lib/product-ops/graph/graph";
 import { ProductOpsCheckpointSaver } from "@/lib/product-ops/graph/checkpointer";
+import { retryRun } from "@/lib/product-ops/workflow";
 import {
   createProductOpsStore,
   seedRunAt,
@@ -73,11 +74,43 @@ const PLAN = {
   risks: ["The vocabulary may be too specialised."],
 };
 
+const BREAKDOWN = {
+  summary: "Ship the vocabulary set first, then the scenario pack on top of it.",
+  overallSize: "l",
+  phases: [
+    {
+      name: "Vocabulary",
+      goal: "A learner can drill the clinical terms.",
+      requirements: [
+        { id: "R1", title: "Clinical vocabulary set", description: "Twenty terms with articles and plurals in the vocabulary table.", size: "s", dependsOn: [] },
+        { id: "R2", title: "Module card", description: "The module appears on the curriculum page.", size: "xs", dependsOn: ["R1"] },
+      ],
+    },
+    {
+      name: "Scenarios",
+      goal: "A learner can rehearse a handover.",
+      requirements: [
+        { id: "R3", title: "Handover scenario", description: "One scenario using the set.", size: "m", dependsOn: ["R1"] },
+      ],
+    },
+  ],
+  technicalGuidance: [
+    {
+      topic: "Scenario storage",
+      current: "Scenarios live in Postgres with pgvector embeddings, ingested offline.",
+      recommendation: "Keep it; one more scenario is one more row.",
+      pros: ["No new moving part"],
+      cons: ["Offline ingestion is a manual step"],
+    },
+  ],
+};
+
 const REPLIES: Readonly<Record<string, unknown>> = {
   "productops.market_research": { findings: [FINDING] },
   "productops.proposal_synthesis": PROPOSAL,
   "productops.prd_sections": SECTIONS,
   "productops.code_plan": PLAN,
+  "productops.plan_breakdown": BREAKDOWN,
 };
 
 /** The checkout the server runs beside, as the planner reads it. */
@@ -365,5 +398,36 @@ describe("the durable checkpoint", () => {
   it("bounds one invocation by a step cap that no honest drive reaches", () => {
     expect(MAX_GRAPH_STEPS).toBeGreaterThanOrEqual(PRODUCT_OPS_STAGES.length);
     expect(MAX_GRAPH_STEPS).toBeLessThan(PRODUCT_OPS_STAGES.length * 2);
+  });
+});
+
+describe("driving a run again after a retry", () => {
+  it("picks the graph up at the stage that failed and carries on", async () => {
+    const store = createProductOpsStore();
+    const runId = await seedRunAt(store, "research");
+    const saver = new MemorySaver();
+
+    // Fails at planning: the server has no repository to read.
+    const blind = depsFor(store, saver, {});
+    await driveRunGraph(blind.deps, runId);
+    await approve(store, runId);
+    const failed = await driveRunGraph(blind.deps, runId, "approve");
+    expect(failed.status).toBe("failed");
+    expect(store.runs.get(runId)?.currentStage).toBe("failed");
+
+    // Now with a repository. The retry returns the run to planning and the
+    // same thread, driven again, runs planning alone and parks at the gate.
+    const sighted = depsFor(store, saver);
+    const retried = await retryRun(sighted.deps, { runId, operatorIdHash: "hash-operator" });
+    expect(retried).toEqual({ status: "retried", stage: "code_plan" });
+
+    const result = await driveRunGraph(sighted.deps, runId);
+
+    expect(result.status).toBe("waiting");
+    expect(store.runs.get(runId)?.currentStage).toBe("plan_review");
+    expect(store.runs.get(runId)?.errorCode).toBeNull();
+    // The PRD was already written before the failure and is not written twice.
+    expect(store.prds).toHaveLength(1);
+    expect(sighted.tasks).toEqual(["productops.code_plan", "productops.plan_breakdown"]);
   });
 });

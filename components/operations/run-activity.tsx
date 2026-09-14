@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { startTransition, useEffect } from "react";
 
+import { RunLiveFeed } from "@/components/operations/run-live-feed";
 import { card, eyebrow } from "@/components/ui/styles";
 import { shouldPoll, type RunReport } from "@/lib/dashboard/product-ops";
 import { cn } from "@/lib/utils";
@@ -71,20 +72,23 @@ export function RunActivityPanel({
       className={cn(card, "flex flex-col gap-2")}
     >
       {reports.map((report) => (
-        <div key={report.run.id} className="flex items-baseline gap-2.5">
-          <span
-            className={cn(
-              eyebrow,
-              "shrink-0",
-              report.activity === "working" && "text-apricot",
-              report.activity === "stalled" && "text-ember",
-              report.activity === "failed" && "text-ember",
-            )}
-          >
-            {/* The word an operator scans for, before reading the sentence. */}
-            {headline(report)}
-          </span>
-          <p className="font-display text-sm text-chalk/70">{report.message}</p>
+        <div key={report.run.id} className="flex flex-col gap-2">
+          <div className="flex items-baseline gap-2.5">
+            <span
+              className={cn(
+                eyebrow,
+                "shrink-0",
+                report.activity === "working" && "text-apricot",
+                report.activity === "stalled" && "text-ember",
+                report.activity === "failed" && "text-ember",
+              )}
+            >
+              {/* The word an operator scans for, before reading the sentence. */}
+              {headline(report)}
+            </span>
+            <p className="font-display text-sm text-chalk/70">{report.message}</p>
+          </div>
+          <RunLiveFeed runId={report.run.id} working={report.activity === "working"} />
         </div>
       ))}
 

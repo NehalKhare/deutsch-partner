@@ -13,6 +13,18 @@ import {
   type LearnerState,
 } from "@/domain/learner";
 import { learnerMemorySchema, type LearnerMemory } from "@/domain/memory";
+import {
+  CHALLENGE_LEVELS,
+  EXPLANATION_DEPTHS,
+  FEEDBACK_REASONS,
+  FEEDBACK_VERDICTS,
+  PRACTICE_FOCUSES,
+  SESSION_LENGTHS,
+  trainerCoachingProfileSchema,
+  trainerFeedbackSchema,
+  type TrainerCoachingProfile,
+  type TrainerFeedback,
+} from "@/domain/trainer-coaching";
 import { levelPerformanceSchema, type LevelPerformance } from "@/domain/performance";
 import {
   grammarPatternCategorySchema,
@@ -417,3 +429,92 @@ export const levelPerformanceFromRow = levelPerformanceRowSchema.transform(
       updatedAt: row.updated_at,
     }, ctx),
 );
+
+// --- trainer coaching -------------------------------------------------------
+
+export const trainerCoachingProfileRowSchema = z.object({
+  learner_id: z.uuid(),
+  explanation_depth: z.enum(EXPLANATION_DEPTHS),
+  challenge: z.enum(CHALLENGE_LEVELS),
+  session_length: z.enum(SESSION_LENGTHS),
+  focus: z.enum(PRACTICE_FOCUSES),
+  news_enabled: z.boolean(),
+  disputed_corrections: z.number().int(),
+  helpful_count: z.number().int(),
+  unhelpful_count: z.number().int(),
+  updated_at: timestampColumn,
+});
+
+export const trainerCoachingProfileFromRow = trainerCoachingProfileRowSchema.transform(
+  (row, ctx) =>
+    validated(
+      trainerCoachingProfileSchema,
+      {
+        learnerId: row.learner_id,
+        explanationDepth: row.explanation_depth,
+        challenge: row.challenge,
+        sessionLength: row.session_length,
+        focus: row.focus,
+        news: row.news_enabled,
+        disputedCorrections: row.disputed_corrections,
+        helpfulCount: row.helpful_count,
+        unhelpfulCount: row.unhelpful_count,
+        updatedAt: row.updated_at,
+      },
+      ctx,
+    ),
+);
+
+export function trainerCoachingProfileToRow(profile: TrainerCoachingProfile) {
+  return {
+    learner_id: profile.learnerId,
+    explanation_depth: profile.explanationDepth,
+    challenge: profile.challenge,
+    session_length: profile.sessionLength,
+    focus: profile.focus,
+    news_enabled: profile.news,
+    disputed_corrections: profile.disputedCorrections,
+    helpful_count: profile.helpfulCount,
+    unhelpful_count: profile.unhelpfulCount,
+  };
+}
+
+export const trainerFeedbackRowSchema = z.object({
+  id: z.uuid(),
+  learner_id: z.uuid(),
+  verdict: z.enum(FEEDBACK_VERDICTS),
+  reasons: z.array(z.enum(FEEDBACK_REASONS)),
+  note: z.string().nullable(),
+  tools: z.array(z.string()),
+  prompt_version: z.number().int(),
+  created_at: timestampColumn,
+});
+
+export const trainerFeedbackFromRow = trainerFeedbackRowSchema.transform((row, ctx) =>
+  validated(
+    trainerFeedbackSchema,
+    {
+      id: row.id,
+      learnerId: row.learner_id,
+      verdict: row.verdict,
+      reasons: row.reasons,
+      note: row.note,
+      tools: row.tools,
+      promptVersion: row.prompt_version,
+      createdAt: row.created_at,
+    },
+    ctx,
+  ),
+);
+
+export function trainerFeedbackToRow(feedback: TrainerFeedback) {
+  return {
+    id: feedback.id,
+    learner_id: feedback.learnerId,
+    verdict: feedback.verdict,
+    reasons: feedback.reasons,
+    note: feedback.note,
+    tools: feedback.tools,
+    prompt_version: feedback.promptVersion,
+  };
+}

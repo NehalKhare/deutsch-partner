@@ -62,6 +62,9 @@ describe("model registry", () => {
     // could only report as a provider failure. Extraction needs no thinking.
     expect(registry.forTier("cheap").reasoningEffort).toBe("minimal");
     expect(registry.forTier("nano").reasoningEffort).toBe("minimal");
+    // Bounded rather than off: the mid tier's structured output wants some
+    // understanding, and none of its ceilings can afford unbounded thinking.
+    expect(registry.forTier("mid").reasoningEffort).toBe("low");
   });
 
   it("gives every tier headroom for the largest task routed to it", () => {

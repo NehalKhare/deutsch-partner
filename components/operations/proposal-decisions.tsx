@@ -8,6 +8,7 @@ import {
   sectionTitle,
 } from "@/components/ui/styles";
 import type { ProductOpsStage } from "@/domain/product-ops";
+import { explainErrorCode, stagePhrase } from "@/lib/dashboard/product-ops";
 import { cn } from "@/lib/utils";
 
 /**
@@ -22,21 +23,40 @@ import { cn } from "@/lib/utils";
  * Accepting the plan ends the run. The plan is what the operator takes away,
  * so the page offers a copy of it beside the decision rather than a button
  * that would pretend to write code.
+ *
+ * A run that stopped is the other case with a decision in it. Every stage is
+ * a resume point, so the offer is to try again from the stage that failed —
+ * and the panel says which stage that is, because "try again" without a
+ * "from where" is a button an operator has to trust rather than read.
  */
+
+/** What the panel needs to know about the run, beyond its stage. */
+export interface DecisionRun {
+  readonly id: string;
+  readonly errorCode: string | null;
+  /** The stage a failed run failed at, from its timeline. Null: cannot retry. */
+  readonly failedAt: ProductOpsStage | null;
+}
 export function ProposalDecisions({
   proposalId,
   priorityScore,
   stage,
   review,
+  run,
+  retry,
 }: {
   readonly proposalId: string;
   readonly priorityScore: number;
   /** Where the run stands. Null when the run could not be read. */
   readonly stage: ProductOpsStage | null;
   readonly review: (formData: FormData) => Promise<void>;
+  readonly run?: DecisionRun | null;
+  readonly retry?: (formData: FormData) => Promise<void>;
 }) {
   const atProposalGate = stage === "human_review";
   const atPlanGate = stage === "plan_review";
+  const stopped = stage === "failed" && run != null;
+  const retryable = stopped && run.failedAt !== null && retry !== undefined;
 
   return (
     <section
@@ -47,7 +67,15 @@ export function ProposalDecisions({
         Your decision
       </h2>
 
-      {!atProposalGate && !atPlanGate ? (
+      {stopped ? (
+        <p className={cn(prose, "text-sm")}>
+          The run stopped while {stagePhrase(run.failedAt ?? "failed")}.{" "}
+          {explainErrorCode(run.errorCode)}
+          {retryable
+            ? " Everything before that is kept, so trying again picks up from there under the same budget."
+            : ""}
+        </p>
+      ) : !atProposalGate && !atPlanGate ? (
         <p className={cn(prose, "text-sm")}>
           This run is not waiting on you. You can still leave a comment or
           change the priority, both of which are recorded.
@@ -64,6 +92,15 @@ export function ProposalDecisions({
       ) : null}
 
       <div className="flex flex-wrap gap-2">
+        {retryable ? (
+          <form action={retry}>
+            <input type="hidden" name="runId" value={run.id} />
+            <button type="submit" className={buttonPrimary}>
+              Try again from {stagePhrase(run.failedAt ?? "failed")}
+            </button>
+          </form>
+        ) : null}
+
         {atProposalGate ? (
           <form action={review}>
             <input type="hidden" name="proposalId" value={proposalId} />

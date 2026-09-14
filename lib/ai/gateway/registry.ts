@@ -37,6 +37,11 @@ export type ModelProvider = "openrouter" | "openai";
  * output ceilings are small: left to themselves they spend the whole ceiling
  * thinking and return no text at all, which the transport can only report as
  * a provider failure. Extraction against a closed schema needs no thinking.
+ *
+ * The mid tier carries "low" for the same reason with one difference: its
+ * work is structured output that needs some understanding, so thinking is
+ * bounded rather than switched off. Left unset, the first real PRD call spent
+ * its 1000-token ceiling thinking and was cut off mid-answer, twice.
  */
 export type ReasoningEffort = "minimal" | "low" | "medium" | "high";
 
@@ -102,6 +107,7 @@ const DEFAULTS: Readonly<Record<Tier, ModelEntry>> = {
     hardMaxInputTokens: 6_000,
     hardMaxOutputTokens: 1_000,
     contextWindow: 1_000_000,
+    reasoningEffort: "low",
   },
   cheap: {
     tier: "cheap",
