@@ -96,6 +96,10 @@ function fakeDeps(options: {
   analyzerFails?: boolean;
   /** Replaces the single scripted model with a ladder of candidates. */
   ladder?: readonly BaseChatModel[];
+  /** The trainer personality on the learner's profile; default friendly. */
+  personality?: "friendly" | "strict";
+  /** Makes the profile unreadable, so the manner has to fall back. */
+  profileFails?: boolean;
 } = {}) {
   const model = new FakeToolCallingModel(options.script ?? [new AIMessage("Gern!")]);
   const upserts: unknown[] = [];
@@ -128,6 +132,23 @@ function fakeDeps(options: {
     learners: {
       getState: async () =>
         ok({ miniLevel: 26, effectiveLevel: { cefr: "A2" as const, plus: false } }),
+      getProfile: async () => {
+        if (options.profileFails) throw new Error("down");
+        return ok({
+          id: IDENTITY.learnerId,
+          nativeLanguage: "en",
+          learningGoal: "Order food in Vienna",
+          selectedLevel: "A2" as const,
+          targetTopics: [],
+          interests: [],
+          inputPreference: "text" as const,
+          outputPreference: "text" as const,
+          correctionPreference: "gentle" as const,
+          voicePreference: "male" as const,
+          trainerPersonality: options.personality ?? ("friendly" as const),
+          masteryThreshold: 80 as const,
+        });
+      },
     } as unknown as TrainerDeps["learners"],
     errors: {
       listUnresolved: async () => ok([]),
@@ -843,6 +864,57 @@ describe("what a learner is told", () => {
     expect(response.status).toBeGreaterThanOrEqual(400);
     expect(response.message.length).toBeGreaterThan(10);
     expect(response.message).not.toMatch(/budget_|gateway|langchain|mcp|token/i);
+  });
+});
+
+describe("the personality the learner chose", () => {
+  it("tells the trainer to be strict when the profile says so", async () => {
+    const { deps, model } = fakeDeps({ personality: "strict" });
+
+    const result = await handleTrainerTurn(body(), IDENTITY, deps);
+
+    expect(result.ok).toBe(true);
+    const shown = shownSystem(model);
+    expect(shown).toContain("Your manner:");
+    expect(shown).toMatch(/exact|precise|every error/i);
+    expect(shown).not.toMatch(/warm and encouraging/i);
+  });
+
+  it("tells it to be friendly by default", async () => {
+    const { deps, model } = fakeDeps();
+
+    await handleTrainerTurn(body(), IDENTITY, deps);
+
+    expect(shownSystem(model)).toContain("Your manner:");
+    expect(shownSystem(model)).toMatch(/warm|encourag/i);
+  });
+
+  it("falls back to friendly when the profile cannot be read", async () => {
+    const { deps, model } = fakeDeps({ profileFails: true });
+
+    const result = await handleTrainerTurn(body(), IDENTITY, deps);
+
+    expect(result.ok).toBe(true);
+    expect(shownSystem(model)).toMatch(/Your manner:[\s\S]*(warm|encourag)/i);
+  });
+
+  it("renders the manner before the coaching block, both behind the fixed prompt", async () => {
+    const { deps, model } = fakeDeps({ personality: "strict" });
+    const repository = {
+      getProfile: async () =>
+        ok({
+          ...defaultCoachingProfile(IDENTITY.learnerId, new Date("2026-09-14T12:00:00.000Z")),
+          explanationDepth: "brief" as const,
+        }),
+      listRecentNotes: async () => ok([]),
+      upsertProfile: async (next: TrainerCoachingProfile) => ok(next),
+    } as unknown as TrainerCoachingRepository;
+
+    await handleTrainerTurn(body(), IDENTITY, { ...deps, coaching: repository });
+
+    const shown = shownSystem(model);
+    expect(shown.indexOf("Deutsch Partner")).toBeLessThan(shown.indexOf("Your manner:"));
+    expect(shown.indexOf("Your manner:")).toBeLessThan(shown.indexOf("wants to be coached:"));
   });
 });
 

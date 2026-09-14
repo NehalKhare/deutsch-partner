@@ -32,7 +32,8 @@ your vocabulary, and a per-level score.
   and closed-set dials move: how much it explains, how hard it pushes, how long
   a sitting runs, what the agenda leans towards, whether it ends on the news.
   Disputed corrections make it check a rule before it corrects. Everything it
-  learned is on the settings page with a button that forgets it.
+  learned is on the settings page with a button that forgets it — next to a
+  choice that button leaves alone: a friendly trainer or a strict one.
 - **Scenarios and comprehensions** (`/scenarios`). Fifty practice items found in
   your own words by vector search: dialogues played as roleplay, passages
   answered as a quiz.

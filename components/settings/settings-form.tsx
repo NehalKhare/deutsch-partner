@@ -8,6 +8,7 @@ import {
   MASTERY_THRESHOLDS,
   type LearnerProfile,
   type MasteryThreshold,
+  type TrainerPersonality,
 } from "@/domain/learner";
 import { TUTOR } from "@/domain/tutor";
 import type { SettingsAction, SettingsFormState } from "@/lib/settings/input";
@@ -55,9 +56,36 @@ function draftFrom(profile: LearnerProfile) {
     outputPreference: profile.outputPreference,
     correctionPreference: profile.correctionPreference,
     voicePreference: profile.voicePreference,
+    trainerPersonality: profile.trainerPersonality,
     masteryThreshold: profile.masteryThreshold,
   };
 }
+
+/**
+ * The two manners the trainer can take, in the learner's words.
+ *
+ * Each detail names what changes — tone, praise, how an error is put — and
+ * the fieldset says what does not: the material, the agenda and the
+ * judgement are the same trainer either way.
+ */
+const TRAINER_PERSONALITY_OPTIONS: ReadonlyArray<{
+  readonly value: TrainerPersonality;
+  readonly label: string;
+  readonly detail: string;
+}> = [
+  {
+    value: "friendly",
+    label: "Friendly",
+    detail:
+      "Warm and encouraging. Notices what went right before fixing what did not, and keeps the mood light.",
+  },
+  {
+    value: "strict",
+    label: "Strict",
+    detail:
+      "Exacting and to the point. Names every error, praises nothing routine, and expects precision.",
+  },
+];
 
 const legendClass = "font-display text-sm font-medium text-chalk/80";
 const hintText = "text-xs text-chalk/45";
@@ -234,6 +262,34 @@ function SettingsFields({ profile }: { readonly profile: LearnerProfile }) {
                 className={control}
               />
               {option.label}
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+      <fieldset className="flex flex-col gap-3">
+        <legend className={legendClass}>How your trainer treats you</legend>
+        <p className={hintText}>
+          Manner only: the same agenda, the same material, and the same
+          judgement of your answers, delivered in a different tone.
+        </p>
+        <div className="flex flex-col gap-2">
+          {TRAINER_PERSONALITY_OPTIONS.map((option) => (
+            <label key={option.value} className={cn(choice, "items-start text-sm")}>
+              <input
+                type="radio"
+                name="trainerPersonality"
+                value={option.value}
+                defaultChecked={draft.trainerPersonality === option.value}
+                onChange={() =>
+                  setDraft((current) => ({ ...current, trainerPersonality: option.value }))
+                }
+                className={cn(control, "mt-0.5")}
+              />
+              <span className="flex flex-col gap-0.5">
+                <span>{option.label}</span>
+                <span className="text-xs text-chalk/45">{option.detail}</span>
+              </span>
             </label>
           ))}
         </div>

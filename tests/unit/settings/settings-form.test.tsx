@@ -31,6 +31,7 @@ const PROFILE: LearnerProfile = {
   outputPreference: "voice",
   correctionPreference: "explicit",
   voicePreference: "male",
+  trainerPersonality: "friendly",
   masteryThreshold: 80,
 };
 
@@ -104,6 +105,38 @@ describe("the voice", () => {
 
     await waitFor(() => expect(seen).toHaveLength(1));
     expect(seen[0]?.get("voicePreference")).toBe("female");
+  });
+});
+
+describe("the trainer's personality", () => {
+  it("shows the saved choice selected", () => {
+    renderForm(noop, { ...PROFILE, trainerPersonality: "strict" });
+
+    expect(screen.getByRole("radio", { name: /^strict/i })).toBeChecked();
+    expect(screen.getByRole("radio", { name: /^friendly/i })).not.toBeChecked();
+  });
+
+  it("says what each personality changes, and what it does not", () => {
+    renderForm();
+
+    // Manner, not material: a strict trainer runs the same session.
+    expect(screen.getByText(/same agenda|same material|what it covers/i)).toBeInTheDocument();
+  });
+
+  it("submits the choice", async () => {
+    const seen: FormData[] = [];
+    const action: SettingsAction = async (_state, formData) => {
+      seen.push(formData);
+      return SETTINGS_SAVED;
+    };
+    const user = userEvent.setup();
+    renderForm(action);
+
+    await user.click(screen.getByRole("radio", { name: /^strict/i }));
+    await user.click(screen.getByRole("button", { name: /save settings/i }));
+
+    await waitFor(() => expect(seen).toHaveLength(1));
+    expect(seen[0]?.get("trainerPersonality")).toBe("strict");
   });
 });
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  TRAINER_PERSONALITIES,
   deriveEffectiveLevel,
   learnerProfileSchema,
   learnerStateSchema,
@@ -50,6 +51,27 @@ describe("learnerProfileSchema", () => {
       ).toBe(correctionPreference);
     },
   );
+
+  describe("the trainer's personality", () => {
+    it("is friendly for a profile from before the column existed", () => {
+      // A learner who has not chosen is a learner with the trainer as shipped.
+      expect(learnerProfileSchema.parse(validProfile).trainerPersonality).toBe("friendly");
+    });
+
+    it.each(TRAINER_PERSONALITIES)("accepts %s", (trainerPersonality) => {
+      expect(
+        learnerProfileSchema.parse({ ...validProfile, trainerPersonality })
+          .trainerPersonality,
+      ).toBe(trainerPersonality);
+    });
+
+    it("refuses a personality the product does not offer", () => {
+      expect(
+        learnerProfileSchema.safeParse({ ...validProfile, trainerPersonality: "sarcastic" })
+          .success,
+      ).toBe(false);
+    });
+  });
 });
 
 describe("deriveEffectiveLevel", () => {

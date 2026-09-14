@@ -95,6 +95,7 @@ export const profileRowSchema = z.object({
   // the new code but not yet the new column must keep reading profiles — a
   // read that fails here takes every conversation down with it.
   voice_preference: z.enum(["male", "female"]).default("male"),
+  trainer_personality: z.enum(["friendly", "strict"]).default("friendly"),
   mastery_threshold: z
     .union([z.literal(33), z.literal(50), z.literal(80)])
     .default(80),
@@ -112,6 +113,7 @@ export const profileFromRow = profileRowSchema.transform((row, ctx) =>
     outputPreference: row.output_preference,
     correctionPreference: row.correction_preference,
     voicePreference: row.voice_preference,
+    trainerPersonality: row.trainer_personality,
     masteryThreshold: row.mastery_threshold,
   }, ctx),
 );
@@ -128,6 +130,7 @@ export function profileToRow(profile: LearnerProfile) {
     output_preference: profile.outputPreference,
     correction_preference: profile.correctionPreference,
     voice_preference: profile.voicePreference,
+    trainer_personality: profile.trainerPersonality,
     mastery_threshold: profile.masteryThreshold,
   };
 }

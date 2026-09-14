@@ -51,6 +51,45 @@ export const card = "rounded-2xl border border-haze/70 bg-dusk/70 p-5";
 export const stat = "rounded-2xl border border-haze/70 bg-dusk/70 p-4";
 
 /**
+ * A section the reader can fold away.
+ *
+ * The proposal page carries the whole audit trail — the proposal, its
+ * evidence, a PRD, a plan, the scan's findings, the timeline, every decision
+ * anybody made — and an operator arriving from the board is there to settle
+ * one of them. Left unfolded that is ten screens of scrolling between the
+ * question and the answer. Native <details> rather than state, because it
+ * folds before React has loaded, it survives the page refreshing itself under
+ * a working run, and find-in-page opens what it matched.
+ */
+export const disclosure = "rounded-2xl border border-haze/70 bg-dusk/40";
+
+/**
+ * The row that folds it. The whole row is the target, not a chevron at the
+ * end of it: a heading you can read but not press is a heading people press
+ * anyway and conclude the page is broken.
+ */
+export const disclosureSummary =
+  "flex cursor-pointer list-none items-center gap-3 rounded-2xl px-4 py-3 " +
+  "transition-colors hover:bg-dusk/60 [&::-webkit-details-marker]:hidden " +
+  focusRing;
+
+/** What the fold reveals, set off from the row that opened it. */
+export const disclosureBody =
+  "flex flex-col gap-3 border-t border-haze/50 px-4 py-4";
+
+/**
+ * A line in a page's outline.
+ *
+ * Quiet by default and loud only under the pointer, because an outline is
+ * furniture until the moment somebody is lost in the page — and a rail of
+ * nine links drawn at full contrast competes with the thing it is meant to
+ * help you read.
+ */
+export const outlineLink =
+  "flex items-baseline gap-2 rounded-lg px-2.5 py-1.5 font-display text-sm " +
+  `text-chalk/55 transition-colors hover:bg-dusk/60 hover:text-chalk ${focusRing}`;
+
+/**
  * The small caps label. Used for anything naming a region rather than saying
  * something — "Week three", "You", "Partner", "Vocabulary".
  */

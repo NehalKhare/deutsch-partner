@@ -1,6 +1,10 @@
 import { z } from "zod";
 
-import { CORRECTION_PREFERENCES, masteryThresholdSchema } from "@/domain/learner";
+import {
+  CORRECTION_PREFERENCES,
+  TRAINER_PERSONALITIES,
+  masteryThresholdSchema,
+} from "@/domain/learner";
 import { VOICE_GENDERS } from "@/domain/tutor";
 import {
   INTEREST_OPTIONS,
@@ -41,6 +45,7 @@ export const settingsInputSchema = z.strictObject({
   // list fails a test instead of widening a type.
   correctionPreference: z.enum(CORRECTION_PREFERENCES),
   voicePreference: z.enum(VOICE_GENDERS),
+  trainerPersonality: z.enum(TRAINER_PERSONALITIES),
   // Coerced from the form's string, then held to the domain's closed set: a
   // tampered "42" is refused, not rounded to something the product never said.
   masteryThreshold: z.coerce.number().pipe(masteryThresholdSchema),
@@ -61,6 +66,7 @@ const FIELD_LABELS: Readonly<Record<string, string>> = {
   outputPreference: "reply preference",
   correctionPreference: "correction preference",
   voicePreference: "voice",
+  trainerPersonality: "trainer personality",
   masteryThreshold: "pass mark",
 };
 
@@ -81,6 +87,7 @@ export function parseSettingsForm(formData: FormData): SettingsParseResult {
     outputPreference: formData.get("outputPreference"),
     correctionPreference: formData.get("correctionPreference"),
     voicePreference: formData.get("voicePreference"),
+    trainerPersonality: formData.get("trainerPersonality"),
     masteryThreshold: formData.get("masteryThreshold"),
   });
 

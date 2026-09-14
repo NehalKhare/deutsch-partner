@@ -27,6 +27,7 @@ function form(over: Record<string, string | string[]> = {}): FormData {
     outputPreference: "text",
     correctionPreference: "gentle",
     voicePreference: "male",
+    trainerPersonality: "friendly",
     masteryThreshold: "80",
   };
 
@@ -115,6 +116,15 @@ describe("what the form refuses", () => {
     expect(
       parseSettingsForm(form({ targetTopics: ["travel", "travel"] })).success,
     ).toBe(false);
+  });
+
+  it("refuses a trainer personality the product does not offer, naming the field", () => {
+    const parsed = parseSettingsForm(form({ trainerPersonality: "sarcastic" }));
+
+    expect(parsed).toEqual({
+      success: false,
+      message: "Please check your trainer personality and try again.",
+    });
   });
 
   it("refuses an empty goal, naming the field", () => {

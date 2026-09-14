@@ -51,6 +51,7 @@ const STORED: LearnerProfile = {
   outputPreference: "text",
   correctionPreference: "gentle",
   voicePreference: "male",
+  trainerPersonality: "friendly",
   masteryThreshold: 80,
 };
 
@@ -65,6 +66,7 @@ function form(over: Record<string, string> = {}): FormData {
     outputPreference: "voice",
     correctionPreference: "explicit",
     voicePreference: "female",
+    trainerPersonality: "strict",
     masteryThreshold: "50",
     ...over,
   };
@@ -97,6 +99,7 @@ describe("saving settings", () => {
         learningGoal: "Hold a job interview in German",
         correctionPreference: "explicit",
         voicePreference: "female",
+        trainerPersonality: "strict",
         targetTopics: ["work"],
         interests: ["technology"],
         inputPreference: "voice",
@@ -167,5 +170,8 @@ describe("saving settings", () => {
     const logged = JSON.stringify(info.mock.calls);
     expect(logged).toContain("learner.settings_changed");
     expect(logged).not.toContain("job interview");
+    // The personality is a closed-set choice that shapes every trainer
+    // prompt, so which one was chosen is worth the audit line.
+    expect(logged).toContain('"trainerPersonality":"strict"');
   });
 });

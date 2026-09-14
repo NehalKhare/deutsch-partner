@@ -31,7 +31,8 @@ import {
   type CoachingDials,
   type TrainerCoachingProfile,
 } from "@/domain/trainer-coaching";
-import { trainerCoachingBlock } from "@/lib/ai/prompts/trainer";
+import { trainerCoachingBlock, trainerPersonalityBlock } from "@/lib/ai/prompts/trainer";
+import type { TrainerPersonality } from "@/domain/learner";
 import type { TrainerAgendaItem } from "@/lib/trainer/agenda";
 import { runTrainerTurn } from "@/lib/trainer/agent";
 import {
@@ -206,6 +207,25 @@ async function readCoaching(
   };
 }
 
+/**
+ * The manner the learner chose, read for one turn.
+ *
+ * The same discipline as readCoaching: an unreadable profile is the trainer
+ * as shipped, so a learner whose profile cannot be read still gets a trainer
+ * — the friendly one, which is what they had before there was a choice.
+ */
+async function readPersonality(
+  learners: LearnerRepository,
+  learnerId: string,
+): Promise<TrainerPersonality> {
+  try {
+    const profile = await learners.getProfile(learnerId);
+    return profile.ok ? profile.data.trainerPersonality : "friendly";
+  } catch {
+    return "friendly";
+  }
+}
+
 export type TrainerResult =
   | { readonly ok: true; readonly payload: TrainerTurnPayload }
   | { readonly ok: false; readonly error: TrainerError };
@@ -260,10 +280,14 @@ export async function handleTrainerTurn(
     },
   });
 
-  // What this learner's feedback has taught the trainer: read once per turn,
-  // rendered once into the system message, and handed to the tools that size
-  // and mix the agenda by it.
-  const coaching = await readCoaching(deps.coaching, identity.learnerId, now());
+  // What this learner's feedback has taught the trainer, and the manner they
+  // chose: read once per turn, rendered once each into the system message,
+  // and the coaching handed on to the tools that size and mix the agenda by it.
+  const [coaching, personality] = await Promise.all([
+    readCoaching(deps.coaching, identity.learnerId, now()),
+    readPersonality(deps.learners, identity.learnerId),
+  ]);
+  const personalityBlock = trainerPersonalityBlock(personality);
   const coachingBlock =
     trainerCoachingBlock({
       dials: dialsOf(coaching.profile),
@@ -335,6 +359,7 @@ export async function handleTrainerTurn(
       {
         models: ladder,
         tools: [...local.tools, ...mcp.tools],
+        personality: personalityBlock,
         coaching: coachingBlock,
         logger,
       },
@@ -356,6 +381,7 @@ export async function handleTrainerTurn(
       complete: local.complete(),
       analysis: findings !== undefined,
       coached: coachingBlock !== undefined,
+      personality,
       costEur: Number(turn.spentEur().toFixed(8)),
     });
 

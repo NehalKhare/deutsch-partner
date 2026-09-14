@@ -4,7 +4,12 @@ import { notFound } from "next/navigation";
 import { retryRunAction, reviewProposalAction } from "../actions";
 import { PlanCopy } from "@/components/operations/plan-copy";
 import { ProposalDecisions } from "@/components/operations/proposal-decisions";
+import {
+  ProposalOutline,
+  type OutlineItem,
+} from "@/components/operations/proposal-outline";
 import { RunActivityPanel } from "@/components/operations/run-activity";
+import { SectionPanel } from "@/components/operations/section-panel";
 import { RichText } from "@/components/ui/rich-text";
 import {
   card,
@@ -14,7 +19,6 @@ import {
   page,
   pageTitle,
   prose,
-  sectionTitle,
   stat,
 } from "@/components/ui/styles";
 import {
@@ -95,8 +99,39 @@ export default async function ProposalPage({
   // window does not change an answer.
   const reports = run.ok ? runReports([boardRunFrom(run.data)], new Date()) : [];
 
+  const evidenceCount = proposal.data.supportingResearch.length;
+  const reviewCount = reviews.ok ? reviews.data.length : 0;
+  const hasPrd = prd.ok && prd.data !== null;
+  const hasPlan = plan.ok && plan.data !== null;
+  const scanFindings = findings.ok ? findings.data : [];
+  // The two stages where a button on this page actually moves the run. The
+  // outline draws that entry in the accent, so an operator who came here to
+  // decide something can see from the rail that there is something to decide.
+  const atGate = stage === "human_review" || stage === "plan_review";
+
+  // Built here rather than inside the rail: which sections exist is a property
+  // of what was read above, and a rail that worked it out again could disagree
+  // with the page it is indexing.
+  const outline: readonly OutlineItem[] = [
+    { id: "proposal-heading", label: "The proposal" },
+    { id: "evidence-heading", label: "Evidence", count: evidenceCount },
+    ...(hasPrd ? [{ id: "prd-heading", label: "PRD" }] : []),
+    ...(hasPlan ? [{ id: "plan-heading", label: "Implementation plan" }] : []),
+    ...(scanFindings.length > 0
+      ? [{ id: "findings-heading", label: "What the scan found", count: scanFindings.length }]
+      : []),
+    { id: "timeline-heading", label: "Timeline", count: timeline.length },
+    ...(reviewCount > 0
+      ? [{ id: "decisions-heading", label: "Decisions", count: reviewCount }]
+      : []),
+    ...(owner === "worker"
+      ? [{ id: "worker-heading", label: "Over to the worker" }]
+      : []),
+    { id: "actions-heading", label: "Your decision", accent: atGate },
+  ];
+
   return (
-    <main className={cn(page, "max-w-4xl")}>
+    <main className={cn(page, "max-w-6xl")}>
       <header className="flex flex-col gap-2">
         <p className={eyebrow}>
           <Link href="/operations/product" className={linkInline}>
@@ -141,224 +176,215 @@ export default async function ProposalPage({
         </div>
       </dl>
 
-      <Prose proposal={proposal.data} />
+      <div className="grid items-start gap-x-10 gap-y-6 lg:grid-cols-[minmax(0,1fr)_13rem]">
+        <div className="flex min-w-0 flex-col gap-3">
+          <Prose proposal={proposal.data} />
 
-      <section aria-labelledby="evidence-heading" className="flex flex-col gap-2">
-        <h2 id="evidence-heading" className={sectionTitle}>
-          Evidence
-        </h2>
-        {proposal.data.supportingResearch.length === 0 ? (
-          <p className={prose}>
-            None cited, which for a proposal is a reason to reject it.
-          </p>
-        ) : (
-          <ul className="flex flex-col gap-1.5">
-            {proposal.data.supportingResearch.map((item, index) => (
-              <li key={`${item.url ?? "no-url"}-${index}`} className={cn(prose, "text-sm")}>
-                {/* The scheme was narrowed to http and https on the way in,
-                    and any url the provider did not actually return was
-                    dropped before this was stored. */}
-                {item.url ? (
-                  <a
-                    href={item.url}
-                    rel="noreferrer nofollow"
-                    target="_blank"
-                    className={linkInline}
-                  >
-                    {item.finding}
-                  </a>
-                ) : (
-                  item.finding
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+          <SectionPanel id="evidence-heading" title="Evidence" count={evidenceCount} defaultOpen>
+            {proposal.data.supportingResearch.length === 0 ? (
+              <p className={prose}>
+                None cited, which for a proposal is a reason to reject it.
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-1.5">
+                {proposal.data.supportingResearch.map((item, index) => (
+                  <li key={`${item.url ?? "no-url"}-${index}`} className={cn(prose, "text-sm")}>
+                    {/* The scheme was narrowed to http and https on the way in,
+                        and any url the provider did not actually return was
+                        dropped before this was stored. */}
+                    {item.url ? (
+                      <a
+                        href={item.url}
+                        rel="noreferrer nofollow"
+                        target="_blank"
+                        className={linkInline}
+                      >
+                        {item.finding}
+                      </a>
+                    ) : (
+                      item.finding
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </SectionPanel>
 
-      {prd.ok && prd.data ? (
-        <section aria-labelledby="prd-heading" className="flex flex-col gap-3">
-          <h2 id="prd-heading" className={sectionTitle}>
-            PRD
-          </h2>
-          <p className="font-display text-xs text-chalk/40">
-            Stored in the database, projected to{" "}
-            <code className="font-mono">{prd.data.filePath}</code> for the
-            worker. If the two disagree, the row is right.
-          </p>
-          <Bullets label="User stories" items={prd.data.sections.userStories} />
-          <Bullets
-            label="Functional requirements"
-            items={prd.data.sections.functionalRequirements}
-          />
-          <Bullets
-            label="Acceptance criteria"
-            items={prd.data.sections.acceptanceCriteria}
-          />
-          <Bullets label="Non-goals" items={prd.data.sections.nonGoals} />
-        </section>
-      ) : null}
+          {prd.ok && prd.data ? (
+            <SectionPanel id="prd-heading" title="PRD">
+              <p className="font-display text-xs text-chalk/40">
+                Stored in the database, projected to{" "}
+                <code className="font-mono">{prd.data.filePath}</code> for the
+                worker. If the two disagree, the row is right.
+              </p>
+              <Bullets label="User stories" items={prd.data.sections.userStories} />
+              <Bullets
+                label="Functional requirements"
+                items={prd.data.sections.functionalRequirements}
+              />
+              <Bullets
+                label="Acceptance criteria"
+                items={prd.data.sections.acceptanceCriteria}
+              />
+              <Bullets label="Non-goals" items={prd.data.sections.nonGoals} />
+            </SectionPanel>
+          ) : null}
 
-      {plan.ok && plan.data ? (
-        <section aria-labelledby="plan-heading" className="flex flex-col gap-3">
-          <h2 id="plan-heading" className={sectionTitle}>
-            Implementation plan
-          </h2>
-          <p className="font-display text-xs text-chalk/40">
-            {plan.data.status === "approved"
-              ? "Accepted. This is the run's deliverable; copy it below."
-              : "Not yet accepted. Read it, copy it if you want it, then decide below."}
-          </p>
-          <PlanCopy
-            markdown={planMarkdown(proposal.data.title, plan.data.plan, plan.data.breakdown)}
-          />
-          {plan.data.breakdown ? (
-            <Breakdown breakdown={plan.data.breakdown} />
-          ) : (
-            <p className="font-display text-xs text-chalk/40">
-              The engineering breakdown has not been written yet. If the run
-              stopped, trying it again writes only this half.
-            </p>
-          )}
-          <PlanFiles label="Files to modify" paths={plan.data.plan.filesToModify} />
-          <PlanFiles label="Files to create" paths={plan.data.plan.filesToCreate} />
-          <PlanFiles label="Tests" paths={plan.data.plan.tests} />
-          <Bullets
-            label="Database changes"
-            items={plan.data.plan.databaseChanges}
-            note="Described, never written. A migration is a person's decision."
-          />
-          <Bullets label="Dependencies" items={plan.data.plan.dependencies} />
-          <Bullets label="Risks" items={plan.data.plan.risks} />
-        </section>
-      ) : null}
-
-      {findings.ok && findings.data.length > 0 ? (
-        <section aria-labelledby="findings-heading" className="flex flex-col gap-2">
-          <h2 id="findings-heading" className={sectionTitle}>
-            What the scan found
-          </h2>
-          <ul className="flex flex-col gap-3">
-            {findings.data.map((finding) => (
-              <li key={finding.id} className={cn(card, "flex flex-col gap-1 p-3.5")}>
-                <p className="font-display text-sm font-semibold text-chalk">
-                  {finding.sourceUrl ? (
-                    <a
-                      href={finding.sourceUrl}
-                      rel="noreferrer nofollow"
-                      target="_blank"
-                      className={linkInline}
-                    >
-                      {finding.title}
-                    </a>
-                  ) : (
-                    finding.title
-                  )}
-                </p>
+          {plan.ok && plan.data ? (
+            <SectionPanel id="plan-heading" title="Implementation plan" defaultOpen>
+              <p className="font-display text-xs text-chalk/40">
+                {plan.data.status === "approved"
+                  ? "Accepted. This is the run's deliverable; copy it below."
+                  : "Not yet accepted. Read it, copy it if you want it, then decide below."}
+              </p>
+              <PlanCopy
+                markdown={planMarkdown(proposal.data.title, plan.data.plan, plan.data.breakdown)}
+              />
+              {plan.data.breakdown ? (
+                <Breakdown breakdown={plan.data.breakdown} />
+              ) : (
                 <p className="font-display text-xs text-chalk/40">
-                  {finding.sourceType}
-                  {finding.relevanceScore === null
-                    ? ""
-                    : ` · relevance ${finding.relevanceScore.toFixed(2)}`}
+                  The engineering breakdown has not been written yet. If the run
+                  stopped, trying it again writes only this half.
                 </p>
-                <p className={cn(prose, "text-sm")}>
-                  <RichText content={finding.summary} />
-                </p>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
+              )}
+              <PlanFiles label="Files to modify" paths={plan.data.plan.filesToModify} />
+              <PlanFiles label="Files to create" paths={plan.data.plan.filesToCreate} />
+              <PlanFiles label="Tests" paths={plan.data.plan.tests} />
+              <Bullets
+                label="Database changes"
+                items={plan.data.plan.databaseChanges}
+                note="Described, never written. A migration is a person's decision."
+              />
+              <Bullets label="Dependencies" items={plan.data.plan.dependencies} />
+              <Bullets label="Risks" items={plan.data.plan.risks} />
+            </SectionPanel>
+          ) : null}
 
-      <section aria-labelledby="timeline-heading" className="flex flex-col gap-2 overflow-x-auto">
-        <h2 id="timeline-heading" className={sectionTitle}>
-          Timeline
-        </h2>
-        <table className="w-full text-left font-display text-sm">
-          <thead className={eyebrow}>
-            <tr>
-              <th scope="col" className="py-1">
-                Stage
-              </th>
-              <th scope="col">What happened</th>
-              <th scope="col" className="text-right">
-                EUR
-              </th>
-              <th scope="col">Detail</th>
-            </tr>
-          </thead>
-          <tbody>
-            {timeline.length === 0 ? (
-              <tr className="border-t border-haze/50">
-                <td colSpan={4} className="py-3 font-body text-chalk/45">
-                  Nothing recorded yet.
-                </td>
-              </tr>
-            ) : null}
-            {timeline.map((entry) => (
-              <tr key={entry.id} className="border-t border-haze/50 text-chalk/80">
-                <td className="py-1">{entry.stage.replace(/_/g, " ")}</td>
-                <td className={entry.status === "failed" ? "text-ember" : undefined}>
-                  {entry.entered ? "entered" : entry.status.replace(/_/g, " ")}
-                  {entry.errorCode ? ` · ${entry.errorCode}` : ""}
-                </td>
-                <td className="text-right tabular-nums text-chalk/55">
-                  {entry.costEur === 0 ? "—" : entry.costEur.toFixed(6)}
-                </td>
-                <td className="text-chalk/45">
-                  {entry.notes
-                    .map((note) => `${note.label}: ${note.value}`)
-                    .join(" · ") || "—"}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
+          {scanFindings.length > 0 ? (
+            <SectionPanel
+              id="findings-heading"
+              title="What the scan found"
+              count={scanFindings.length}
+            >
+              <ul className="flex flex-col gap-3">
+                {scanFindings.map((finding) => (
+                  <li key={finding.id} className={cn(card, "flex flex-col gap-1 p-3.5")}>
+                    <p className="font-display text-sm font-semibold text-chalk">
+                      {finding.sourceUrl ? (
+                        <a
+                          href={finding.sourceUrl}
+                          rel="noreferrer nofollow"
+                          target="_blank"
+                          className={linkInline}
+                        >
+                          {finding.title}
+                        </a>
+                      ) : (
+                        finding.title
+                      )}
+                    </p>
+                    <p className="font-display text-xs text-chalk/40">
+                      {finding.sourceType}
+                      {finding.relevanceScore === null
+                        ? ""
+                        : ` · relevance ${finding.relevanceScore.toFixed(2)}`}
+                    </p>
+                    <p className={cn(prose, "text-sm")}>
+                      <RichText content={finding.summary} />
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </SectionPanel>
+          ) : null}
 
-      {reviews.ok && reviews.data.length > 0 ? (
-        <section aria-labelledby="decisions-heading" className="flex flex-col gap-2">
-          <h2 id="decisions-heading" className={sectionTitle}>
-            Decisions
-          </h2>
-          <ul className="flex flex-col gap-2">
-            {reviews.data.map((review) => (
-              <li key={review.id} className={cn(card, "p-3.5")}>
-                <Decision review={review} />
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
+          <SectionPanel id="timeline-heading" title="Timeline" count={timeline.length}>
+            <div className="overflow-x-auto">
+            <table className="w-full text-left font-display text-sm">
+              <thead className={eyebrow}>
+                <tr>
+                  <th scope="col" className="py-1">
+                    Stage
+                  </th>
+                  <th scope="col">What happened</th>
+                  <th scope="col" className="text-right">
+                    EUR
+                  </th>
+                  <th scope="col">Detail</th>
+                </tr>
+              </thead>
+              <tbody>
+                {timeline.length === 0 ? (
+                  <tr className="border-t border-haze/50">
+                    <td colSpan={4} className="py-3 font-body text-chalk/45">
+                      Nothing recorded yet.
+                    </td>
+                  </tr>
+                ) : null}
+                {timeline.map((entry) => (
+                  <tr key={entry.id} className="border-t border-haze/50 text-chalk/80">
+                    <td className="py-1">{entry.stage.replace(/_/g, " ")}</td>
+                    <td className={entry.status === "failed" ? "text-ember" : undefined}>
+                      {entry.entered ? "entered" : entry.status.replace(/_/g, " ")}
+                      {entry.errorCode ? ` · ${entry.errorCode}` : ""}
+                    </td>
+                    <td className="text-right tabular-nums text-chalk/55">
+                      {entry.costEur === 0 ? "—" : entry.costEur.toFixed(6)}
+                    </td>
+                    <td className="text-chalk/45">
+                      {entry.notes
+                        .map((note) => `${note.label}: ${note.value}`)
+                        .join(" · ") || "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            </div>
+          </SectionPanel>
 
-      {owner === "worker" ? (
-        <section aria-labelledby="worker-heading" className={cn(card, "flex flex-col gap-2")}>
-          <h2 id="worker-heading" className={sectionTitle}>
-            Over to the worker
-          </h2>
-          <p className={cn(prose, "text-sm")}>
-            The next stage needs a working tree, which this server does not
-            have. Run this where the repository is checked out; it is safe to
-            run twice.
-          </p>
-          <code className="overflow-x-auto rounded bg-ink/60 px-3 py-2 font-mono text-xs text-chalk/70">
-            {workerCommandFor(proposal.data.id)}
-          </code>
-        </section>
-      ) : null}
+          {reviews.ok && reviews.data.length > 0 ? (
+            <SectionPanel id="decisions-heading" title="Decisions" count={reviews.data.length}>
+              <ul className="flex flex-col gap-2">
+                {reviews.data.map((review) => (
+                  <li key={review.id} className={cn(card, "p-3.5")}>
+                    <Decision review={review} />
+                  </li>
+                ))}
+              </ul>
+            </SectionPanel>
+          ) : null}
 
-      <ProposalDecisions
-        proposalId={proposal.data.id}
-        priorityScore={proposal.data.priorityScore}
-        stage={stage}
-        review={reviewProposalAction}
-        run={
-          run.ok
-            ? { id: run.data.id, errorCode: run.data.errorCode, failedAt: failedAt }
-            : null
-        }
-        retry={retryRunAction}
-      />
+          {owner === "worker" ? (
+            <SectionPanel id="worker-heading" title="Over to the worker" defaultOpen>
+              <p className={cn(prose, "text-sm")}>
+                The next stage needs a working tree, which this server does not
+                have. Run this where the repository is checked out; it is safe to
+                run twice.
+              </p>
+              <code className="overflow-x-auto rounded bg-ink/60 px-3 py-2 font-mono text-xs text-chalk/70">
+                {workerCommandFor(proposal.data.id)}
+              </code>
+            </SectionPanel>
+          ) : null}
+
+          <ProposalDecisions
+            proposalId={proposal.data.id}
+            priorityScore={proposal.data.priorityScore}
+            stage={stage}
+            review={reviewProposalAction}
+            run={
+              run.ok
+                ? { id: run.data.id, errorCode: run.data.errorCode, failedAt: failedAt }
+                : null
+            }
+            retry={retryRunAction}
+          />
+        </div>
+
+        <ProposalOutline items={outline} />
+      </div>
     </main>
   );
 }
@@ -373,10 +399,7 @@ function Prose({ proposal }: { readonly proposal: StoredProposal }) {
   ];
 
   return (
-    <section aria-labelledby="proposal-heading" className="flex flex-col gap-4">
-      <h2 id="proposal-heading" className={sectionTitle}>
-        The proposal
-      </h2>
+    <SectionPanel id="proposal-heading" title="The proposal" defaultOpen>
       {sections.map((section) => (
         <div key={section.label} className="flex flex-col gap-1">
           <h3 className={eyebrow}>{section.label}</h3>
@@ -395,7 +418,7 @@ function Prose({ proposal }: { readonly proposal: StoredProposal }) {
           </ol>
         </div>
       ) : null}
-    </section>
+    </SectionPanel>
   );
 }
 

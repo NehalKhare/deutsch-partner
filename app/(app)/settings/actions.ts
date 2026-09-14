@@ -18,7 +18,7 @@ import type { DatabaseClient } from "@/repositories/types";
 /**
  * Saves the profile settings.
  *
- * Merge, not replace: the form owns seven fields, and the profile's identity
+ * Merge, not replace: the form owns its fields, and the profile's identity
  * and selected level are read from the row it is changing. Both the read and
  * the write run as the signed-in learner, so Row Level Security decides which
  * row that is.
@@ -55,6 +55,7 @@ export async function updateSettingsAction(
   actionLogger().info("learner.settings_changed", {
     userIdHash: pseudonymOrUnavailable(learnerId),
     correctionPreference: parsed.data.correctionPreference,
+    trainerPersonality: parsed.data.trainerPersonality,
     topics: parsed.data.targetTopics.length,
     interests: parsed.data.interests.length,
   });

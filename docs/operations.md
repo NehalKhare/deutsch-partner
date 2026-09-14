@@ -30,6 +30,8 @@ contributor can run the app and the suite without provisioning anything.
 
 ```bash
 pnpm install
+supabase login                                  # once per machine
+supabase link --project-ref <your-project-ref>  # once per checkout
 pnpm db:push          # 29 migrations: 24 tables, RLS, functions
 pnpm db:seed          # curriculum, vocabulary and grammar seeds
 pnpm dummy:user       # a confirmed fixture learner, credentials printed
@@ -48,6 +50,15 @@ comprehensions) with no key and no database. See `scripts/scenarios/README.md`.
 `pnpm ingest --dry-run` reports what would be written — 234 documents, 599
 chunks — without contacting a provider or needing a key. Useful for checking
 chunking and metadata on a laptop with nothing configured.
+
+`supabase link` is what `db:push`, `db:diff` and `db:seed` mean by "the linked
+project". It writes `supabase/.temp/project-ref`, which is gitignored, so it is
+a per-checkout step rather than something a clone inherits — a fresh clone that
+skips it gets `Cannot find project ref` from the first command that needs a
+database. The project ref is the subdomain of `NEXT_PUBLIC_SUPABASE_URL`, and
+`supabase projects list` prints it for every project the logged-in account can
+see. Linking prompts once for the database password and stores it, which is why
+the later commands do not ask again.
 
 `db:seed` exists because a migration runs once. The seeds are declarative and
 idempotent, so a fresh database gets them from `db:push` while one that already

@@ -249,6 +249,16 @@ describe("the trainer's prompt", () => {
     // catalogue's learner-state block. (Version 10 closed items on the first
     // correct answer and named records by the agenda's subject.)
     "trainer.session@11": "afda6e81",
+    // Version 12: the learner chooses the trainer's manner. The identity no
+    // longer calls the sessions "warm" — that was the friendly personality
+    // written into the fixed text, and a strict trainer cannot be told to be
+    // warm and exacting in one breath — and a new rules block says a block
+    // headed "Your manner" follows, sets tone, praise and how a correction is
+    // put, and changes neither the protocol nor the judgement of answers. The
+    // rendered manner itself is a per-learner template behind this lock, like
+    // the coaching block. (Version 11 taught the trainer to learn from
+    // feedback through adjust_coaching and the standing-requests block.)
+    "trainer.session@12": "548777ec",
   };
 
   it("matches its recorded fingerprint", () => {

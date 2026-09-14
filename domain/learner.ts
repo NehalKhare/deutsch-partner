@@ -21,6 +21,20 @@ export const INPUT_MODES = ["text", "voice"] as const;
 export const CORRECTION_PREFERENCES = ["gentle", "explicit", "minimal"] as const;
 
 /**
+ * The manner the trainer takes with a learner.
+ *
+ * Two positions rather than a free description, because a manner is prompt
+ * content on every trainer turn: a closed set is what lets it be a template
+ * the prompt layer owns and fingerprints, rather than words about the learner
+ * that no test can pin. "friendly" is the trainer as shipped — warm and
+ * encouraging; "strict" names every error and praises nothing routine. Both
+ * are coaches: the session protocol and the judgement of answers do not
+ * change with it, only the tone they are delivered in.
+ */
+export const TRAINER_PERSONALITIES = ["friendly", "strict"] as const;
+export type TrainerPersonality = (typeof TRAINER_PERSONALITIES)[number];
+
+/**
  * The pass marks a learner may set for moving up: the share of evaluated
  * turns that must be error-free before a mini-level counts as cleared.
  *
@@ -59,6 +73,12 @@ export const learnerProfileSchema = z.strictObject({
    * is a learner who has not chosen, which is exactly what the default means.
    */
   voicePreference: z.enum(VOICE_GENDERS).default("male"),
+  /**
+   * How the trainer carries itself with this learner. Defaulted like the
+   * voice: a profile from before the column is a learner who has not chosen,
+   * and the trainer they had was the friendly one.
+   */
+  trainerPersonality: z.enum(TRAINER_PERSONALITIES).default("friendly"),
   /**
    * The pass mark for clearing a mini-level, as a percentage of evaluated
    * turns that were error-free. Defaulted for the same reason as the voice:

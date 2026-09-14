@@ -184,6 +184,44 @@ describe("the learner's coaching block", () => {
     );
   });
 
+  it("puts the manner block behind the mark too, before the coaching block", async () => {
+    const MANNER = "Your manner: exacting.";
+    const model = new FakeToolCallingModel([new AIMessage("Gern!")]);
+    await runTrainerTurn(
+      {
+        models: [{ model, cacheMarks: true }],
+        tools: [],
+        personality: MANNER,
+        coaching: COACHING,
+      },
+      { message: "Weiter", history: [] },
+    );
+
+    const [system] = model.seen[0];
+    const parts = system.content as Array<{ text?: string; cache_control?: unknown }>;
+    // Three parts: the shared prefix, marked; then this learner's two blocks, not.
+    expect(parts).toHaveLength(3);
+    expect(parts[0].cache_control).toEqual({ type: "ephemeral" });
+    expect(parts[0].text).not.toContain("Your manner:");
+    expect(parts[1]).toEqual({ type: "text", text: MANNER });
+    expect(parts[2]).toEqual({ type: "text", text: COACHING });
+  });
+
+  it("joins the manner onto the fixed prompt for a candidate without cache marks", async () => {
+    const MANNER = "Your manner: exacting.";
+    const model = new FakeToolCallingModel([new AIMessage("Gern!")]);
+    await runTrainerTurn(
+      { models: [{ model, cacheMarks: false }], tools: [], personality: MANNER },
+      { message: "Weiter", history: [] },
+    );
+
+    const [system] = model.seen[0];
+    expect(textOf(system)).toContain(MANNER);
+    expect(textOf(system).indexOf("Deutsch Partner")).toBeLessThan(
+      textOf(system).indexOf(MANNER),
+    );
+  });
+
   it("leaves the system message exactly as it was when there is no block", async () => {
     const model = new FakeToolCallingModel([new AIMessage("Gern!")]);
     await runTrainerTurn(

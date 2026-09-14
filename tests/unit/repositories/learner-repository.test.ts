@@ -16,6 +16,7 @@ const profileRow = {
   output_preference: "text",
   correction_preference: "gentle",
   voice_preference: "male",
+  trainer_personality: "strict",
 };
 
 const stateRow = {
@@ -137,6 +138,27 @@ describe("getState", () => {
   });
 });
 
+describe("the trainer personality column", () => {
+  it("reads the stored choice", async () => {
+    const fake = createFakeSupabase({ profiles: { data: profileRow } });
+
+    const result = await createLearnerRepository(fake.client).getProfile(LEARNER);
+
+    expect(result.ok && result.data.trainerPersonality).toBe("strict");
+  });
+
+  it("reads a row from before the column as the trainer as shipped", async () => {
+    // A deployment with the new code but not yet the new column must keep
+    // reading profiles: the default is friendly, in the mapper as in the database.
+    const { trainer_personality: _dropped, ...older } = profileRow;
+    const fake = createFakeSupabase({ profiles: { data: older } });
+
+    const result = await createLearnerRepository(fake.client).getProfile(LEARNER);
+
+    expect(result.ok && result.data.trainerPersonality).toBe("friendly");
+  });
+});
+
 describe("upsertProfile", () => {
   it("writes the snake_case row the schema expects", async () => {
     const fake = createFakeSupabase({ profiles: { data: profileRow } });
@@ -152,7 +174,8 @@ describe("upsertProfile", () => {
       outputPreference: "text",
       correctionPreference: "gentle",
       voicePreference: "male",
-  masteryThreshold: 80,
+      trainerPersonality: "strict",
+      masteryThreshold: 80,
     });
 
     const [[payload]] = fake.methodArgs("profiles", "upsert");
@@ -160,7 +183,8 @@ describe("upsertProfile", () => {
       id: LEARNER,
       native_language: "en",
       correction_preference: "gentle",
-  voice_preference: "male",
+      voice_preference: "male",
+      trainer_personality: "strict",
       selected_level: "A2",
     });
     expect(payload).not.toHaveProperty("nativeLanguage");
@@ -196,6 +220,7 @@ describe("upsertProfile", () => {
       id: LEARNER,
       nativeLanguage: "en",
       learningGoal: "x",
+      trainerPersonality: "friendly",
       selectedLevel: "A2",
       targetTopics: [],
       interests: [],

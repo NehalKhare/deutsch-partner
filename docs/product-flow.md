@@ -383,6 +383,20 @@ the note; never a line of the reply itself, because transcripts are ephemeral
 by design and a feedback table that quoted them would be the transcript table
 by another name.
 
+**Its manner is the learner's to choose.** Settings offers two trainers —
+*friendly*, warm and encouraging, the trainer as shipped; and *strict*,
+exacting, naming every error and praising nothing routine — and the choice is
+a column on the profile (`trainer_personality`), not a coaching dial: the
+dials are what feedback taught the trainer and *Forget my feedback* wipes
+them, whereas this is a choice made in so many words and survives that reset.
+It changes manner only. The fixed prompt says so — a block headed *Your
+manner* sets tone, praise and how a correction is put, and changes neither
+what the session covers nor how an answer is judged — and each personality is
+one templated paragraph in `lib/ai/prompts/trainer.ts`, rendered per learner
+behind the fixed prompt's cache mark ahead of the coaching block. The strict
+trainer is still a coach: it is told never to mock or belittle, and a wrong
+first answer still gets its hint and another chance.
+
 The same votes reach the operator. The product-ops board draws the last
 thirty days of them — by reason, by trainer prompt version, by the tools a
 reply used, with the newest notes — and every market scan records that

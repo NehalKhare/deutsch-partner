@@ -162,26 +162,27 @@ export interface TrainerCandidate {
 }
 
 /**
- * The system message: the fixed prompt, then the learner's coaching block.
+ * The system message: the fixed prompt, then this learner's blocks — the
+ * manner they chose, then what their feedback taught the trainer.
  *
- * Two parts rather than one string, because the cache breakpoint sits between
- * them. The fixed text is shared by every trainer session in the product and
- * is what the prefix cache serves; the coaching block is this learner's and
- * changes when their feedback does, so it rides behind the mark where a
- * change costs only its own tokens. On a provider without cache marks the
- * two are simply joined.
+ * Separate parts rather than one string, because the cache breakpoint sits
+ * after the first. The fixed text is shared by every trainer session in the
+ * product and is what the prefix cache serves; the learner's blocks change
+ * when their settings or feedback do, so they ride behind the mark where a
+ * change costs only their own tokens. On a provider without cache marks the
+ * parts are simply joined.
  */
 export function trainerSystemMessage(
-  coaching: string | undefined,
+  learner: readonly string[],
   marked: boolean,
 ): SystemMessage | string {
   const fixed = trainerSystemPrompt();
-  if (!marked) return coaching === undefined ? fixed : `${fixed}\n\n${coaching}`;
+  if (!marked) return [fixed, ...learner].join("\n\n");
 
   return new SystemMessage({
     content: [
       cacheMarkedPart(fixed),
-      ...(coaching === undefined ? [] : [{ type: "text" as const, text: coaching }]),
+      ...learner.map((text) => ({ type: "text" as const, text })),
     ],
   });
 }
@@ -191,6 +192,12 @@ export async function runTrainerTurn(
     /** The tier's ladder: the primary first, same-tier fallbacks after. */
     readonly models: readonly TrainerCandidate[];
     readonly tools: StructuredToolInterface[];
+    /**
+     * The learner's rendered manner block — the personality they chose in
+     * settings — appended to the system message behind the fixed prompt's
+     * cache mark, ahead of the coaching block.
+     */
+    readonly personality?: string;
     /**
      * The learner's rendered coaching block, when they have one: standing
      * requests from their feedback, appended to the system message behind
@@ -225,6 +232,10 @@ export async function runTrainerTurn(
       ? turn.message
       : `${turn.message}\n\n${turn.analysis}`;
 
+  const learnerBlocks = [deps.personality, deps.coaching].filter(
+    (block): block is string => block !== undefined,
+  );
+
   let result: { messages: BaseMessage[] } | null = null;
   for (const [attempt, candidate] of deps.models.entries()) {
     // Cache breakpoints, only for a model whose provider reads them: the
@@ -236,7 +247,7 @@ export async function runTrainerTurn(
     const agent = createAgent({
       model: candidate.model,
       tools: deps.tools,
-      systemPrompt: trainerSystemMessage(deps.coaching, marked),
+      systemPrompt: trainerSystemMessage(learnerBlocks, marked),
     });
 
     try {
