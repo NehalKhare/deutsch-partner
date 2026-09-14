@@ -198,6 +198,15 @@ without any counter or deadline in the browser. A spinner that turns forever
 over dead work is worse than no spinner, because it teaches an operator to
 distrust the only signal that means something is wrong.
 
+**Deciding and operating are two pages.** `/operations/product` is the proposal
+board, and nothing on it moves on its own; `/operations/product/runs` holds the
+scan form, the run cards that follow their own timelines live, and the
+learner-feedback aggregate. The split is what lets the runs page poll itself
+every few seconds without redrawing the page an operator is reading a proposal
+on. Both are dynamic routes, and a dynamic route is prefetched only as far as
+its nearest loading boundary, so each has a `loading.tsx`: without one the
+switch between them is a wait on a blank page rather than a click.
+
 **Nothing writes a file without two approvals.** The proposal is approved before
 a PRD exists, and the plan is approved before a file is written. The approved
 plan's file lists become the coding agent's path allowlist, checked in trusted
@@ -283,8 +292,8 @@ Stated here so nobody has to discover it by reading the code.
   *search* embeds through the gateway and is ledgered, budgeted and cached
   like every other call.
 - **Learner feedback informs a scan; nothing acts on it automatically.** The
-  aggregate of trainer votes is on the product-ops board and enters every
-  scan as an internal finding, so a prompt version that is losing shows up in
+  aggregate of trainer votes is on the product-ops scans and runs page and
+  enters every scan as an internal finding, so a prompt version that is losing shows up in
   a proposal a person reviews. No job compares prompt versions, alerts on a
   rising unhelpful share, or proposes a prompt edit on its own — the prompt
   layer is on the coding agent's deny-list on purpose.
@@ -372,7 +381,7 @@ Stated here so nobody has to discover it by reading the code.
   `supabase/migrations/**` whatever the plan says, so a schema change is
   described in the document and written by a person. Per-run operator opt-in is
   the extension point.
-- **The operator board polls; nothing is pushed.** While a run is moving, the
+- **The runs page polls; nothing is pushed.** While a run is moving, the
   page asks the server again every few seconds. Postgres can push this — a
   realtime subscription on `ai_run_events` is the obvious version — and the
   reason it does not is that the polling stops on its own: a run that goes

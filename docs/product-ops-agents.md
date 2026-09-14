@@ -145,7 +145,8 @@ learners flagged beside what the web says about learners in general. Fewer than
 five votes in the window is no finding rather than a trend. The research agent
 also reads the same document through `read_learner_feedback`, fenced as
 `learner_feedback` because the notes in it are learners' words. The same
-aggregate is drawn on the board, above the runs.
+aggregate is drawn for the operator on the scans and runs page, below the
+runs it feeds.
 
 ## 4. Inside an agent node
 

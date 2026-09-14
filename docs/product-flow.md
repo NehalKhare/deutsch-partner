@@ -397,8 +397,8 @@ behind the fixed prompt's cache mark ahead of the coaching block. The strict
 trainer is still a coach: it is told never to mock or belittle, and a wrong
 first answer still gets its hint and another chance.
 
-The same votes reach the operator. The product-ops board draws the last
-thirty days of them — by reason, by trainer prompt version, by the tools a
+The same votes reach the operator. The product-ops scans and runs page draws
+the last thirty days of them — by reason, by trainer prompt version, by the tools a
 reply used, with the newest notes — and every market scan records that
 aggregate as its first finding, before it searches the web, so a proposal
 weighs what this product's learners flagged against what forums say about
