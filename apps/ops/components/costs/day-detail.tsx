@@ -12,7 +12,8 @@ import { formatCount, formatEur, formatTokens } from "./format";
  * One day, opened up.
  *
  * What the calendar cannot say: which tasks the money went on, which tier
- * each of them was routed to, and how many tokens went in and came back. The
+ * each of them was routed to, which model actually ran it, and how many tokens
+ * went in and came back. The
  * cell carries magnitude and the figure; this carries the reason, and the
  * reason is the point — "Tuesday cost thirty euro" is not actionable and
  * "Tuesday cost thirty euro and twenty-eight of it was one embedding
@@ -98,12 +99,14 @@ export function DayDetail({ day, limitEur }: DayDetailProps) {
 
           <Breakdown
             heading="Tasks"
-            columns={["Task", "Tier", "Calls", "Tokens", "EUR"]}
+            columns={["Task", "Tier", "Model", "Calls", "Tokens", "EUR"]}
+            textColumns={3}
             rows={tasks.map((task) => ({
-              key: `${task.task}:${task.tier}`,
+              key: `${task.task}:${task.tier}:${task.modelId}`,
               cells: [
                 task.task,
                 task.tier,
+                task.modelId,
                 formatCount(task.calls),
                 formatTokens(task.inputTokens + task.outputTokens),
                 formatEur(task.costEur),
@@ -145,10 +148,13 @@ function Figure({
 function Breakdown({
   heading,
   columns,
+  textColumns = 1,
   rows,
 }: {
   readonly heading: string;
   readonly columns: readonly string[];
+  /** How many leading columns are words rather than figures. Words align left. */
+  readonly textColumns?: number;
   readonly rows: ReadonlyArray<{ readonly key: string; readonly cells: readonly string[] }>;
 }) {
   if (rows.length === 0) return null;
@@ -163,7 +169,7 @@ function Breakdown({
               <th
                 key={column}
                 scope="col"
-                className={cn("py-1", index > 0 && "text-right")}
+                className={cn("py-1 pr-3", index >= textColumns && "text-right")}
               >
                 {column}
               </th>
@@ -176,7 +182,10 @@ function Breakdown({
               {row.cells.map((cell, index) => (
                 <td
                   key={columns[index] ?? index}
-                  className={cn("py-1", index > 0 && "text-right tabular-nums")}
+                  className={cn(
+                    "py-1 pr-3",
+                    index >= textColumns ? "text-right tabular-nums" : "whitespace-nowrap",
+                  )}
                 >
                   {cell}
                 </td>

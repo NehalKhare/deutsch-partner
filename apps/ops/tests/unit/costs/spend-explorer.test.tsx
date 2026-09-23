@@ -34,8 +34,8 @@ const SERIES: DaySpend[] = Array.from({ length: 300 }, (_, index) => {
     outputTokens: 2_000,
     failures: 0,
     byTask: [
-      { task: "conversation.turn", tier: "strong", calls: 60, costEur: costEur * 0.8, inputTokens: 8000, outputTokens: 1800 },
-      { task: "classification.intent", tier: "nano", calls: 40, costEur: costEur * 0.2, inputTokens: 2000, outputTokens: 200 },
+      { task: "conversation.turn", tier: "strong", modelId: "vendor/strong-model", calls: 60, costEur: costEur * 0.8, inputTokens: 8000, outputTokens: 1800 },
+      { task: "classification.intent", tier: "nano", modelId: "vendor/nano-model", calls: 40, costEur: costEur * 0.2, inputTokens: 2000, outputTokens: 200 },
     ],
     byModel: [{ modelId: "strong tier", calls: 100, costEur }],
   };
@@ -156,6 +156,24 @@ describe("SpendExplorer", () => {
     expect(within(detail).getByText("Models routed to")).toBeInTheDocument();
     expect(within(detail).getByText("strong tier")).toBeInTheDocument();
     expect(within(detail).getByText("conversation.turn")).toBeInTheDocument();
+  });
+
+  it("names the model each task actually ran on", async () => {
+    const user = setup();
+
+    await user.click(screen.getByRole("gridcell", { name: /Tue 22 Sep/ }));
+
+    const detail = screen.getByRole("region", { name: "Tue 22 Sep" });
+    const tasks = within(detail)
+      .getAllByRole("table")
+      .find((table) => within(table).queryByRole("columnheader", { name: "Task" }));
+    if (!tasks) throw new Error("no Tasks table");
+
+    expect(within(tasks).getByRole("columnheader", { name: "Model" })).toBeInTheDocument();
+    const turn = within(tasks).getByText("conversation.turn").closest("tr");
+    expect(turn).toHaveTextContent("vendor/strong-model");
+    const intent = within(tasks).getByText("classification.intent").closest("tr");
+    expect(intent).toHaveTextContent("vendor/nano-model");
   });
 
   it("explains a day that broke the ceiling rather than only colouring it", async () => {

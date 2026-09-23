@@ -127,11 +127,12 @@ export function groupByDay(rows: readonly RollupRow[]): readonly DaySpend[] {
     // keeps status as a dimension precisely so this is countable.
     if (row.status !== "ok") day.failures += row.call_count;
 
-    const taskKey = `${row.task}:${row.tier}`;
+    const taskKey = `${row.task}:${row.tier}:${row.model_id_resolved}`;
     const task = day.tasks.get(taskKey);
     day.tasks.set(taskKey, {
       task: row.task,
       tier: row.tier,
+      modelId: row.model_id_resolved,
       calls: (task?.calls ?? 0) + row.call_count,
       costEur: round((task?.costEur ?? 0) + row.cost_eur),
       inputTokens: (task?.inputTokens ?? 0) + row.input_tokens,

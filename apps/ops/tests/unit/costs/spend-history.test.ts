@@ -37,10 +37,21 @@ describe("groupByDay", () => {
     expect(days).toHaveLength(1);
     expect(days[0]?.calls).toBe(105);
     expect(days[0]?.costEur).toBe(0.76);
-    // Three rows, two models and two tasks: the dimensions collapse
-    // independently and neither double-counts the other.
+    // Three rows, two models, and three task rows because the third reached
+    // a second model: the dimensions collapse independently and neither
+    // double-counts the other.
     expect(days[0]?.byModel).toHaveLength(2);
+    expect(days[0]?.byTask).toHaveLength(3);
+    expect(days[0]?.byTask.reduce((sum, task) => sum + task.calls, 0)).toBe(105);
+  });
+
+  it("keeps a task's two models apart", () => {
+    // A fallback or a resolution to a different model is what the Model
+    // column exists to show. Merging the rows would name only one of them.
+    const days = groupByDay([row(), row({ model_id_resolved: "vendor/other", cost_eur: 0.1 })]);
+
     expect(days[0]?.byTask).toHaveLength(2);
+    expect(days[0]?.byTask.map((task) => task.modelId)).toContain("vendor/other");
   });
 
   it("keeps a task's two tiers apart", () => {

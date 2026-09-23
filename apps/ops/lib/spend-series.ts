@@ -28,6 +28,12 @@ export interface DayModelSpend {
 export interface DayTaskSpend {
   readonly task: string;
   readonly tier: string;
+  /**
+   * What the provider actually ran for this task on this day. Part of the
+   * key: a task that fell back or resolved to a second model is two rows, the
+   * same rule as the live By-task table.
+   */
+  readonly modelId: string;
   readonly calls: number;
   readonly costEur: number;
   readonly inputTokens: number;
