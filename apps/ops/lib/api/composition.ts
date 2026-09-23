@@ -2,6 +2,10 @@ import "server-only";
 
 import { createBudgetRepository, type BudgetRepository } from "@dp/db/budget-repository";
 import { createJobsRepository, type JobsRepository } from "@dp/db/jobs-repository";
+import {
+  createLearnerAdminRepository,
+  type LearnerAdminRepository,
+} from "@dp/db/learner-admin-repository";
 import { createLedgerRepository, type LedgerRepository } from "@dp/db/ledger-repository";
 import {
   createLearnerFeedbackRepository,
@@ -15,6 +19,7 @@ import { hashUserId } from "@dp/observability/pseudonym";
 import { createProductOpsRepository, type ProductOpsRepository } from "@dp/product-ops/repository";
 
 import { serverEnv } from "@/lib/env/server";
+import { createLearnerAccounts, type LearnerAccounts } from "@/lib/learner-directory";
 import { createSecretKeySupabaseClient } from "@/lib/supabase/server-client";
 
 /**
@@ -99,6 +104,32 @@ export function createCostAdmin(): CostAdmin {
     pricing: createPricingRepository(client),
     ledger: createLedgerRepository(client),
     jobs: createJobsRepository(client),
+    logger: createLogger({ base: { service: "ops", environment: env.NODE_ENV } }),
+  };
+}
+
+export interface LearnerSupport {
+  /** Any learner's rows, by id. Every method takes the learner id explicitly. */
+  readonly learners: LearnerAdminRepository;
+  /** The auth account behind a learner: lookup by email, export details, deletion. */
+  readonly accounts: LearnerAccounts;
+  readonly logger: Logger;
+}
+
+/**
+ * The learner pages' dependencies.
+ *
+ * The secret key again, which bypasses RLS: the learner tables' policies stay
+ * as they are for learners, and this app's operator check is what stands in
+ * front of these reads instead. Nothing here calls a model.
+ */
+export function createLearnerSupport(): LearnerSupport {
+  const env = serverEnv();
+  const client = createSecretKeySupabaseClient();
+
+  return {
+    learners: createLearnerAdminRepository(client as unknown as DatabaseClient),
+    accounts: createLearnerAccounts(client.auth.admin),
     logger: createLogger({ base: { service: "ops", environment: env.NODE_ENV } }),
   };
 }

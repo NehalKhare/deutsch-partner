@@ -234,9 +234,22 @@ landmark and a single `aria-current`; the bar is `fixed`, and an in-flow spacer
 under the scrolling region keeps its height clear so a page's `sticky bottom-0`
 composer rests above it. The operator's rooms run in order of attention — AI
 spend, which is the front page (`HOME_PATH` is `/costs`), then Trainer
-feedback, Feature proposals and Market Scan. Only the two leaves that need the
+feedback, Learners, Feature proposals and Market Scan. Only the two leaves that need the
 browser are client components: the nav, because the current page should say
 so, and the menu, because it opens.
+
+**Spend is four pages and learners are two, all behind the same gate.** Under
+`/costs`, a second row of tabs adds Budgets (the only writer of
+`budget_limits`, which the gateway reads before every call), Pricing (the
+snapshot jobs' output and the buttons that ask the worker to rerun them) and
+Ledger (`model_invocations`, one call at a time, bounded to 31 days).
+`/learners` lists learners by the ledger's pseudonym and `/learners/[id]` shows
+everything stored about one, with the corrections support may make, a JSON
+export and account deletion. Every read and write there goes through an
+`ops_*` database function revoked from `authenticated` and filtered on the
+learner id; account lookup and deletion go through the Auth admin API. Each
+view and each change is an audit log line under two pseudonyms — the
+operator's and the learner's — and never carries the learner's words or email.
 
 **Nothing writes a file without two approvals.** The proposal is approved before
 a PRD exists, and the plan is approved before a file is written. The approved
@@ -422,6 +435,18 @@ Stated here so nobody has to discover it by reading the code.
   schedules have not yet fired against a hosted project; PGlite cannot run
   pg_cron, so the harness strips the extension and the schedule block and a
   static test asserts both are declared.
+- **Operator changes are audited in the logs, not in a table.** Budget edits
+  and learner corrections write an audit event with the before and after, under
+  the operator's pseudonym; there is no `ops_audit_log` table to query them
+  from, and a log retention policy is the only thing keeping them.
+- **Learners cannot export or delete their own data.** Guardrails S16 asks for
+  both; today both exist only as operator actions on the learner page, done on
+  a learner's behalf.
+- **Finding a learner is a scan.** A pseudonym is a keyed hash and cannot be
+  reversed, so resolving one hashes profile ids until one matches; an email is
+  matched by paging the Auth admin user list. Both stop at 50,000 accounts and
+  say so. Past that, a stored lookup index is the fix. Neither lookup nor the
+  Auth admin deletion has yet run against the linked project.
 - **The operator app's second factor has run only against a fake auth client.**
   Enrolment, the challenge and the step-up table are tested; nobody has enrolled
   a real authenticator against the linked project yet.

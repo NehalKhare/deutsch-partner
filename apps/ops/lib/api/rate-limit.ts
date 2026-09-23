@@ -41,6 +41,12 @@ export const RATE_LIMITS = {
   // a fresh snapshot. Cheap for the database, but each one moves real money or
   // real jobs; a scripted loop should hit this long before it hits anything.
   ops_cost_admin: { limit: 20, windowMs: 60_000 },
+  // Finding a learner by email or pseudonym. Each lookup is a scan and an
+  // answer about whether an address has an account, so it is an enumeration
+  // surface as much as a support tool.
+  ops_learner_lookup: { limit: 20, windowMs: 60_000 },
+  // Correcting, exporting or deleting one learner's data.
+  ops_learner_write: { limit: 30, windowMs: 60_000 },
   // Sign-in attempts per address, on top of the auth service's own per-IP
   // limits: an operator's password is worth guessing at.
   ops_login: { limit: 5, windowMs: 15 * 60_000 },

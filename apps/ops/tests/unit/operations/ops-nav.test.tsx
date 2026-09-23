@@ -22,13 +22,14 @@ function renderNav(at: string) {
 }
 
 describe("the rooms it offers", () => {
-  it("names all four in the order of attention, each pointing at its own page", () => {
+  it("names all five in the order of attention, each pointing at its own page", () => {
     // Spend first — it is the front page — then feedback, proposals, scans.
     renderNav("/costs");
 
     const expected = [
       ["AI spend", "/costs"],
       ["Trainer feedback", "/feedback"],
+      ["Learners", "/learners"],
       ["Feature proposals", "/product"],
       ["Market Scan", "/product/runs"],
     ] as const;

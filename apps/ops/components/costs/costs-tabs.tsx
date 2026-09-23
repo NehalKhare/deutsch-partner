@@ -10,7 +10,7 @@ import { cn } from "@dp/ui/utils";
  * The four pages of the spend room.
  *
  * A second row under the operator nav rather than four more rooms in it: the
- * phone tab bar is four columns wide and full, and budgets, prices and the
+ * phone tab bar is already full, and budgets, prices and the
  * ledger are all ways of answering the spend page's question. `/costs` stays
  * the room, so "AI spend" stays lit on every one of them.
  *

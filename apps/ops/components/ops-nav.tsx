@@ -2,20 +2,20 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Lightbulb, MessageSquareText, Radar, Wallet } from "lucide-react";
+import { Lightbulb, MessageSquareText, Radar, Users, Wallet } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { focusRing } from "@dp/ui/styles";
 import { cn } from "@dp/ui/utils";
 
 /**
- * The operator's four rooms.
+ * The operator's five rooms.
  *
  * A client component only because the current page should say so; everything
  * else about it is links. The order is the order of attention: the spend is
  * the front page and the first thing to check, then what learners say about
- * the Trainer, then the proposals waiting on a decision, then the scans that
- * feed them.
+ * the Trainer, then the learners themselves, then the proposals waiting on a
+ * decision, then the scans that feed them.
  *
  * Mobile first, and one tree for both sizes — the learner's nav in the
  * operator's palette. On a phone it is a tab bar pinned under the thumb; from
@@ -27,7 +27,7 @@ import { cn } from "@dp/ui/utils";
 interface OpsRoom {
   readonly href: string;
   readonly label: string;
-  /** What fits under an icon in a quarter of a phone's width. */
+  /** What fits under an icon in a fifth of a phone's width. */
   readonly short: string;
   readonly icon: LucideIcon;
 }
@@ -35,6 +35,7 @@ interface OpsRoom {
 export const OPS_ROOMS: readonly OpsRoom[] = [
   { href: "/costs", label: "AI spend", short: "Spend", icon: Wallet },
   { href: "/feedback", label: "Trainer feedback", short: "Feedback", icon: MessageSquareText },
+  { href: "/learners", label: "Learners", short: "Learners", icon: Users },
   { href: "/product", label: "Feature proposals", short: "Proposals", icon: Lightbulb },
   { href: "/product/runs", label: "Market Scan", short: "Scan", icon: Radar },
 ];
@@ -73,7 +74,7 @@ export function OpsNav() {
     <nav
       aria-label="Operations"
       className={cn(
-        // Phone: pinned to the foot, four equal columns, clear of the home
+        // Phone: pinned to the foot, five equal columns, clear of the home
         // indicator. Frosted so a page scrolling under it stays legible.
         "fixed inset-x-0 bottom-0 z-30 border-t border-edge/60 bg-ground/90 px-2 pt-1.5",
         "h-[calc(4rem+env(safe-area-inset-bottom))] pb-[calc(0.375rem+env(safe-area-inset-bottom))]",
@@ -83,7 +84,7 @@ export function OpsNav() {
         "md:backdrop-blur-none",
       )}
     >
-      <ul className="grid h-full grid-cols-4 gap-1 md:flex md:items-center">
+      <ul className="grid h-full grid-cols-5 gap-1 md:flex md:items-center">
         {OPS_ROOMS.map((room) => {
           const here = active === room.href;
           const Icon = room.icon;
