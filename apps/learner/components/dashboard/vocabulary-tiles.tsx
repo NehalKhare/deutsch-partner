@@ -58,9 +58,9 @@ function Word({ word }: { readonly word: PractisedWord }) {
             </span>{" "}
           </>
         ) : null}
-        <span className="text-chalk">{word.word}</span>
+        <span className="text-copy">{word.word}</span>
       </span>
-      <span className="shrink-0 text-sm text-chalk/55">{word.english}</span>
+      <span className="shrink-0 text-sm text-copy/60">{word.english}</span>
     </li>
   );
 }
@@ -95,7 +95,7 @@ export function VocabularyTiles({ counts, words }: VocabularyTilesProps) {
               )}
             >
               <span className={cn(eyebrow, "block")}>{LABELS[bucket]}</span>
-              <span className="mt-1 block font-display text-2xl font-semibold tabular-nums text-chalk">
+              <span className="mt-1 block font-display text-2xl font-semibold tabular-nums text-copy">
                 {counts[bucket]}
               </span>
             </button>
@@ -107,18 +107,18 @@ export function VocabularyTiles({ counts, words }: VocabularyTilesProps) {
           labelled by always points at something a screen reader can reach. */}
       <div id={panelId} hidden={open === null}>
         {open === null ? null : (
-          <div className="rounded-2xl border border-haze/60 bg-dusk/50 px-5 py-3">
+          <div className="rounded-2xl border border-edge/60 bg-panel/50 px-5 py-3">
             {shown.length === 0 ? (
-              <p className="py-1 text-sm text-chalk/55">{WHEN_EMPTY[open]}</p>
+              <p className="py-1 text-sm text-copy/60">{WHEN_EMPTY[open]}</p>
             ) : (
               <>
-                <ul className="flex flex-col divide-y divide-haze/40">
+                <ul className="flex flex-col divide-y divide-edge/40">
                   {shown.map((word) => (
                     <Word key={`${open}:${word.id}`} word={word} />
                   ))}
                 </ul>
                 {missing > 0 ? (
-                  <p className="pt-2 text-xs text-chalk/40">
+                  <p className="pt-2 text-xs text-copy/40">
                     Showing {shown.length} of {counts[open]}.
                   </p>
                 ) : null}

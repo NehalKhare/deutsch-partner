@@ -2,7 +2,7 @@
  * The Trainer's door, lit.
  *
  * Everything else on this page is drawn rather than filled: bordered cards on
- * the ink ground, one accent used sparingly. This is the exception on purpose.
+ * the page's ground, one accent used sparingly. This is the exception on purpose.
  * A learner who does not know they have a personal trainer never opens one,
  * and a quiet link beside a heading is a thing the eye files as chrome.
  *
@@ -13,16 +13,20 @@
  */
 
 .invite {
-  --filament: #fff1dc;
-  --halogen: var(--color-apricot);
+  /* The role variables from the theme, so the bulb is lit in both themes.
+     Local aliases because `--filament` is the global name and a property
+     cannot be defined in terms of itself. */
+  --core: var(--filament);
+  --halogen: var(--apricot);
+  --deep: var(--filament-deep);
 
   position: relative;
   isolation: isolate;
   background-image: linear-gradient(
     135deg,
-    var(--filament) 0%,
+    var(--core) 0%,
     var(--halogen) 55%,
-    color-mix(in oklab, var(--halogen) 82%, #b4622f) 100%
+    color-mix(in oklab, var(--halogen) 82%, var(--deep)) 100%
   );
   box-shadow:
     inset 0 1px 0 color-mix(in oklab, #fff 55%, transparent),

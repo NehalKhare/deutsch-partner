@@ -86,14 +86,14 @@ export function RunActivityPanel({
               {/* The word an operator scans for, before reading the sentence. */}
               {headline(report)}
             </span>
-            <p className="font-display text-sm text-chalk/70">{report.message}</p>
+            <p className="font-display text-sm text-copy/70">{report.message}</p>
           </div>
           <RunLiveFeed runId={report.run.id} working={report.activity === "working"} />
         </div>
       ))}
 
       {polling ? (
-        <p className="font-display text-xs text-chalk/40">
+        <p className="font-display text-xs text-copy/40">
           This page is updating itself while the work runs.
         </p>
       ) : null}

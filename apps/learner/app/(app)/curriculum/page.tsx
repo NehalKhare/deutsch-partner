@@ -121,7 +121,7 @@ export default async function CurriculumPage({
                 "flex items-baseline gap-2 rounded-full border px-5 py-2 font-display text-sm transition-colors",
                 active
                   ? "border-apricot bg-apricot/15 text-apricot"
-                  : "border-haze text-chalk/60 hover:border-chalk/40 hover:text-chalk",
+                  : "border-edge text-copy/60 hover:border-copy/40 hover:text-copy",
                 focusRing,
               )}
             >
@@ -130,7 +130,7 @@ export default async function CurriculumPage({
                 {range.first}–{range.last}
               </span>
               {learner?.effectiveLevel.cefr === level ? (
-                <span className="text-xs text-chalk/50">you are here</span>
+                <span className="text-xs text-copy/60">you are here</span>
               ) : null}
             </Link>
           );
@@ -148,13 +148,13 @@ export default async function CurriculumPage({
 
       {learner ? (
         <div className={cn(card, "flex flex-col gap-3")}>
-          <p className="text-chalk/80">
-            You are on <strong className="text-chalk">mini-level {at}</strong> —{" "}
+          <p className="text-copy/80">
+            You are on <strong className="text-copy">mini-level {at}</strong> —{" "}
             <span lang="de">{getMiniLevel(learner.miniLevel).theme}</span>, which
             is {learner.effectiveLevel.cefr}.
           </p>
           {isCurrentBand ? (
-            <p className="text-xs text-chalk/45">
+            <p className="text-xs text-copy/45">
               This is the level you are being taught at. Pick any mini-level
               below to stand somewhere else.
             </p>
@@ -181,7 +181,7 @@ export default async function CurriculumPage({
               <span className="text-das">das</span>
             </span>
           </h2>
-          <p className="text-sm text-chalk/55">
+          <p className="text-sm text-copy/60">
             Every noun {showing} teaches, in its own column. {band.nounCount} of
             them.
           </p>
@@ -205,17 +205,17 @@ export default async function CurriculumPage({
                 lang="de"
               >
                 {group.article}
-                <span className="ml-2 text-xs font-normal tabular-nums text-chalk/40">
+                <span className="ml-2 text-xs font-normal tabular-nums text-copy/40">
                   {group.words.length}
                 </span>
               </p>
               <ul className="flex flex-col gap-1.5">
                 {group.words.map((word) => (
                   <li key={word.word} className="text-sm leading-snug">
-                    <span lang="de" className="text-chalk">
+                    <span lang="de" className="text-copy">
                       {word.word}
                     </span>
-                    <span className="text-chalk/60"> — {word.english}</span>
+                    <span className="text-copy/60"> — {word.english}</span>
                   </li>
                 ))}
               </ul>
@@ -229,7 +229,7 @@ export default async function CurriculumPage({
           <h2 id="levels-heading" className={sectionTitle}>
             Mini-levels {band.first} to {band.last}
           </h2>
-          <p className="text-sm text-chalk/55">
+          <p className="text-sm text-copy/60">
             Open one to see its words — or stand on it and practise.
           </p>
         </div>
@@ -263,17 +263,17 @@ export default async function CurriculumPage({
                         say they open before somebody happens to click one. */}
                     <span
                       aria-hidden
-                      className="self-center text-[0.6rem] text-chalk/40 transition-transform group-open:rotate-90"
+                      className="self-center text-[0.6rem] text-copy/40 transition-transform group-open:rotate-90"
                     >
                       ▶
                     </span>
-                    <span className="w-6 text-right font-display text-xs tabular-nums text-chalk/40">
+                    <span className="w-6 text-right font-display text-xs tabular-nums text-copy/40">
                       {level.miniLevel}
                     </span>
-                    <span lang="de" className="font-display font-medium text-chalk">
+                    <span lang="de" className="font-display font-medium text-copy">
                       {level.theme}
                     </span>
-                    <span className="text-sm text-chalk/50">{level.focus}</span>
+                    <span className="text-sm text-copy/60">{level.focus}</span>
                     {tally ? (
                       <span className="font-display text-xs tabular-nums text-sprout/90">
                         {Math.round(tally.score * 100)}% · {tally.turns}{" "}
@@ -285,13 +285,13 @@ export default async function CurriculumPage({
                         you are here
                       </span>
                     ) : skipped ? (
-                      <span className="ml-auto font-display text-xs uppercase tracking-wider text-chalk/50">
+                      <span className="ml-auto font-display text-xs uppercase tracking-wider text-copy/60">
                         skipped
                       </span>
                     ) : null}
                   </summary>
 
-                  <div className="flex flex-col gap-4 border-t border-haze/50 px-5 py-4">
+                  <div className="flex flex-col gap-4 border-t border-edge/50 px-5 py-4">
                     {/* Standing somewhere and talking from it are one gesture
                         apart. Practise moves you there and opens the
                         conversation; Start here just moves you. */}
@@ -323,7 +323,7 @@ export default async function CurriculumPage({
                     </div>
 
                     {level.grammar.length > 0 ? (
-                      <p className="text-sm text-chalk/55">
+                      <p className="text-sm text-copy/60">
                         <span className={eyebrow}>Grammar</span>{" "}
                         {level.grammar.join(" · ")}
                       </p>
@@ -342,27 +342,27 @@ export default async function CurriculumPage({
                       </thead>
                       <tbody>
                         {level.words.map((word) => (
-                          <tr key={word.word} className="border-t border-haze/40">
+                          <tr key={word.word} className="border-t border-edge/40">
                             <td lang="de" className="py-1.5 pr-3">
                               {word.article ? (
                                 <>
                                   <span className={cn("font-medium", ARTICLE_COLOR[word.article])}>
                                     {word.article}
                                   </span>{" "}
-                                  <span className="text-chalk">
+                                  <span className="text-copy">
                                     {word.word.replace(/^(der|die|das)\s+/u, "")}
                                   </span>
                                 </>
                               ) : (
-                                <span className="text-chalk">{word.word}</span>
+                                <span className="text-copy">{word.word}</span>
                               )}
                             </td>
-                            <td className="py-1.5 pr-3 text-chalk/60">
+                            <td className="py-1.5 pr-3 text-copy/60">
                               {word.english}
                             </td>
                             <td
                               lang="de"
-                              className="hidden py-1.5 text-chalk/55 sm:table-cell"
+                              className="hidden py-1.5 text-copy/60 sm:table-cell"
                             >
                               {word.plural ?? "—"}
                             </td>

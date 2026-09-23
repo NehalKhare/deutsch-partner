@@ -32,7 +32,7 @@ export function PlanCopy({ markdown }: { readonly markdown: string }) {
         <button type="button" onClick={copy} className={buttonQuiet}>
           Copy the plan as Markdown
         </button>
-        <span role="status" className="font-display text-xs text-chalk/50">
+        <span role="status" className="font-display text-xs text-copy/60">
           {state === "copied"
             ? "Copied."
             : state === "refused"
@@ -40,7 +40,7 @@ export function PlanCopy({ markdown }: { readonly markdown: string }) {
               : ""}
         </span>
       </div>
-      <pre className="max-h-96 overflow-auto rounded-xl border border-haze/60 bg-ink/60 p-4 font-mono text-xs leading-relaxed text-chalk/75 whitespace-pre-wrap">
+      <pre className="max-h-96 overflow-auto rounded-xl border border-edge/60 bg-ground/60 p-4 font-mono text-xs leading-relaxed text-copy/75 whitespace-pre-wrap">
         {markdown}
       </pre>
     </div>

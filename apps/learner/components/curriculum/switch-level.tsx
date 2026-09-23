@@ -45,7 +45,7 @@ export function SwitchLevel({
         >
           {pending ? "Moving…" : `Learn ${level} instead`}
         </button>
-        <span className="text-xs text-chalk/50">
+        <span className="text-xs text-copy/60">
           Picks up at mini-level {miniLevel}, {theme}
         </span>
       </form>

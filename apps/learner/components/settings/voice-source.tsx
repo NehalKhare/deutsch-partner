@@ -43,7 +43,7 @@ export function VoiceSourceSetting() {
 
   return (
     <fieldset className="flex flex-col gap-3">
-      <legend className="font-display text-sm font-medium text-chalk/80">
+      <legend className="font-display text-sm font-medium text-copy/80">
         Where the read-aloud voice comes from
       </legend>
       <div className="flex flex-col gap-2">
@@ -59,12 +59,12 @@ export function VoiceSourceSetting() {
             />
             <span className="flex flex-col gap-0.5">
               <span>{option.label}</span>
-              <span className="text-xs text-chalk/45">{option.detail}</span>
+              <span className="text-xs text-copy/45">{option.detail}</span>
             </span>
           </label>
         ))}
       </div>
-      <p className="text-xs text-chalk/45">
+      <p className="text-xs text-copy/45">
         Saved straight away, and only on this device — each of your devices can
         answer this differently.
       </p>

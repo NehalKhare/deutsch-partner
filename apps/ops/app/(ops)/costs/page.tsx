@@ -104,7 +104,7 @@ export default async function CostDashboardPage() {
     <main className="mx-auto flex w-full max-w-4xl flex-col gap-8 px-6 py-10 md:px-10 md:py-14">
       <header className="flex flex-col gap-2">
         <h1 className={pageTitle}>AI spend</h1>
-        <p className="font-display text-sm text-chalk/50">
+        <p className="font-display text-sm text-copy/60">
           Last 24 hours · status {worstAlert(alerts)}
           {rate
             ? ` · EUR ${rate.rate} per USD, ${rate.rateDate} (${rate.source})`
@@ -114,7 +114,7 @@ export default async function CostDashboardPage() {
         {/* Said once, here, rather than as a banner: it is a caveat about how
             one figure was arrived at, not something wrong with the day. */}
         {euro.estimatedCalls > 0 ? (
-          <p className="font-display text-sm text-chalk/40">
+          <p className="font-display text-sm text-copy/40">
             €{money(euro.estimated)} of that is {euro.estimatedCalls} call
             {euro.estimatedCalls === 1 ? "" : "s"} converted at this rate — they
             were written before any rate existed and carry none of their own.
@@ -125,7 +125,7 @@ export default async function CostDashboardPage() {
         <form action={refreshFxRateAction}>
           <button
             type="submit"
-            className="rounded-lg border border-haze/60 px-3 py-1 font-display text-xs uppercase tracking-wide text-chalk/60 transition-colors hover:border-chalk/40 hover:text-chalk"
+            className="rounded-lg border border-edge/60 px-3 py-1 font-display text-xs uppercase tracking-wide text-copy/60 transition-colors hover:border-copy/40 hover:text-copy"
           >
             {/* The source is read once a day on its own. This is the rest of
                 the day — it publishes in the afternoon. */}
@@ -160,12 +160,12 @@ export default async function CostDashboardPage() {
         {tiles.map((tile) => (
           <div key={tile.label} className={stat}>
             <dt className={eyebrow}>{tile.label}</dt>
-            <dd className="mt-1 font-display text-xl font-semibold tabular-nums text-chalk">
+            <dd className="mt-1 font-display text-xl font-semibold tabular-nums text-copy">
               {tile.value}
               {/* Euro leads and dollars sit under it, quietly: the same money
                   twice, one figure of which can be missing. */}
               {tile.secondary === undefined ? null : (
-                <span className="block text-sm font-normal text-chalk/45">
+                <span className="block text-sm font-normal text-copy/45">
                   {tile.secondary}
                 </span>
               )}
@@ -192,8 +192,8 @@ export default async function CostDashboardPage() {
           </thead>
           <tbody>
             {data.byTask.length === 0 ? (
-              <tr className="border-t border-haze/50">
-                <td colSpan={7} className="py-3 font-body text-chalk/45">
+              <tr className="border-t border-edge/50">
+                <td colSpan={7} className="py-3 font-body text-copy/45">
                   No calls in this window.
                 </td>
               </tr>
@@ -201,7 +201,7 @@ export default async function CostDashboardPage() {
             {data.byTask.map((row) => (
               <tr
                 key={`${row.task}:${row.tier}`}
-                className="border-t border-haze/50 text-chalk/80"
+                className="border-t border-edge/50 text-copy/80"
               >
                 <td className="py-1">{row.task}</td>
                 <td>{row.tier}</td>
@@ -233,14 +233,14 @@ export default async function CostDashboardPage() {
           </thead>
           <tbody>
             {data.byModel.length === 0 ? (
-              <tr className="border-t border-haze/50">
-                <td colSpan={4} className="py-3 font-body text-chalk/45">
+              <tr className="border-t border-edge/50">
+                <td colSpan={4} className="py-3 font-body text-copy/45">
                   No calls in this window.
                 </td>
               </tr>
             ) : null}
             {data.byModel.map((row) => (
-              <tr key={row.modelId} className="border-t border-haze/50 text-chalk/80">
+              <tr key={row.modelId} className="border-t border-edge/50 text-copy/80">
                 <td className="py-1">{row.modelId}</td>
                 <td className="text-right tabular-nums">{row.calls}</td>
                 <td className="text-right tabular-nums">

@@ -1,3 +1,4 @@
+import { ThemeToggle } from "./theme-toggle";
 import { Wordmark } from "./wordmark";
 
 /**
@@ -18,9 +19,12 @@ export function QuietShell({
   width?: "narrow" | "wide";
 }) {
   return (
-    <div className="flex min-h-dvh flex-col bg-ink font-body text-chalk">
-      <header className="flex items-center px-6 py-4 md:px-10">
+    <div className="flex min-h-dvh flex-col bg-ground font-body text-copy">
+      <header className="flex items-center justify-between gap-4 px-6 py-4 md:px-10">
         <Wordmark />
+        {/* Signing in is the one place a reader is on this product without an
+            account to hang a preference on, so the switch has to be here too. */}
+        <ThemeToggle hideLegend />
       </header>
       <main
         className={[

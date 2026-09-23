@@ -137,7 +137,7 @@ export default async function ProposalPage({
           </Link>
         </p>
         <h1 className={pageTitle}>{proposal.data.title}</h1>
-        <p className="font-display text-sm text-chalk/50">
+        <p className="font-display text-sm text-copy/60">
           {proposal.data.status.replace(/_/g, " ")}
           {stage ? ` · run at ${stage.replace(/_/g, " ")}` : ""}
           {` · €${spentEur.toFixed(4)} spent`}
@@ -149,26 +149,26 @@ export default async function ProposalPage({
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div className={stat}>
           <dt className={eyebrow}>Priority</dt>
-          <dd className="mt-1 font-display text-xl font-semibold tabular-nums text-chalk">
+          <dd className="mt-1 font-display text-xl font-semibold tabular-nums text-copy">
             {proposal.data.priorityScore}
-            <span className="text-sm font-normal text-chalk/45">/100</span>
+            <span className="text-sm font-normal text-copy/45">/100</span>
           </dd>
         </div>
         <div className={stat}>
           <dt className={eyebrow}>Effort</dt>
-          <dd className="mt-1 font-display text-xl font-semibold text-chalk">
+          <dd className="mt-1 font-display text-xl font-semibold text-copy">
             {proposal.data.complexity}
           </dd>
         </div>
         <div className={stat}>
           <dt className={eyebrow}>Evidence</dt>
-          <dd className="mt-1 font-display text-xl font-semibold tabular-nums text-chalk">
+          <dd className="mt-1 font-display text-xl font-semibold tabular-nums text-copy">
             {proposal.data.supportingResearch.length}
           </dd>
         </div>
         <div className={stat}>
           <dt className={eyebrow}>Decisions</dt>
-          <dd className="mt-1 font-display text-xl font-semibold tabular-nums text-chalk">
+          <dd className="mt-1 font-display text-xl font-semibold tabular-nums text-copy">
             {reviews.ok ? reviews.data.length : 0}
           </dd>
         </div>
@@ -210,7 +210,7 @@ export default async function ProposalPage({
 
           {prd.ok && prd.data ? (
             <SectionPanel id="prd-heading" title="PRD">
-              <p className="font-display text-xs text-chalk/40">
+              <p className="font-display text-xs text-copy/40">
                 Stored in the database, projected to{" "}
                 <code className="font-mono">{prd.data.filePath}</code> for the
                 worker. If the two disagree, the row is right.
@@ -230,7 +230,7 @@ export default async function ProposalPage({
 
           {plan.ok && plan.data ? (
             <SectionPanel id="plan-heading" title="Implementation plan" defaultOpen>
-              <p className="font-display text-xs text-chalk/40">
+              <p className="font-display text-xs text-copy/40">
                 {plan.data.status === "approved"
                   ? "Accepted. This is the run's deliverable; copy it below."
                   : "Not yet accepted. Read it, copy it if you want it, then decide below."}
@@ -241,7 +241,7 @@ export default async function ProposalPage({
               {plan.data.breakdown ? (
                 <Breakdown breakdown={plan.data.breakdown} />
               ) : (
-                <p className="font-display text-xs text-chalk/40">
+                <p className="font-display text-xs text-copy/40">
                   The engineering breakdown has not been written yet. If the run
                   stopped, trying it again writes only this half.
                 </p>
@@ -268,7 +268,7 @@ export default async function ProposalPage({
               <ul className="flex flex-col gap-3">
                 {scanFindings.map((finding) => (
                   <li key={finding.id} className={cn(card, "flex flex-col gap-1 p-3.5")}>
-                    <p className="font-display text-sm font-semibold text-chalk">
+                    <p className="font-display text-sm font-semibold text-copy">
                       {finding.sourceUrl ? (
                         <a
                           href={finding.sourceUrl}
@@ -282,7 +282,7 @@ export default async function ProposalPage({
                         finding.title
                       )}
                     </p>
-                    <p className="font-display text-xs text-chalk/40">
+                    <p className="font-display text-xs text-copy/40">
                       {finding.sourceType}
                       {finding.relevanceScore === null
                         ? ""
@@ -314,23 +314,23 @@ export default async function ProposalPage({
               </thead>
               <tbody>
                 {timeline.length === 0 ? (
-                  <tr className="border-t border-haze/50">
-                    <td colSpan={4} className="py-3 font-body text-chalk/45">
+                  <tr className="border-t border-edge/50">
+                    <td colSpan={4} className="py-3 font-body text-copy/45">
                       Nothing recorded yet.
                     </td>
                   </tr>
                 ) : null}
                 {timeline.map((entry) => (
-                  <tr key={entry.id} className="border-t border-haze/50 text-chalk/80">
+                  <tr key={entry.id} className="border-t border-edge/50 text-copy/80">
                     <td className="py-1">{entry.stage.replace(/_/g, " ")}</td>
                     <td className={entry.status === "failed" ? "text-ember" : undefined}>
                       {entry.entered ? "entered" : entry.status.replace(/_/g, " ")}
                       {entry.errorCode ? ` · ${entry.errorCode}` : ""}
                     </td>
-                    <td className="text-right tabular-nums text-chalk/55">
+                    <td className="text-right tabular-nums text-copy/60">
                       {entry.costEur === 0 ? "—" : entry.costEur.toFixed(6)}
                     </td>
-                    <td className="text-chalk/45">
+                    <td className="text-copy/45">
                       {entry.notes
                         .map((note) => `${note.label}: ${note.value}`)
                         .join(" · ") || "—"}
@@ -361,7 +361,7 @@ export default async function ProposalPage({
                 have. Run this where the repository is checked out; it is safe to
                 run twice.
               </p>
-              <code className="overflow-x-auto rounded bg-ink/60 px-3 py-2 font-mono text-xs text-chalk/70">
+              <code className="overflow-x-auto rounded bg-ground/60 px-3 py-2 font-mono text-xs text-copy/70">
                 {workerCommandFor(proposal.data.id)}
               </code>
             </SectionPanel>
@@ -431,19 +431,19 @@ function Breakdown({ breakdown }: { readonly breakdown: EngineeringBreakdown }) 
       <div className="flex flex-col gap-1">
         <h3 className={eyebrow}>Engineering breakdown</h3>
         <p className={cn(prose, "text-sm")}>{breakdown.summary}</p>
-        <p className="font-display text-xs text-chalk/50">
+        <p className="font-display text-xs text-copy/60">
           Overall size <SizeBadge size={breakdown.overallSize} />
         </p>
       </div>
 
       {breakdown.phases.map((phase, index) => (
         <div key={phase.name} className="flex flex-col gap-2 overflow-x-auto">
-          <h4 className="font-display text-sm font-semibold text-chalk">
+          <h4 className="font-display text-sm font-semibold text-copy">
             Phase {index + 1}: {phase.name}
           </h4>
           <p className={cn(prose, "text-sm")}>{phase.goal}</p>
           <table className="w-full text-left font-display text-xs">
-            <thead className="text-chalk/45">
+            <thead className="text-copy/45">
               <tr>
                 <th className="py-1 pr-3 font-medium">ID</th>
                 <th className="py-1 pr-3 font-medium">Requirement</th>
@@ -454,15 +454,15 @@ function Breakdown({ breakdown }: { readonly breakdown: EngineeringBreakdown }) 
             <tbody>
               {phase.requirements.map((requirement) => (
                 <tr key={requirement.id} className={cn("border-t align-top", hairline)}>
-                  <td className="py-2 pr-3 font-mono text-chalk/60">{requirement.id}</td>
+                  <td className="py-2 pr-3 font-mono text-copy/60">{requirement.id}</td>
                   <td className="py-2 pr-3">
-                    <p className="text-chalk">{requirement.title}</p>
-                    <p className="mt-0.5 text-chalk/60">{requirement.description}</p>
+                    <p className="text-copy">{requirement.title}</p>
+                    <p className="mt-0.5 text-copy/60">{requirement.description}</p>
                   </td>
                   <td className="py-2 pr-3">
                     <SizeBadge size={requirement.size} />
                   </td>
-                  <td className="py-2 pr-3 font-mono text-chalk/60">
+                  <td className="py-2 pr-3 font-mono text-copy/60">
                     {requirement.dependsOn.length === 0 ? "—" : requirement.dependsOn.join(", ")}
                   </td>
                 </tr>
@@ -473,26 +473,26 @@ function Breakdown({ breakdown }: { readonly breakdown: EngineeringBreakdown }) 
       ))}
 
       <div className="flex flex-col gap-2">
-        <h4 className="font-display text-sm font-semibold text-chalk">Technical guidance</h4>
+        <h4 className="font-display text-sm font-semibold text-copy">Technical guidance</h4>
         <ul className="grid gap-2 md:grid-cols-2">
           {breakdown.technicalGuidance.map((guidance) => (
             <li key={guidance.topic} className={cn(card, "flex flex-col gap-1.5 p-3.5")}>
-              <p className="font-display text-sm font-semibold text-chalk">{guidance.topic}</p>
+              <p className="font-display text-sm font-semibold text-copy">{guidance.topic}</p>
               <p className={cn(prose, "text-sm")}>
-                <span className="text-chalk/45">Now: </span>
+                <span className="text-copy/45">Now: </span>
                 {guidance.current}
               </p>
               <p className={cn(prose, "text-sm")}>
-                <span className="text-chalk/45">Recommendation: </span>
+                <span className="text-copy/45">Recommendation: </span>
                 {guidance.recommendation}
               </p>
               <div className="grid gap-1 sm:grid-cols-2">
-                <ul className="font-display text-xs text-chalk/60">
+                <ul className="font-display text-xs text-copy/60">
                   {guidance.pros.map((pro) => (
                     <li key={pro}>+ {pro}</li>
                   ))}
                 </ul>
-                <ul className="font-display text-xs text-chalk/60">
+                <ul className="font-display text-xs text-copy/60">
                   {guidance.cons.map((con) => (
                     <li key={con}>− {con}</li>
                   ))}
@@ -508,7 +508,7 @@ function Breakdown({ breakdown }: { readonly breakdown: EngineeringBreakdown }) 
 
 function SizeBadge({ size }: { readonly size: TShirtSize }) {
   return (
-    <span className="rounded-full border border-haze px-2 py-0.5 font-display text-[0.65rem] font-semibold uppercase tracking-wider text-apricot">
+    <span className="rounded-full border border-edge px-2 py-0.5 font-display text-[0.65rem] font-semibold uppercase tracking-wider text-apricot">
       {sizeLabel(size)}
     </span>
   );
@@ -526,9 +526,9 @@ function Bullets({
   return (
     <div className="flex flex-col gap-1">
       <h3 className={eyebrow}>{label}</h3>
-      {note ? <p className="font-display text-xs text-chalk/35">{note}</p> : null}
+      {note ? <p className="font-display text-xs text-copy/35">{note}</p> : null}
       {items.length === 0 ? (
-        <p className="font-display text-sm text-chalk/35">None.</p>
+        <p className="font-display text-sm text-copy/35">None.</p>
       ) : (
         <ul className={cn(prose, "list-inside list-disc text-sm")}>
           {items.map((item, index) => (
@@ -551,7 +551,7 @@ function PlanFiles({
     <div className="flex flex-col gap-1">
       <h3 className={eyebrow}>{label}</h3>
       {paths.length === 0 ? (
-        <p className="font-display text-sm text-chalk/35">None.</p>
+        <p className="font-display text-sm text-copy/35">None.</p>
       ) : (
         <ul className="flex flex-col gap-0.5">
           {paths.map((path) => {
@@ -559,7 +559,7 @@ function PlanFiles({
 
             return (
               <li key={path} className="font-mono text-xs">
-                <span className={denied ? "text-ember" : "text-chalk/70"}>
+                <span className={denied ? "text-ember" : "text-copy/70"}>
                   {path}
                 </span>
                 {/* Shown rather than removed: the plan asked for it, and the
@@ -585,10 +585,10 @@ function Decision({ review }: { readonly review: ProposalReview }) {
 
   return (
     <div className="flex flex-col gap-1">
-      <p className="font-display text-sm text-chalk/80">
+      <p className="font-display text-sm text-copy/80">
         {review.action.replace(/_/g, " ")}
         {moved ? ` · ${review.previousPriority ?? "—"} → ${review.newPriority}` : ""}
-        <span className="ml-2 text-xs text-chalk/40">
+        <span className="ml-2 text-xs text-copy/40">
           {review.createdAt.toISOString().slice(0, 16)}
         </span>
       </p>

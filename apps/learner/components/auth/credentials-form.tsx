@@ -11,7 +11,7 @@ import {
 import type { AuthFormState } from "@dp/auth/form-state";
 import { MIN_PASSWORD_LENGTH } from "@dp/auth/credentials";
 
-const label = "font-display text-sm font-medium text-chalk/80";
+const label = "font-display text-sm font-medium text-copy/80";
 
 export interface CredentialsFormProps {
   readonly mode: "sign-in" | "sign-up";
@@ -63,7 +63,7 @@ export function CredentialsForm({
           className={field}
         />
         {isSignUp ? (
-          <p id="password-hint" className="text-xs text-chalk/45">
+          <p id="password-hint" className="text-xs text-copy/45">
             At least {MIN_PASSWORD_LENGTH} characters.
           </p>
         ) : null}
@@ -114,7 +114,7 @@ export function CredentialsForm({
             : "Sign in"}
       </button>
 
-      <p className="text-sm text-chalk/60">
+      <p className="text-sm text-copy/60">
         {isSignUp ? "Already have an account? " : "New here? "}
         <Link
           href={isSignUp ? "/auth/login" : "/auth/sign-up"}

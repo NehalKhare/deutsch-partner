@@ -132,7 +132,7 @@ export function ScenarioExplorer({
               "rounded-full px-3 py-1.5 font-display text-sm whitespace-nowrap transition-colors",
               filter === tab.value
                 ? "bg-apricot/15 text-apricot"
-                : "text-chalk/55 hover:text-chalk",
+                : "text-copy/60 hover:text-copy",
               focusRing,
             )}
           >
@@ -145,7 +145,7 @@ export function ScenarioExplorer({
             type="button"
             onClick={clearSearch}
             className={cn(
-              "ml-auto font-display text-sm text-chalk/55 underline underline-offset-4 hover:text-chalk",
+              "ml-auto font-display text-sm text-copy/60 underline underline-offset-4 hover:text-copy",
               focusRing,
               "rounded-sm",
             )}
@@ -162,7 +162,7 @@ export function ScenarioExplorer({
       )}
 
       {shown.length === 0 ? (
-        <p className="leading-relaxed text-chalk/70">
+        <p className="leading-relaxed text-copy/70">
           {results !== null
             ? "Nothing matched that search. Try different words, or show all scenarios."
             : "No scenarios here yet."}

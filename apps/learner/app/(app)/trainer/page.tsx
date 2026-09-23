@@ -41,7 +41,7 @@ export default async function TrainerPage() {
 
   return (
     <main className="mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col gap-6 px-6 pt-6 md:px-10">
-      <header className="flex flex-col gap-2 border-b border-haze/60 pb-4">
+      <header className="flex flex-col gap-2 border-b border-edge/60 pb-4">
         <p className={eyebrow}>Practice, with receipts</p>
         <h1 className={pageTitle}>Trainer</h1>
         <p className={cn(prose, "max-w-xl text-sm")}>

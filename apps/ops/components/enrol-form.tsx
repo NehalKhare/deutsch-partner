@@ -47,13 +47,13 @@ export function EnrolForm({ action, initialState }: EnrolFormProps) {
       <p className={prose}>Scan this with your authenticator app, then enter the code it shows.</p>
       {/* Supabase hands back an SVG data URL; an img keeps it out of the DOM as markup. */}
       {/* eslint-disable-next-line @next/next/no-img-element -- a data URL, not an asset to optimise */}
-      <img src={state.qrCode} alt="Authenticator enrolment QR code" width={192} height={192} className="rounded-lg bg-chalk p-2" />
-      <details className="text-sm text-chalk/60">
+      <img src={state.qrCode} alt="Authenticator enrolment QR code" width={192} height={192} className="rounded-lg bg-white p-2" />
+      <details className="text-sm text-copy/60">
         <summary className={buttonQuiet}>Can&apos;t scan? Enter the key by hand</summary>
-        <code className="mt-2 block break-all font-mono text-xs text-chalk/80">{state.secret}</code>
+        <code className="mt-2 block break-all font-mono text-xs text-copy/80">{state.secret}</code>
       </details>
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="code" className="font-display text-sm font-medium text-chalk/80">
+        <label htmlFor="code" className="font-display text-sm font-medium text-copy/80">
           Code
         </label>
         <input

@@ -69,7 +69,7 @@ function ReadAloudToggle({
       className={cn(
         "flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 font-display text-xs",
         "uppercase tracking-wider transition-colors",
-        on ? "text-apricot" : "text-chalk/70 hover:text-chalk",
+        on ? "text-apricot" : "text-copy/70 hover:text-copy",
         focusRing,
       )}
     >
@@ -93,9 +93,9 @@ function CoachingNote({ dials }: { readonly dials: CoachingDials | null }) {
   return (
     <p
       data-role="coaching"
-      className="rounded-2xl border border-haze/70 bg-dusk/70 px-4 py-3 text-xs text-chalk/55"
+      className="rounded-2xl border border-edge/70 bg-panel/70 px-4 py-3 text-xs text-copy/60"
     >
-      <span className="uppercase tracking-[0.14em] text-chalk/45">Tuned for you</span>
+      <span className="uppercase tracking-[0.14em] text-copy/45">Tuned for you</span>
       <br />
       {describeDials(dials).join(" · ")}
     </p>
@@ -305,14 +305,14 @@ export function TrainerSession({
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
           {entries.length === 0 ? (
             <div className="m-auto flex max-w-sm flex-col gap-2 text-center">
-              <p className="text-chalk/45">
+              <p className="text-copy/45">
                 Your trainer runs the drills the tutor does not: say{" "}
-                <span lang="de" className="text-chalk/70">
+                <span lang="de" className="text-copy/70">
                   „Lass uns üben!“
                 </span>{" "}
                 to review your due words, or ask anything about your progress.
               </p>
-              <p className="text-xs text-chalk/55">
+              <p className="text-xs text-copy/60">
                 The trainer shows which tools it used to answer.
               </p>
             </div>
@@ -324,7 +324,7 @@ export function TrainerSession({
                 <li
                   key={entry.id}
                   data-role="user"
-                  className="max-w-[85%] self-end rounded-2xl rounded-br-md bg-apricot px-4 py-2.5 leading-relaxed text-ink"
+                  className="max-w-[85%] self-end rounded-2xl rounded-br-md bg-apricot px-4 py-2.5 leading-relaxed text-on-accent"
                 >
                   {entry.content}
                 </li>
@@ -337,7 +337,7 @@ export function TrainerSession({
                   <div className="flex items-start gap-1.5">
                     <span
                       lang="de"
-                      className="rounded-2xl rounded-bl-md border border-haze/70 bg-dusk px-4 py-2.5 leading-relaxed text-chalk"
+                      className="rounded-2xl rounded-bl-md border border-edge/70 bg-panel px-4 py-2.5 leading-relaxed text-copy"
                     >
                       <RichText content={entry.content} />
                     </span>
@@ -352,7 +352,7 @@ export function TrainerSession({
                         }
                         aria-pressed={speakingId === entry.id}
                         className={cn(
-                          "mt-1.5 shrink-0 rounded-full p-1.5 text-chalk/50 transition-colors hover:text-apricot",
+                          "mt-1.5 shrink-0 rounded-full p-1.5 text-copy/60 transition-colors hover:text-apricot",
                           speakingId === entry.id && "text-apricot",
                           focusRing,
                         )}
@@ -371,15 +371,15 @@ export function TrainerSession({
                       {entry.steps.map((step, index) => (
                         <li
                           key={`${entry.id}-step-${index}`}
-                          className="flex items-baseline gap-2 text-xs text-chalk/55"
+                          className="flex items-baseline gap-2 text-xs text-copy/60"
                         >
                           <span aria-hidden className="text-apricot/70">
                             ⚙
                           </span>
                           <span>
-                            <span className="text-chalk/75">{toolLabel(step.tool)}</span>
+                            <span className="text-copy/75">{toolLabel(step.tool)}</span>
                             {step.summary ? (
-                              <span className="text-chalk/40"> — {step.summary}</span>
+                              <span className="text-copy/40"> — {step.summary}</span>
                             ) : null}
                           </span>
                         </li>
@@ -388,7 +388,7 @@ export function TrainerSession({
                   ) : null}
 
                   {entry.sources && entry.sources.length > 0 ? (
-                    <p data-role="sources" className="px-1 text-xs text-chalk/45">
+                    <p data-role="sources" className="px-1 text-xs text-copy/45">
                       Sources:{" "}
                       {entry.sources
                         .map((source) => `${source.contentType} #${source.documentId}`)
@@ -409,7 +409,7 @@ export function TrainerSession({
         {/* One request is a whole agent loop, so the wait deserves an honest
             working indicator rather than a frozen page. */}
         {pending ? (
-          <p role="status" className="flex items-center gap-2 px-1 text-sm text-chalk/55">
+          <p role="status" className="flex items-center gap-2 px-1 text-sm text-copy/60">
             <span
               aria-hidden
               className="size-2 animate-pulse rounded-full bg-apricot"
@@ -424,7 +424,7 @@ export function TrainerSession({
             are said quietly, and never as the red banner that means "your turn
             did not happen". */}
         {voiceNotice ? (
-          <p role="status" className="px-1 text-xs text-chalk/55">
+          <p role="status" className="px-1 text-xs text-copy/60">
             {voiceNotice}
           </p>
         ) : null}
@@ -441,9 +441,9 @@ export function TrainerSession({
         {complete ? (
           <section
             data-role="session-end"
-            className="sticky bottom-0 flex flex-col gap-3 border-t border-haze/60 bg-ink/95 py-4 backdrop-blur"
+            className="sticky bottom-0 flex flex-col gap-3 border-t border-edge/60 bg-ground/95 py-4 backdrop-blur"
           >
-            <p className="text-sm text-chalk/70">
+            <p className="text-sm text-copy/70">
               Session complete — that is everything that was due. Your trainer&apos;s
               last message is what to take away.
             </p>
@@ -457,7 +457,7 @@ export function TrainerSession({
           </section>
         ) : (
           <form
-            className="sticky bottom-0 flex items-center gap-3 border-t border-haze/60 bg-ink/95 py-4 backdrop-blur"
+            className="sticky bottom-0 flex items-center gap-3 border-t border-edge/60 bg-ground/95 py-4 backdrop-blur"
             onSubmit={(event) => {
               event.preventDefault();
               const message = draft.trim();

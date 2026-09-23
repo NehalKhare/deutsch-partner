@@ -1,16 +1,21 @@
 /**
  * The visual language, written down once.
  *
- * Every page in the product is the same room: deep blue ground, warm accent,
- * a tight display face for chrome and a serif for anything a learner reads as
- * a sentence. Keeping the strings here rather than at each call site is what
+ * Every page in the product is the same room: one ground, one warm accent, a
+ * tight display face for chrome and a serif for anything a learner reads as a
+ * sentence. Keeping the strings here rather than at each call site is what
  * stops the fifth page from being nearly the same as the other four.
+ *
+ * The colours are named for the role they play — `ground`, `panel`, `edge`,
+ * `copy`, `on-accent` — rather than for a material, because the same class
+ * string has to work on a near-black page and a near-white one. The two sets
+ * of values live in theme.css.
  *
  * These are class strings rather than components on purpose — they compose
  * with whatever a page needs to add, and they cannot grow behaviour.
  */
 
-/** Warm ring on the dark ground; visible without being decoration. */
+/** Warm ring on the page's ground; visible without being decoration. */
 export const focusRing =
   "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 " +
   "focus-visible:outline-apricot";
@@ -21,22 +26,23 @@ export const focusRing =
  */
 export const focusRingOnAccent =
   "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 " +
-  "focus-visible:outline-chalk";
+  "focus-visible:outline-on-accent";
 
 /**
- * The one call to action. Filled apricot with ink text, because the accent is
- * the light source in this palette and the primary action should be it.
+ * The one call to action. Filled apricot, with whatever reads on top of it in
+ * this theme, because the accent is the light source in this palette and the
+ * primary action should be it.
  */
 export const buttonPrimary =
   "inline-flex items-center justify-center rounded-full bg-apricot px-6 py-3 " +
-  "font-display font-semibold text-ink transition-transform hover:scale-[1.03] " +
+  "font-display font-semibold text-on-accent transition-transform hover:scale-[1.03] " +
   `disabled:pointer-events-none disabled:opacity-55 ${focusRingOnAccent}`;
 
 /** Secondary: the same pill, drawn rather than filled. */
 export const buttonQuiet =
-  "inline-flex items-center justify-center rounded-full border border-haze " +
-  "px-5 py-2 font-display text-sm text-chalk/75 transition-colors " +
-  "hover:border-apricot/60 hover:text-chalk disabled:pointer-events-none " +
+  "inline-flex items-center justify-center rounded-full border border-edge " +
+  "px-5 py-2 font-display text-sm text-copy/75 transition-colors " +
+  "hover:border-apricot/60 hover:text-copy disabled:pointer-events-none " +
   `disabled:opacity-55 ${focusRing}`;
 
 /** For a link inside a paragraph, where a pill would be too loud. */
@@ -44,11 +50,11 @@ export const linkInline =
   `text-apricot underline decoration-apricot/40 underline-offset-4 ` +
   `hover:decoration-apricot ${focusRing} rounded-sm`;
 
-/** A raised panel on the ink ground. Matches the landing page's proof card. */
-export const card = "rounded-2xl border border-haze/70 bg-dusk/70 p-5";
+/** A raised panel on the page's ground. Matches the landing page's proof card. */
+export const card = "rounded-2xl border border-edge/70 bg-panel/70 p-5";
 
 /** A small figure with its label: the dashboard and cost grids are made of these. */
-export const stat = "rounded-2xl border border-haze/70 bg-dusk/70 p-4";
+export const stat = "rounded-2xl border border-edge/70 bg-panel/70 p-4";
 
 /**
  * A section the reader can fold away.
@@ -61,7 +67,7 @@ export const stat = "rounded-2xl border border-haze/70 bg-dusk/70 p-4";
  * folds before React has loaded, it survives the page refreshing itself under
  * a working run, and find-in-page opens what it matched.
  */
-export const disclosure = "rounded-2xl border border-haze/70 bg-dusk/40";
+export const disclosure = "rounded-2xl border border-edge/70 bg-panel/40";
 
 /**
  * The row that folds it. The whole row is the target, not a chevron at the
@@ -70,12 +76,12 @@ export const disclosure = "rounded-2xl border border-haze/70 bg-dusk/40";
  */
 export const disclosureSummary =
   "flex cursor-pointer list-none items-center gap-3 rounded-2xl px-4 py-3 " +
-  "transition-colors hover:bg-dusk/60 [&::-webkit-details-marker]:hidden " +
+  "transition-colors hover:bg-panel/60 [&::-webkit-details-marker]:hidden " +
   focusRing;
 
 /** What the fold reveals, set off from the row that opened it. */
 export const disclosureBody =
-  "flex flex-col gap-3 border-t border-haze/50 px-4 py-4";
+  "flex flex-col gap-3 border-t border-edge/50 px-4 py-4";
 
 /**
  * A line in a page's outline.
@@ -87,14 +93,14 @@ export const disclosureBody =
  */
 export const outlineLink =
   "flex items-baseline gap-2 rounded-lg px-2.5 py-1.5 font-display text-sm " +
-  `text-chalk/55 transition-colors hover:bg-dusk/60 hover:text-chalk ${focusRing}`;
+  `text-copy/60 transition-colors hover:bg-panel/60 hover:text-copy ${focusRing}`;
 
 /**
  * The small caps label. Used for anything naming a region rather than saying
  * something — "Week three", "You", "Partner", "Vocabulary".
  */
 export const eyebrow =
-  "font-display text-xs font-medium uppercase tracking-[0.18em] text-chalk/40";
+  "font-display text-xs font-medium uppercase tracking-[0.18em] text-copy/40";
 
 /** Page title. Display face, tight leading, same as the landing hero at rest. */
 export const pageTitle =
@@ -102,15 +108,15 @@ export const pageTitle =
 
 /** Section title, one step down. */
 export const sectionTitle =
-  "font-display text-lg font-semibold tracking-tight text-chalk";
+  "font-display text-lg font-semibold tracking-tight text-copy";
 
 /** Body prose. The serif is the point: this product is about reading sentences. */
-export const prose = "leading-relaxed text-chalk/70";
+export const prose = "leading-relaxed text-copy/70";
 
 /** A text input, select or textarea. */
 export const field =
-  "w-full rounded-xl border border-haze bg-ink/80 px-3.5 py-2.5 font-body " +
-  "text-chalk placeholder:text-chalk/35 transition-colors hover:border-haze " +
+  "w-full rounded-xl border border-edge bg-ground/80 px-3.5 py-2.5 font-body " +
+  "text-copy placeholder:text-copy/35 transition-colors hover:border-edge " +
   "focus:border-apricot/70 focus:outline-none focus:ring-2 focus:ring-apricot/40";
 
 /** The form control accent, so radios and checkboxes are not browser blue. */
@@ -118,7 +124,7 @@ export const control = "size-4 shrink-0 accent-apricot";
 
 /** A selectable card: radio and checkbox rows in onboarding. */
 export const choice =
-  "flex cursor-pointer gap-3 rounded-xl border border-haze/70 bg-dusk/40 p-3.5 " +
+  "flex cursor-pointer gap-3 rounded-xl border border-edge/70 bg-panel/40 p-3.5 " +
   "transition-colors hover:border-apricot/50 has-checked:border-apricot " +
   "has-checked:bg-apricot/10 has-focus-visible:outline has-focus-visible:outline-2 " +
   "has-focus-visible:outline-offset-2 has-focus-visible:outline-apricot";
@@ -127,7 +133,7 @@ export const choice =
 export const page = "mx-auto flex w-full flex-col gap-8 px-6 py-10 md:px-10 md:py-14";
 
 /** The rule that separates the header, the footer and the major bands. */
-export const hairline = "border-haze/60";
+export const hairline = "border-edge/60";
 
 /**
  * The gender colours German course books have printed for decades: der blue,

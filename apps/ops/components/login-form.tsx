@@ -7,7 +7,7 @@ import { buttonPrimary, field } from "@dp/ui/styles";
 
 import type { LoginFormState } from "@/lib/auth/login-state";
 
-const label = "font-display text-sm font-medium text-chalk/80";
+const label = "font-display text-sm font-medium text-copy/80";
 
 export interface LoginFormProps {
   readonly action: (state: LoginFormState, formData: FormData) => Promise<LoginFormState>;

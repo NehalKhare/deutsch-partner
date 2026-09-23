@@ -34,19 +34,19 @@ export function TrainerCoachingSettings({
   return (
     <div className="flex flex-col gap-3" data-role="trainer-coaching">
       {tuned ? (
-        <p className="leading-relaxed text-chalk/70">
+        <p className="leading-relaxed text-copy/70">
           From your feedback, your trainer now gives you{" "}
-          <span className="text-chalk">{describeDials(profile).join(", ")}</span>.
+          <span className="text-copy">{describeDials(profile).join(", ")}</span>.
         </p>
       ) : (
-        <p className="leading-relaxed text-chalk/70">
+        <p className="leading-relaxed text-copy/70">
           Your trainer is on its default settings. Rate its replies during a
           session, or just ask it — for shorter explanations, harder exercises,
           a grammar focus — and it adjusts from then on.
         </p>
       )}
       {votes > 0 ? (
-        <p className="text-xs text-chalk/45">
+        <p className="text-xs text-copy/45">
           Learned from {votes} {votes === 1 ? "vote" : "votes"}
           {profile !== null && profile.disputedCorrections > 0
             ? `, including ${profile.disputedCorrections} disputed ${
@@ -69,7 +69,7 @@ export function TrainerCoachingSettings({
           {state.message ? (
             <p
               role="status"
-              className={cn("text-xs", state.status === "error" ? "text-ember" : "text-chalk/55")}
+              className={cn("text-xs", state.status === "error" ? "text-ember" : "text-copy/60")}
             >
               {state.message}
             </p>

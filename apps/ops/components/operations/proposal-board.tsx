@@ -51,10 +51,10 @@ export function ProposalBoard({
           <h3 id={`column-${column.key}`} className={eyebrow}>
             {column.label} ({column.proposals.length})
           </h3>
-          <p className="font-display text-xs text-chalk/35">{column.hint}</p>
+          <p className="font-display text-xs text-copy/35">{column.hint}</p>
 
           {column.proposals.length === 0 ? (
-            <p className="font-display text-xs text-chalk/30">Nothing here.</p>
+            <p className="font-display text-xs text-copy/30">Nothing here.</p>
           ) : null}
 
           {column.proposals.map((proposal) => (
@@ -82,13 +82,13 @@ function ProposalCard({ proposal }: { readonly proposal: BoardProposal }) {
     >
       <Link
         href={`/product/${proposal.id}`}
-        className="font-display text-sm font-semibold text-chalk hover:text-apricot"
+        className="font-display text-sm font-semibold text-copy hover:text-apricot"
       >
         {proposal.title}
       </Link>
 
-      <p className="flex flex-wrap items-center gap-2 font-display text-xs text-chalk/45">
-        <span className="tabular-nums text-chalk/70">
+      <p className="flex flex-wrap items-center gap-2 font-display text-xs text-copy/45">
+        <span className="tabular-nums text-copy/70">
           {proposal.priorityScore}/100
         </span>
         <span aria-hidden>·</span>
@@ -112,12 +112,12 @@ function ProposalCard({ proposal }: { readonly proposal: BoardProposal }) {
         ) : null}
       </p>
 
-      <p className="font-display text-xs text-chalk/50">{nextStep(proposal)}</p>
+      <p className="font-display text-xs text-copy/60">{nextStep(proposal)}</p>
 
       {owner === "worker" ? (
         // Shown rather than run. The stage needs a working tree, and a button
         // here that pretended otherwise would be the dishonest version.
-        <code className="overflow-x-auto rounded bg-ink/60 px-2 py-1 font-mono text-[0.7rem] text-chalk/60">
+        <code className="overflow-x-auto rounded bg-ground/60 px-2 py-1 font-mono text-[0.7rem] text-copy/60">
           {workerCommandFor(proposal.id)}
         </code>
       ) : null}

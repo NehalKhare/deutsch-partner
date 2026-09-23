@@ -34,7 +34,7 @@ export function FeedbackPanel({ summary }: { readonly summary: LearnerFeedbackSu
   if (totals.votes === 0) {
     return (
       <div data-role="feedback-panel" className={cn(card, "flex flex-col gap-2")}>
-        <p className="text-sm text-chalk/70">
+        <p className="text-sm text-copy/70">
           No learner has rated a trainer reply in the last {summary.window.days} days.
           When they do, every scan starts from what they said.
         </p>
@@ -48,7 +48,7 @@ export function FeedbackPanel({ summary }: { readonly summary: LearnerFeedbackSu
         {tiles.map((tile) => (
           <div key={tile.label} className={stat}>
             <dt className={eyebrow}>{tile.label}</dt>
-            <dd className="mt-1 font-display text-xl font-semibold tabular-nums text-chalk">
+            <dd className="mt-1 font-display text-xl font-semibold tabular-nums text-copy">
               {tile.value}
             </dd>
           </div>
@@ -61,16 +61,16 @@ export function FeedbackPanel({ summary }: { readonly summary: LearnerFeedbackSu
             Why replies were unhelpful
           </h3>
           {summary.byReason.length === 0 ? (
-            <p className="text-sm text-chalk/55">No reasons were given.</p>
+            <p className="text-sm text-copy/60">No reasons were given.</p>
           ) : (
             <ol className="flex flex-col gap-2">
               {summary.byReason.map((entry) => (
                 <li key={entry.reason} className="flex flex-col gap-1 text-sm">
                   <span className="flex items-baseline justify-between">
-                    <span className="text-chalk/80">{FEEDBACK_REASON_LABELS[entry.reason]}</span>
-                    <span className="tabular-nums text-chalk/55">{entry.count}</span>
+                    <span className="text-copy/80">{FEEDBACK_REASON_LABELS[entry.reason]}</span>
+                    <span className="tabular-nums text-copy/60">{entry.count}</span>
                   </span>
-                  <span aria-hidden className="h-1 rounded-full bg-haze/60">
+                  <span aria-hidden className="h-1 rounded-full bg-edge/60">
                     <span
                       className="block h-1 rounded-full bg-apricot/70"
                       style={{ width: `${Math.round((entry.count / maxReason) * 100)}%` }}
@@ -87,7 +87,7 @@ export function FeedbackPanel({ summary }: { readonly summary: LearnerFeedbackSu
             By trainer prompt version
           </h3>
           <table className="w-full text-sm">
-            <thead className="text-left text-xs uppercase tracking-wider text-chalk/45">
+            <thead className="text-left text-xs uppercase tracking-wider text-copy/45">
               <tr>
                 <th scope="col" className="pb-1 font-normal">Version</th>
                 <th scope="col" className="pb-1 text-right font-normal">Votes</th>
@@ -96,10 +96,10 @@ export function FeedbackPanel({ summary }: { readonly summary: LearnerFeedbackSu
             </thead>
             <tbody>
               {summary.byPromptVersion.map((version) => (
-                <tr key={version.promptVersion} className="border-t border-haze/40">
-                  <td className="py-1 text-chalk/80">v{version.promptVersion}</td>
-                  <td className="py-1 text-right tabular-nums text-chalk/70">{version.votes}</td>
-                  <td className="py-1 text-right tabular-nums text-chalk/70">
+                <tr key={version.promptVersion} className="border-t border-edge/40">
+                  <td className="py-1 text-copy/80">v{version.promptVersion}</td>
+                  <td className="py-1 text-right tabular-nums text-copy/70">{version.votes}</td>
+                  <td className="py-1 text-right tabular-nums text-copy/70">
                     {percent(unhelpfulShare(version))}
                   </td>
                 </tr>
@@ -107,7 +107,7 @@ export function FeedbackPanel({ summary }: { readonly summary: LearnerFeedbackSu
             </tbody>
           </table>
           {summary.byTool.length > 0 ? (
-            <p className="text-xs text-chalk/55">
+            <p className="text-xs text-copy/60">
               Most flagged tools:{" "}
               {summary.byTool
                 .slice(0, SHOWN_TOOLS)
@@ -126,10 +126,10 @@ export function FeedbackPanel({ summary }: { readonly summary: LearnerFeedbackSu
           <ul className="flex flex-col gap-3">
             {summary.recentNotes.map((entry, index) => (
               <li key={`${entry.createdAt.toISOString()}-${index}`} className="flex flex-col gap-1">
-                <blockquote className="text-sm leading-relaxed text-chalk/80">
+                <blockquote className="text-sm leading-relaxed text-copy/80">
                   “{entry.note}”
                 </blockquote>
-                <p className="text-xs text-chalk/45">
+                <p className="text-xs text-copy/45">
                   {entry.verdict === "helpful" ? "Helpful" : "Not helpful"}
                   {entry.reasons.length > 0
                     ? ` · ${entry.reasons.map((reason) => FEEDBACK_REASON_LABELS[reason]).join(", ")}`

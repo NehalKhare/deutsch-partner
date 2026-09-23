@@ -61,18 +61,19 @@ const KINDS: Readonly<
     dot: "bg-die",
     tint: "text-die/90",
   },
-  // Chalk, deliberately: the semantic colours are spoken for, and the accent
-  // marks what is happening now — a culture note is the one line here that is
-  // neither review nor a slip, so it wears the page's own voice.
+  // The page's own copy colour, deliberately: the semantic colours are spoken
+  // for, and the accent marks what is happening now — a culture note is the
+  // one line here that is neither review nor a slip, so it wears the page's
+  // own voice.
   culture_drill: {
     label: "culture note",
-    dot: "bg-chalk/60",
-    tint: "text-chalk/60",
+    dot: "bg-copy/60",
+    tint: "text-copy/60",
   },
   read_the_news: { label: "read today's news", dot: "bg-der", tint: "text-der/90" },
 };
 
-const FALLBACK_KIND = { label: "", dot: "bg-haze", tint: "text-chalk/40" };
+const FALLBACK_KIND = { label: "", dot: "bg-edge", tint: "text-copy/40" };
 
 export interface TrainerAgendaProps {
   readonly plan: readonly AgendaEntry[];
@@ -92,9 +93,9 @@ export function TrainerAgenda({ plan, finished }: TrainerAgendaProps) {
     <section
       data-role="agenda"
       aria-label="What this session covers"
-      className="rounded-2xl border border-haze/70 bg-dusk/70 px-4 py-3"
+      className="rounded-2xl border border-edge/70 bg-panel/70 px-4 py-3"
     >
-      <p className="flex items-baseline justify-between text-xs uppercase tracking-[0.14em] text-chalk/45">
+      <p className="flex items-baseline justify-between text-xs uppercase tracking-[0.14em] text-copy/45">
         <span>This session{finished ? " — done" : null}</span>
         <span className="tabular-nums normal-case tracking-normal">
           {done}/{plan.length}
@@ -127,7 +128,7 @@ export function TrainerAgenda({ plan, finished }: TrainerAgendaProps) {
                 aria-hidden
                 className={cn(
                   "mb-0.5 size-1.5 shrink-0 self-center rounded-full",
-                  item.done ? "bg-haze" : kind.dot,
+                  item.done ? "bg-edge" : kind.dot,
                 )}
               />
               <span className="flex min-w-0 flex-col">
@@ -135,17 +136,17 @@ export function TrainerAgenda({ plan, finished }: TrainerAgendaProps) {
                   lang={german ? "de" : undefined}
                   className={
                     item.done
-                      ? "text-chalk/35 line-through"
+                      ? "text-copy/35 line-through"
                       : now
-                        ? "font-medium text-chalk"
-                        : "text-chalk/75"
+                        ? "font-medium text-copy"
+                        : "text-copy/75"
                   }
                 >
                   {item.subject}
                 </span>
                 {item.kind ? (
                   <span
-                    className={cn("text-xs", item.done ? "text-chalk/30" : kind.tint)}
+                    className={cn("text-xs", item.done ? "text-copy/30" : kind.tint)}
                   >
                     {kind.label || item.kind}
                     {now ? (

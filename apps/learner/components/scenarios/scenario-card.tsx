@@ -41,7 +41,7 @@ export function ScenarioCard({
       </p>
 
       <div className="flex flex-col gap-1">
-        <h3 className="font-display text-lg font-semibold tracking-tight text-chalk">
+        <h3 className="font-display text-lg font-semibold tracking-tight text-copy">
           <Link
             href={`/scenarios/${scenario.slug}`}
             className={cn("rounded-sm hover:text-apricot", focusRing)}
@@ -49,14 +49,14 @@ export function ScenarioCard({
             {scenario.title}
           </Link>
         </h3>
-        <p className="font-display text-sm text-chalk/50">{scenario.titleEnglish}</p>
+        <p className="font-display text-sm text-copy/60">{scenario.titleEnglish}</p>
       </div>
 
-      <p className="flex-1 text-sm leading-relaxed text-chalk/70">
+      <p className="flex-1 text-sm leading-relaxed text-copy/70">
         {scenario.description}
       </p>
 
-      <p className="text-xs text-chalk/40">Source: {scenarioCitation(scenario)}</p>
+      <p className="text-xs text-copy/40">Source: {scenarioCitation(scenario)}</p>
 
       <div className="flex flex-wrap items-center gap-2">
         {/* Both kinds practise in the chat now: a dialogue as a roleplay, a

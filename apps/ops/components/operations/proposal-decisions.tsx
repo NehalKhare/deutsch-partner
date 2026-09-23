@@ -169,7 +169,7 @@ export function ProposalDecisions({
         </button>
       </form>
 
-      <p className="font-display text-xs text-chalk/35">
+      <p className="font-display text-xs text-copy/35">
         The score is computed from four judgements — reach, severity, how well
         the evidence supports it, and how well it fits a German tutor for
         English speakers — so changing it by hand is a deliberate override, and

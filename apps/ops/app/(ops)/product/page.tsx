@@ -90,7 +90,7 @@ export default async function ProductOpsPage() {
           {tiles.map((tile) => (
             <div key={tile.label} className={stat}>
               <dt className={eyebrow}>{tile.label}</dt>
-              <dd className="mt-1 font-display text-xl font-semibold tabular-nums text-chalk">
+              <dd className="mt-1 font-display text-xl font-semibold tabular-nums text-copy">
                 {tile.value}
               </dd>
             </div>
@@ -101,7 +101,7 @@ export default async function ProductOpsPage() {
             figures that point at it. */}
         <div className="flex flex-wrap items-center gap-3">
           <OpsSwitch to="runs" tone="quiet" />
-          <p className="font-display text-xs text-chalk/40">
+          <p className="font-display text-xs text-copy/40">
             The runs behind these figures, and the scan that starts one.
           </p>
         </div>

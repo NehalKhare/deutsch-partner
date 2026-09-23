@@ -496,7 +496,7 @@ export function Conversation({
           at you, what this room is called, and where you are standing. All of
           it is live — a move mid-conversation updates the label and grows the
           blob without a reload. */}
-      <header className="flex flex-wrap items-center gap-x-4 gap-y-3 border-b border-haze/60 pb-4">
+      <header className="flex flex-wrap items-center gap-x-4 gap-y-3 border-b border-edge/60 pb-4">
         <Companion
           state={companionStateFor({ miniLevel: position.miniLevel, activity })}
           decorative
@@ -511,12 +511,12 @@ export function Conversation({
               {heading}
             </h1>
           ) : null}
-          <p className="font-display text-xs uppercase tracking-wider text-chalk/60">
+          <p className="font-display text-xs uppercase tracking-wider text-copy/60">
             Mini-level {position.miniLevel}
             {position.theme ? (
               <>
                 {" · "}
-                <span lang="de" className="normal-case tracking-normal text-chalk/60">
+                <span lang="de" className="normal-case tracking-normal text-copy/60">
                   {position.theme}
                 </span>
               </>
@@ -535,7 +535,7 @@ export function Conversation({
             aria-label="Move on to the next mini-level"
             className={cn(
               "flex items-center gap-1.5 rounded-full px-2.5 py-1 font-display text-xs",
-              "uppercase tracking-wider text-chalk/70 transition-colors hover:text-apricot",
+              "uppercase tracking-wider text-copy/70 transition-colors hover:text-apricot",
               "disabled:pointer-events-none disabled:opacity-50",
               focusRing,
             )}
@@ -551,7 +551,7 @@ export function Conversation({
               className={cn(
                 "flex items-center gap-1.5 rounded-full px-2.5 py-1 font-display text-xs",
                 "uppercase tracking-wider transition-colors",
-                readAloud ? "text-apricot" : "text-chalk/70 hover:text-chalk",
+                readAloud ? "text-apricot" : "text-copy/70 hover:text-copy",
                 focusRing,
               )}
             >
@@ -569,7 +569,7 @@ export function Conversation({
             className={cn(
               "flex items-center gap-1.5 rounded-full px-2.5 py-1 font-display text-xs",
               "uppercase tracking-wider transition-colors",
-              showMastery ? "text-apricot" : "text-chalk/70 hover:text-chalk",
+              showMastery ? "text-apricot" : "text-copy/70 hover:text-copy",
               focusRing,
             )}
           >
@@ -591,14 +591,14 @@ export function Conversation({
             invitation is in German and short enough to answer. */}
         {messages.length === 0 && streaming.length === 0 ? (
           <div className="m-auto flex max-w-xs flex-col gap-2 text-center">
-            <p className="text-chalk/45">
+            <p className="text-copy/45">
               {TUTOR.name} is waiting. Say anything —{" "}
-              <span lang="de" className="text-chalk/70">
+              <span lang="de" className="text-copy/70">
                 Hallo!
               </span>{" "}
               is enough to start.
             </p>
-            <p className="text-xs text-chalk/55">
+            <p className="text-xs text-copy/60">
               Nothing you say here is stored. What you learn is.
             </p>
           </div>
@@ -638,7 +638,7 @@ export function Conversation({
               <li
                 key={message.id}
                 data-role="user"
-                className="max-w-[85%] self-end rounded-2xl rounded-br-md bg-apricot px-4 py-2.5 leading-relaxed text-ink"
+                className="max-w-[85%] self-end rounded-2xl rounded-br-md bg-apricot px-4 py-2.5 leading-relaxed text-on-accent"
               >
                 {message.content}
               </li>
@@ -650,7 +650,7 @@ export function Conversation({
               >
                 <span
                   lang="de"
-                  className="rounded-2xl rounded-bl-md border border-haze/70 bg-dusk px-4 py-2.5 leading-relaxed text-chalk"
+                  className="rounded-2xl rounded-bl-md border border-edge/70 bg-panel px-4 py-2.5 leading-relaxed text-copy"
                 >
                   <RichText content={message.content} />
                 </span>
@@ -664,7 +664,7 @@ export function Conversation({
                   }
                   aria-pressed={speakingId === message.id}
                   className={cn(
-                    "shrink-0 rounded-full p-1.5 text-chalk/50 transition-colors hover:text-apricot",
+                    "shrink-0 rounded-full p-1.5 text-copy/60 transition-colors hover:text-apricot",
                     speakingId === message.id && "text-apricot",
                     focusRing,
                   )}
@@ -680,7 +680,7 @@ export function Conversation({
               data-streaming="true"
               aria-live="off"
               lang="de"
-              className="max-w-[85%] self-start rounded-2xl rounded-bl-md border border-apricot/40 bg-dusk px-4 py-2.5 leading-relaxed text-chalk"
+              className="max-w-[85%] self-start rounded-2xl rounded-bl-md border border-apricot/40 bg-panel px-4 py-2.5 leading-relaxed text-copy"
             >
               {/* Formatted as it arrives, so the reply does not visibly
                   reflow the moment it finishes. A marker whose closer has not
@@ -702,7 +702,7 @@ export function Conversation({
           aria-label="Mini-level cleared"
           className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-apricot/40 bg-apricot/10 px-4 py-3"
         >
-          <p className="min-w-40 flex-1 text-sm leading-relaxed text-chalk">
+          <p className="min-w-40 flex-1 text-sm leading-relaxed text-copy">
             <span className="font-display font-semibold text-apricot">
               Mini-level {tally.miniLevel} cleared!
             </span>{" "}
@@ -741,7 +741,7 @@ export function Conversation({
           failures are said quietly, beside the control that caused them, and
           never as the red banner that means "your turn did not happen". */}
       {micNotice ?? voiceNotice ? (
-        <p role="status" className="px-1 text-xs text-chalk/55">
+        <p role="status" className="px-1 text-xs text-copy/60">
           {micNotice ?? voiceNotice}
         </p>
       ) : null}
@@ -756,7 +756,7 @@ export function Conversation({
       ) : null}
 
       <form
-        className="sticky bottom-0 flex items-center gap-3 border-t border-haze/60 bg-ink/95 py-4 backdrop-blur"
+        className="sticky bottom-0 flex items-center gap-3 border-t border-edge/60 bg-ground/95 py-4 backdrop-blur"
         onSubmit={(event) => {
           event.preventDefault();
           const message = draft.trim();
@@ -777,7 +777,7 @@ export function Conversation({
               "shrink-0 rounded-full border p-2.5 transition-colors",
               recording
                 ? "animate-pulse border-ember bg-ember/20 text-ember"
-                : "border-haze text-chalk/60 hover:border-apricot/60 hover:text-apricot",
+                : "border-edge text-copy/60 hover:border-apricot/60 hover:text-apricot",
               "disabled:pointer-events-none disabled:opacity-50",
               focusRing,
             )}

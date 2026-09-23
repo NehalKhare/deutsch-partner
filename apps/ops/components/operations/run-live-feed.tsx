@@ -108,17 +108,17 @@ export function RunLiveFeed({
   if (!working || state === "connecting") return null;
 
   return (
-    <div className="flex flex-col gap-1 rounded-xl border border-haze/50 bg-ink/40 px-3 py-2">
+    <div className="flex flex-col gap-1 rounded-xl border border-edge/50 bg-ground/40 px-3 py-2">
       <ol className="flex flex-col gap-0.5" aria-label="What the run is doing">
         {entries.map((entry) => (
           <li
             key={entry.id}
-            className="flex items-baseline justify-between gap-3 font-display text-xs text-chalk/60"
+            className="flex items-baseline justify-between gap-3 font-display text-xs text-copy/60"
           >
             <span className={cn(entry.status === "failed" && "text-ember")}>
               {describeTimelineEntry(entry)}
             </span>
-            <span className="shrink-0 tabular-nums text-chalk/35">
+            <span className="shrink-0 tabular-nums text-copy/35">
               {relativeTime(entry.at, now)}
             </span>
           </li>

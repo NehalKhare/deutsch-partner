@@ -115,7 +115,7 @@ export default async function DashboardPage() {
         <div className="flex flex-col gap-1.5">
           <p className={eyebrow}>Mini-level {data.level.miniLevel} of 70</p>
           <h1 className={pageTitle}>{data.miniLevel.theme}</h1>
-          <p className="text-chalk/60">
+          <p className="text-copy/60">
             {data.level.effective}
             {data.level.plus ? "+" : ""} — {data.miniLevel.focus}
           </p>
@@ -137,15 +137,15 @@ export default async function DashboardPage() {
               aria-valuemin={0}
               aria-valuemax={100}
               aria-label={`Turn accuracy at this level, towards the ${gatePercent}% gate`}
-              className="h-2.5 w-full overflow-hidden rounded-full bg-haze/50"
+              className="h-2.5 w-full overflow-hidden rounded-full bg-edge/50"
             >
               <div
                 className="h-full rounded-full bg-apricot transition-[width] duration-700"
                 style={{ width: `${Math.round(tally.score * 100)}%` }}
               />
             </div>
-            <p className="text-sm text-chalk/55">
-              <span className="font-display tabular-nums text-chalk">
+            <p className="text-sm text-copy/60">
+              <span className="font-display tabular-nums text-copy">
                 {Math.round(tally.score * 100)}%
               </span>{" "}
               of your {tally.turns} evaluated{" "}
@@ -155,7 +155,7 @@ export default async function DashboardPage() {
             </p>
           </>
         ) : (
-          <p className="text-sm text-chalk/55">
+          <p className="text-sm text-copy/60">
             No evaluated turns at this level yet —{" "}
             <Link href="/chat" className="text-apricot underline decoration-apricot/40 underline-offset-4 hover:decoration-apricot">
               have a conversation
@@ -163,7 +163,7 @@ export default async function DashboardPage() {
             and your score appears here.
           </p>
         )}
-        <p className="text-sm text-chalk/45">
+        <p className="text-sm text-copy/45">
           {data.vocabulary.mastered} of {target} of this level&apos;s words
           mastered ({progress}%).
         </p>
@@ -192,12 +192,12 @@ export default async function DashboardPage() {
                   ) : null}
                 </dt>
                 <dd className="mt-1 flex flex-col gap-0.5">
-                  <span className="font-display text-2xl font-semibold tabular-nums text-chalk">
+                  <span className="font-display text-2xl font-semibold tabular-nums text-copy">
                     {band.averageScore === null
                       ? "—"
                       : `${Math.round(band.averageScore * 100)}%`}
                   </span>
-                  <span className="text-xs text-chalk/50">
+                  <span className="text-xs text-copy/60">
                     {band.practised === 0
                       ? "not practised yet"
                       : `across ${band.practised} of ${band.of} mini-levels`}
@@ -230,14 +230,14 @@ export default async function DashboardPage() {
                   aria-valuemin={0}
                   aria-valuemax={100}
                   aria-label={`${label} estimate`}
-                  className="h-1.5 flex-1 overflow-hidden rounded-full bg-haze/50"
+                  className="h-1.5 flex-1 overflow-hidden rounded-full bg-edge/50"
                 >
                   <div
                     className="h-full rounded-full bg-sprout/80"
                     style={{ width: `${Math.round(Number(value) * 100)}%` }}
                   />
                 </div>
-                <span className="w-10 shrink-0 text-right font-display text-sm tabular-nums text-chalk/70">
+                <span className="w-10 shrink-0 text-right font-display text-sm tabular-nums text-copy/70">
                   {Math.round(Number(value) * 100)}%
                 </span>
               </dd>
@@ -252,14 +252,14 @@ export default async function DashboardPage() {
         </h2>
         <Link
           href="/curriculum"
-          className="group flex items-center justify-between gap-4 rounded-2xl border border-haze/60 px-5 py-4 transition-colors hover:border-apricot/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-apricot"
+          className="group flex items-center justify-between gap-4 rounded-2xl border border-edge/60 px-5 py-4 transition-colors hover:border-apricot/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-apricot"
         >
-          <span className="text-chalk/80">
+          <span className="text-copy/80">
             The whole path, every word with its article and its English
           </span>
           <span
             aria-hidden
-            className="font-display text-chalk/40 transition-transform group-hover:translate-x-1 group-hover:text-apricot"
+            className="font-display text-copy/40 transition-transform group-hover:translate-x-1 group-hover:text-apricot"
           >
             →
           </span>
@@ -271,7 +271,7 @@ export default async function DashboardPage() {
           Vocabulary
         </h2>
         {data.vocabulary.total === 0 ? (
-          <p className="text-sm text-chalk/55">
+          <p className="text-sm text-copy/60">
             Words you use in conversation are tracked here — how many you have
             met, mastered, and are due to review. Say something to start.
           </p>
@@ -300,7 +300,7 @@ export default async function DashboardPage() {
             href={next.candidate.activityType === "review" ? "/review" : "/chat"}
             className="group flex items-center justify-between gap-4 rounded-2xl border border-apricot/50 bg-apricot/10 px-5 py-4 transition-colors hover:bg-apricot/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-apricot"
           >
-            <span className="font-display font-medium text-chalk">
+            <span className="font-display font-medium text-copy">
               {next.candidate.title}
             </span>
             <span
@@ -319,14 +319,14 @@ export default async function DashboardPage() {
             <h2 id="mistakes-heading" className={sectionTitle}>
               Keeps coming back
             </h2>
-            <p className="text-sm text-chalk/55">
+            <p className="text-sm text-copy/60">
               The mistakes you have repeated, and how often each has returned.
               {" "}{/* One sentence of purpose: this list is what the tutor is
               quietly watching for in every conversation. */}
               Jonas watches for these while you talk.
             </p>
           </div>
-          <ul className={cn(card, "flex flex-col divide-y divide-haze/50 p-0")}>
+          <ul className={cn(card, "flex flex-col divide-y divide-edge/50 p-0")}>
             {data.recurringMistakes.map((mistake) => (
               <li
                 key={`${mistake.errorType}:${mistake.pattern}`}
@@ -337,10 +337,10 @@ export default async function DashboardPage() {
                     evaluator explained in English still reads as teaching
                     rather than as a foreign log line. */}
                 <span className="flex min-w-0 flex-col gap-0.5">
-                  <span className="font-display text-sm font-medium text-chalk">
+                  <span className="font-display text-sm font-medium text-copy">
                     {ERROR_TYPE_LABELS[mistake.errorType]}
                   </span>
-                  <span className="text-sm text-chalk/60">{mistake.pattern}</span>
+                  <span className="text-sm text-copy/60">{mistake.pattern}</span>
                 </span>
                 <span className="shrink-0 font-display text-sm tabular-nums text-apricot">
                   ×{mistake.occurrences}

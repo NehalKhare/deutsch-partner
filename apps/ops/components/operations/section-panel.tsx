@@ -44,7 +44,7 @@ export function SectionPanel({
             {title}
           </h2>
           {count === undefined ? null : (
-            <span className="font-display text-xs tabular-nums text-chalk/40">
+            <span className="font-display text-xs tabular-nums text-copy/40">
               {count}
             </span>
           )}
@@ -55,7 +55,7 @@ export function SectionPanel({
             viewBox="0 0 12 12"
             aria-hidden="true"
             className={cn(
-              "ml-auto size-3 shrink-0 text-chalk/40 transition-transform",
+              "ml-auto size-3 shrink-0 text-copy/40 transition-transform",
               "group-open:rotate-180 motion-reduce:transition-none",
             )}
           >

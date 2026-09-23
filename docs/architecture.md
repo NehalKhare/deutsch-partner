@@ -30,7 +30,8 @@ packages/auth            Supabase clients, the session refresher, claims, creden
                          the operator allowlist parser
 packages/env             environment validation
 packages/observability   logging, pseudonyms, tracing config
-packages/ui              the theme and the class strings both apps compose
+packages/ui              the two themes, the class strings both apps compose,
+                         and the device preferences behind them
 packages/corpus          the hand-authored knowledge documents and the scenario dataset
 packages/security-tests  the gates that scan every workspace root
 ```

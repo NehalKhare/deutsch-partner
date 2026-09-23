@@ -52,7 +52,7 @@ export function ProposalOutline({
             >
               <span className="min-w-0 flex-1">{item.label}</span>
               {item.count === undefined ? null : (
-                <span className="shrink-0 text-xs tabular-nums text-chalk/35">
+                <span className="shrink-0 text-xs tabular-nums text-copy/35">
                   {item.count}
                 </span>
               )}

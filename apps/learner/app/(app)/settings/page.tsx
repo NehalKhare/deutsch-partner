@@ -80,14 +80,14 @@ export default async function SettingsPage() {
         </h2>
         {level ? (
           <p className={prose}>
-            Mini-level <strong className="text-chalk">{level.miniLevel}</strong> —{" "}
+            Mini-level <strong className="text-copy">{level.miniLevel}</strong> —{" "}
             <span lang="de">{getMiniLevel(level.miniLevel).theme}</span>, which is{" "}
             {level.effectiveLevel.cefr}.
           </p>
         ) : (
           <p className={prose}>Your level could not be read just now.</p>
         )}
-        <p className="text-sm text-chalk/55">
+        <p className="text-sm text-copy/60">
           Your level is position, not preference, so it moves on the{" "}
           <Link href="/curriculum" className={linkInline}>
             curriculum page

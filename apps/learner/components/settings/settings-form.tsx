@@ -87,8 +87,8 @@ const TRAINER_PERSONALITY_OPTIONS: ReadonlyArray<{
   },
 ];
 
-const legendClass = "font-display text-sm font-medium text-chalk/80";
-const hintText = "text-xs text-chalk/45";
+const legendClass = "font-display text-sm font-medium text-copy/80";
+const hintText = "text-xs text-copy/45";
 
 /** What each pass mark is called when the slider stands on it. */
 const THRESHOLD_LABELS: Readonly<Record<MasteryThreshold, string>> = {
@@ -140,7 +140,7 @@ function CheckboxGroup({
               className={cn(
                 choice,
                 "items-center rounded-full px-3.5 py-1.5 text-sm",
-                disabled && "cursor-not-allowed opacity-40 hover:border-haze/70",
+                disabled && "cursor-not-allowed opacity-40 hover:border-edge/70",
               )}
             >
               <input
@@ -288,7 +288,7 @@ function SettingsFields({ profile }: { readonly profile: LearnerProfile }) {
               />
               <span className="flex flex-col gap-0.5">
                 <span>{option.label}</span>
-                <span className="text-xs text-chalk/45">{option.detail}</span>
+                <span className="text-xs text-copy/45">{option.detail}</span>
               </span>
             </label>
           ))}
@@ -324,7 +324,7 @@ function SettingsFields({ profile }: { readonly profile: LearnerProfile }) {
           aria-valuetext={`${THRESHOLD_LABELS[draft.masteryThreshold]} — ${draft.masteryThreshold}% of turns error-free`}
           className="w-full max-w-xs accent-apricot"
         />
-        <p className="text-sm text-chalk/70" aria-hidden>
+        <p className="text-sm text-copy/70" aria-hidden>
           {MASTERY_THRESHOLDS.map((value, index) => (
             <span key={value}>
               {index > 0 ? " · " : ""}
@@ -332,7 +332,7 @@ function SettingsFields({ profile }: { readonly profile: LearnerProfile }) {
                 className={cn(
                   draft.masteryThreshold === value
                     ? "font-semibold text-apricot"
-                    : "text-chalk/45",
+                    : "text-copy/45",
                 )}
               >
                 {THRESHOLD_LABELS[value]} {value}%

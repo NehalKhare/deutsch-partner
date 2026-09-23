@@ -55,7 +55,7 @@ export function MasteryProgress({
         aria-valuemax={100}
         aria-valuenow={percent}
         aria-label={`Error-free turns against your ${threshold}% bar`}
-        className="h-1.5 min-w-24 flex-1 overflow-hidden rounded-full bg-haze/60"
+        className="h-1.5 min-w-24 flex-1 overflow-hidden rounded-full bg-edge/60"
       >
         <div
           data-fill
@@ -78,7 +78,7 @@ export function MasteryProgress({
             data-dot={index < evaluated ? "filled" : "empty"}
             className={cn(
               "size-1.5 rounded-full",
-              index < evaluated ? "bg-chalk/70" : "bg-haze/70",
+              index < evaluated ? "bg-copy/70" : "bg-edge/70",
             )}
           />
         ))}

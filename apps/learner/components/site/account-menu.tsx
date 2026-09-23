@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 
 import { focusRing } from "@dp/ui/styles";
+import { ThemeToggle } from "@dp/ui/theme-toggle";
 import { cn } from "@dp/ui/utils";
 
 /**
@@ -85,8 +86,8 @@ export function AccountMenu({ label, email, signOut }: AccountMenuProps) {
           "flex max-w-[12rem] items-center gap-1.5 rounded-full border px-3 py-1.5",
           "font-display text-sm transition-colors",
           open
-            ? "border-apricot/50 bg-apricot/10 text-chalk"
-            : "border-haze/60 text-chalk/70 hover:border-chalk/30 hover:text-chalk",
+            ? "border-apricot/50 bg-apricot/10 text-copy"
+            : "border-edge/60 text-copy/70 hover:border-copy/30 hover:text-copy",
           focusRing,
         )}
       >
@@ -101,19 +102,19 @@ export function AccountMenu({ label, email, signOut }: AccountMenuProps) {
         aria-labelledby={labelId}
         hidden={!open}
         className={cn(
-          "absolute right-0 z-20 mt-2 w-60 rounded-2xl border border-haze/70 bg-dusk p-1.5",
-          "shadow-lg shadow-ink/40",
+          "absolute right-0 z-20 mt-2 w-60 rounded-2xl border border-edge/70 bg-panel p-1.5",
+          "shadow-lg shadow-shade/40",
         )}
       >
         {email ? (
           // Which account, in full. The button can only afford a fragment of
           // it, and a fragment is exactly what is ambiguous between two logins.
-          <p className="truncate px-3 pt-1.5 pb-2 text-xs text-chalk/45" title={email}>
+          <p className="truncate px-3 pt-1.5 pb-2 text-xs text-copy/45" title={email}>
             {email}
           </p>
         ) : null}
 
-        <div className="flex flex-col border-t border-haze/50 pt-1.5">
+        <div className="flex flex-col border-t border-edge/50 pt-1.5">
           {links.map((link) => {
             const active = pathname === link.href || pathname.startsWith(`${link.href}/`);
 
@@ -128,7 +129,7 @@ export function AccountMenu({ label, email, signOut }: AccountMenuProps) {
                 onClick={() => setOpen(false)}
                 className={cn(
                   item,
-                  active ? "bg-apricot/15 text-apricot" : "text-chalk/75 hover:bg-haze/40 hover:text-chalk",
+                  active ? "bg-apricot/15 text-apricot" : "text-copy/75 hover:bg-edge/40 hover:text-copy",
                   focusRing,
                 )}
               >
@@ -138,12 +139,20 @@ export function AccountMenu({ label, email, signOut }: AccountMenuProps) {
           })}
         </div>
 
+        {/* Light or dark is about you rather than about German, which is
+            what this menu is for. In the panel rather than the bar because it
+            is set once and then not thought about again — a control that
+            permanently occupies the header would outrank Catch up. */}
+        <div className="mt-1.5 border-t border-edge/50 px-3 pt-2.5 pb-1.5">
+          <ThemeToggle />
+        </div>
+
         {/* Last, and separated. Ending the session is not the same kind of
             thing as opening a page, and it should not sit flush against one. */}
-        <form action={signOut} className="mt-1.5 border-t border-haze/50 pt-1.5">
+        <form action={signOut} className="mt-1.5 border-t border-edge/50 pt-1.5">
           <button
             type="submit"
-            className={cn(item, "w-full text-chalk/75 hover:bg-haze/40 hover:text-chalk", focusRing)}
+            className={cn(item, "w-full text-copy/75 hover:bg-edge/40 hover:text-copy", focusRing)}
           >
             Sign out
           </button>

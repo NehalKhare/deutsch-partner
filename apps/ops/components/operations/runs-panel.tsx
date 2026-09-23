@@ -80,7 +80,7 @@ export function RunsPanel({
 
   if (runs.length === 0) {
     return (
-      <p className="font-display text-sm text-chalk/45">
+      <p className="font-display text-sm text-copy/45">
         No runs yet. Start a scan above and it will appear here.
       </p>
     );
@@ -96,7 +96,7 @@ export function RunsPanel({
   return (
     <div className="flex flex-col gap-2">
       {polling ? (
-        <p className="font-display text-xs text-chalk/40" aria-live="polite">
+        <p className="font-display text-xs text-copy/40" aria-live="polite">
           Following the work. This list updates itself while a run is moving.
         </p>
       ) : null}
@@ -131,10 +131,10 @@ const TONE: Readonly<Record<RunActivity, string>> = {
   working: "border-apricot/60 bg-apricot/10 text-apricot",
   stalled: "border-ember/60 bg-ember/10 text-ember",
   waiting: "border-apricot/60 bg-apricot/10 text-apricot",
-  worker: "border-haze bg-ink/40 text-chalk/70",
-  done: "border-haze bg-ink/40 text-chalk/60",
+  worker: "border-edge bg-ground/40 text-copy/70",
+  done: "border-edge bg-ground/40 text-copy/60",
   failed: "border-ember/60 bg-ember/10 text-ember",
-  rejected: "border-haze bg-ink/40 text-chalk/60",
+  rejected: "border-edge bg-ground/40 text-copy/60",
 };
 
 const HEADLINE: Readonly<Record<RunActivity, string>> = {
@@ -189,17 +189,17 @@ function RunCard({
         >
           {HEADLINE[activity]}
         </span>
-        <span className="font-display text-sm font-semibold text-chalk">
+        <span className="font-display text-sm font-semibold text-copy">
           {runKindLabel(run)}
         </span>
         {/* The live sentence below already names the stage; a settled run
             has no sentence, so the phrase stands in the header instead. */}
         {report === null ? (
-          <span className={cn(eyebrow, "normal-case tracking-normal text-chalk/40")}>
+          <span className={cn(eyebrow, "normal-case tracking-normal text-copy/40")}>
             {stagePhrase(run.stage)}
           </span>
         ) : null}
-        <span className="ml-auto font-display text-xs tabular-nums text-chalk/40">
+        <span className="ml-auto font-display text-xs tabular-nums text-copy/40">
           {relativeTime(run.updatedAt, asOf)}
         </span>
       </div>
@@ -208,7 +208,7 @@ function RunCard({
         // A run that is moving announces its sentence; a settled one is just
         // part of the page.
         <p
-          className="font-display text-sm text-chalk/70"
+          className="font-display text-sm text-copy/70"
           role={activity === "working" || activity === "stalled" ? "status" : undefined}
         >
           {report.message}
@@ -219,10 +219,10 @@ function RunCard({
       <RunLiveFeed runId={run.id} working={activity === "working"} />
 
       {explanation ? (
-        <p className="font-display text-sm text-chalk/70">
+        <p className="font-display text-sm text-copy/70">
           {explanation}
           {run.errorCode ? (
-            <code className="ml-2 rounded bg-ink/60 px-1.5 py-0.5 font-mono text-[0.7rem] text-chalk/50">
+            <code className="ml-2 rounded bg-ground/60 px-1.5 py-0.5 font-mono text-[0.7rem] text-copy/60">
               {run.errorCode}
             </code>
           ) : null}
@@ -248,7 +248,7 @@ function RunCard({
           {removable ? (
             <form action={remove}>
               <input type="hidden" name="runId" value={run.id} />
-              <PendingButton className={cn(buttonQuiet, "text-chalk/50")}>
+              <PendingButton className={cn(buttonQuiet, "text-copy/60")}>
                 Remove
               </PendingButton>
             </form>

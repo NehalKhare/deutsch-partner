@@ -18,7 +18,7 @@ export function CodeForm({ action, initialState }: CodeFormProps) {
   return (
     <form action={formAction} className="flex w-full flex-col gap-5">
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="code" className="font-display text-sm font-medium text-chalk/80">
+        <label htmlFor="code" className="font-display text-sm font-medium text-copy/80">
           Code
         </label>
         <input

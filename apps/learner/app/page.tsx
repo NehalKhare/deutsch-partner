@@ -21,13 +21,13 @@ const GROWTH_MARKERS = Array.from({ length: MAX_GROWTH_STAGE }, (_, index) => {
 
 export default function Home() {
   return (
-    <div className="flex min-h-dvh flex-col bg-ink font-body text-chalk">
-      <header className="flex items-center justify-between border-b border-haze/60 px-6 py-4 md:px-10">
+    <div className="flex min-h-dvh flex-col bg-ground font-body text-copy">
+      <header className="flex items-center justify-between border-b border-edge/60 px-6 py-4 md:px-10">
         <Wordmark />
         <nav className="flex items-center gap-5 text-sm">
           <Link
             href="/auth/login"
-            className="text-chalk/70 underline-offset-4 hover:text-chalk hover:underline"
+            className="text-copy/70 underline-offset-4 hover:text-copy hover:underline"
           >
             Sign in
           </Link>
@@ -58,7 +58,7 @@ export default function Home() {
               Just start talking.
             </p>
 
-            <p className="max-w-md text-lg leading-relaxed text-chalk/75">
+            <p className="max-w-md text-lg leading-relaxed text-copy/75">
               You have been learning German for a year and you still freeze at
               the bakery. The problem was never vocabulary. It was that nothing
               ever talked back.
@@ -68,7 +68,7 @@ export default function Home() {
               <Link href="/auth/sign-up" className={buttonPrimary}>
                 Start free
               </Link>
-              <span className="text-sm text-chalk/50">
+              <span className="text-sm text-copy/60">
                 No card. Your first conversation takes two minutes.
               </span>
             </div>
@@ -77,10 +77,10 @@ export default function Home() {
 
         {/* The proof. Product output with the learner state shown in the
             margin — this is the thing a generic chatbot cannot put on a page. */}
-        <section className="border-y border-haze/60 bg-dusk">
+        <section className="border-y border-edge/60 bg-panel">
           <div className="mx-auto flex w-full max-w-4xl flex-col gap-8 px-6 py-16 md:px-10 md:py-24">
             <div className="flex flex-col gap-3">
-              <p className="font-display text-xs uppercase tracking-[0.2em] text-chalk/40">
+              <p className="font-display text-xs uppercase tracking-[0.2em] text-copy/40">
                 Week three
               </p>
               <h2 className="max-w-xl font-display text-3xl font-semibold tracking-tight md:text-4xl">
@@ -88,9 +88,9 @@ export default function Home() {
               </h2>
             </div>
 
-            <div className="flex flex-col gap-6 rounded-2xl border border-haze/70 bg-ink/60 p-6 md:p-8">
+            <div className="flex flex-col gap-6 rounded-2xl border border-edge/70 bg-ground/60 p-6 md:p-8">
               <div className="flex flex-col gap-2">
-                <p className="font-display text-xs uppercase tracking-[0.16em] text-chalk/40">
+                <p className="font-display text-xs uppercase tracking-[0.16em] text-copy/40">
                   You
                 </p>
                 <p lang="de" className="text-xl leading-relaxed">
@@ -100,7 +100,7 @@ export default function Home() {
               </div>
 
               <div className="flex flex-col gap-2 border-l-2 border-apricot/40 pl-5">
-                <p className="font-display text-xs uppercase tracking-[0.16em] text-chalk/40">
+                <p className="font-display text-xs uppercase tracking-[0.16em] text-copy/40">
                   {TUTOR.name}
                 </p>
                 <p lang="de" className="text-xl leading-relaxed">
@@ -108,20 +108,20 @@ export default function Home() {
                   <strong className="font-semibold text-sprout">bin</strong>{" "}
                   nach Berlin gefahren. Und wie war es?
                 </p>
-                <p className="text-sm text-chalk/50">
+                <p className="text-sm text-copy/60">
                   Almost! With <em>fahren</em> you use <em>sein</em>. And how
                   was it?
                 </p>
               </div>
 
-              <p className="border-t border-haze/60 pt-4 font-display text-sm text-chalk/55">
+              <p className="border-t border-edge/60 pt-4 font-display text-sm text-copy/60">
                 <span className="text-sprout">Third time this month.</span>{" "}
                 Perfekt with <em>sein</em> is now in your review queue, and it
                 will come back in conversation until it sticks.
               </p>
             </div>
 
-            <p className="max-w-2xl text-lg leading-relaxed text-chalk/70">
+            <p className="max-w-2xl text-lg leading-relaxed text-copy/70">
               Every conversation updates what we know about you: the words you
               have met, the ones you can actually use, the patterns you reach
               for and the ones you avoid. Nothing is a fresh start.
@@ -137,7 +137,7 @@ export default function Home() {
             <h2 className="max-w-xl font-display text-3xl font-semibold tracking-tight md:text-4xl">
               What you actually do here
             </h2>
-            <p className="max-w-xl text-lg leading-relaxed text-chalk/70">
+            <p className="max-w-xl text-lg leading-relaxed text-copy/70">
               Not exercises about German. German, used — with somebody who
               answers.
             </p>
@@ -172,12 +172,12 @@ export default function Home() {
             ].map((room) => (
               <li
                 key={room.name}
-                className="flex flex-col gap-2 rounded-2xl border border-haze/70 bg-dusk/50 p-5"
+                className="flex flex-col gap-2 rounded-2xl border border-edge/70 bg-panel/50 p-5"
               >
                 <h3 className="font-display text-lg font-semibold text-apricot">
                   {room.name}
                 </h3>
-                <p className="text-sm leading-relaxed text-chalk/70">{room.what}</p>
+                <p className="text-sm leading-relaxed text-copy/70">{room.what}</p>
               </li>
             ))}
           </ul>
@@ -189,7 +189,7 @@ export default function Home() {
             <h2 className="max-w-xl font-display text-3xl font-semibold tracking-tight md:text-4xl">
               Seventy mini-levels. Your partner grows through all of them.
             </h2>
-            <p className="max-w-xl text-lg leading-relaxed text-chalk/70">
+            <p className="max-w-xl text-lg leading-relaxed text-copy/70">
               Not more vocabulary each time — a different kind of thinking.
               Naming things, then combining them, then telling a story, then
               disagreeing with someone.
@@ -212,7 +212,7 @@ export default function Home() {
                   decorative
                   className="[--companion-size:1.9rem] sm:[--companion-size:2.75rem]"
                 />
-                <span className="font-display text-xs tracking-wide text-chalk/45">
+                <span className="font-display text-xs tracking-wide text-copy/45">
                   {marker.first}–{marker.last}
                 </span>
               </li>
@@ -223,12 +223,12 @@ export default function Home() {
         {/* Why it does not wear you out: the comfortable-difficulty policy,
             described rather than praised. This is a mechanism the product
             actually has, not a mood. */}
-        <section className="border-t border-haze/60 bg-dusk">
+        <section className="border-t border-edge/60 bg-panel">
           <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-6 py-16 md:px-10 md:py-24">
             <h2 className="max-w-xl font-display text-3xl font-semibold tracking-tight md:text-4xl">
               Easy on purpose
             </h2>
-            <div className="flex max-w-2xl flex-col gap-4 text-lg leading-relaxed text-chalk/70">
+            <div className="flex max-w-2xl flex-col gap-4 text-lg leading-relaxed text-copy/70">
               <p>
                 Every reply is pitched at your level: mostly language you
                 already handle comfortably, with just enough new to stretch
@@ -240,7 +240,7 @@ export default function Home() {
                 above where you were. When you are ready, the next mini-level
                 comes to you — you do not climb, it lifts.
               </p>
-              <p className="text-chalk/55">
+              <p className="text-copy/60">
                 Which is why half an hour here feels like a chat, not a class.
               </p>
             </div>
@@ -256,7 +256,7 @@ export default function Home() {
             <h2 className="max-w-xl font-display text-3xl font-semibold tracking-tight md:text-4xl">
               How long it takes, honestly
             </h2>
-            <p className="max-w-xl text-lg leading-relaxed text-chalk/70">
+            <p className="max-w-xl text-lg leading-relaxed text-copy/70">
               Based on the ~{GUIDED_HOURS.A1}, {GUIDED_HOURS.A2} and{" "}
               {GUIDED_HOURS.B1} guided hours language schools plan for the
               levels — just spent in conversation instead of a classroom.
@@ -265,7 +265,7 @@ export default function Home() {
 
           <div className="overflow-x-auto">
             <table className="w-full text-left font-display text-sm">
-              <thead className="text-xs uppercase tracking-[0.16em] text-chalk/40">
+              <thead className="text-xs uppercase tracking-[0.16em] text-copy/40">
                 <tr>
                   <th scope="col" className="py-2 pr-4">Finish</th>
                   <th scope="col" className="py-2 pr-4">30 min a day</th>
@@ -283,17 +283,17 @@ export default function Home() {
                     ["B1", "hold your own: opinions, stories, most everyday situations"],
                   ] as const
                 ).map(([level, means]) => (
-                  <tr key={level} className="border-t border-haze/50">
+                  <tr key={level} className="border-t border-edge/50">
                     <th scope="row" className="py-3 pr-4 font-semibold text-apricot">
                       {level}
                     </th>
-                    <td className="py-3 pr-4 text-chalk/80">
+                    <td className="py-3 pr-4 text-copy/80">
                       {timelinePhrase(level, 30)}
                     </td>
-                    <td className="py-3 pr-4 text-chalk/80">
+                    <td className="py-3 pr-4 text-copy/80">
                       {timelinePhrase(level, 60)}
                     </td>
-                    <td className="hidden py-3 text-sm text-chalk/55 sm:table-cell">
+                    <td className="hidden py-3 text-sm text-copy/60 sm:table-cell">
                       {means}
                     </td>
                   </tr>
@@ -302,20 +302,20 @@ export default function Home() {
             </table>
           </div>
 
-          <p className="max-w-2xl text-sm leading-relaxed text-chalk/50">
+          <p className="max-w-2xl text-sm leading-relaxed text-copy/60">
             Your pace will differ — everyone&apos;s does. The product tells you
             where you actually are, not where the calendar says you should be.
           </p>
         </section>
 
         {/* Honesty, stated plainly. Everyone else overclaims here. */}
-        <section className="border-t border-haze/60">
+        <section className="border-t border-edge/60">
           <div className="mx-auto flex w-full max-w-4xl flex-col gap-8 px-6 py-16 md:flex-row md:items-center md:justify-between md:px-10 md:py-20">
             <div className="flex max-w-lg flex-col gap-3">
               <h2 className="font-display text-2xl font-semibold tracking-tight">
                 B1-oriented, and honest about it.
               </h2>
-              <p className="leading-relaxed text-chalk/70">
+              <p className="leading-relaxed text-copy/70">
                 We estimate your readiness and tell you what the estimate is
                 based on. We do not issue certificates, and we will never tell
                 you that you have passed something you have not sat.
@@ -328,7 +328,7 @@ export default function Home() {
         </section>
       </main>
 
-      <footer className="border-t border-haze/60 px-6 py-6 text-sm text-chalk/40 md:px-10">
+      <footer className="border-t border-edge/60 px-6 py-6 text-sm text-copy/40 md:px-10">
         Deutsch Partner — an AI conversation partner for learning German.
       </footer>
     </div>

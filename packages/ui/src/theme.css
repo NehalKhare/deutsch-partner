@@ -1,37 +1,181 @@
 
 /*
- * Landing palette: warm light in a cool room.
+ * Landing palette: warm light in a cool room, and the same room in daylight.
  *
- * The ground is a deep blue rather than a neutral black, and the single strong
- * accent is warm — the companion is meant to read as the source of light in an
- * unfamiliar language, not as a highlight colour on a dark UI.
+ * The tokens below are named for the *role* they play, not for the material
+ * they are made of. That distinction is the whole reason a second theme is
+ * possible: `ground` is whatever the page sits on and `copy` is whatever you
+ * read, and each takes a different value in each theme. Naming them `ink` and
+ * `chalk` — as they were until light mode arrived — forced every class string
+ * to promise a darkness it could no longer keep.
  *
- * There is one theme, not two. A product whose whole identity is a warm blob
- * glowing in a dark room does not have a light mode; offering one would mean
- * maintaining a second, weaker version of the idea.
+ * `apricot` is still the single strong accent and still warm. It is a lighter
+ * apricot on the dark ground and a burnt one on the light, because the accent
+ * has to carry link text and a filled button in both, and the same hex cannot
+ * clear 4.5:1 against a near-black and a near-white at once.
+ *
+ * The companion itself is not themed. It is a character, not chrome, and a
+ * mascot that changes colour with the OS is a different mascot.
  */
-@theme {
-  --color-ink: #0f1320;
-  --color-dusk: #171c2e;
-  --color-haze: #2b3350;
-  --color-chalk: #ede7dc;
-  --color-apricot: #f2a277;
-  --color-sprout: #86d3a8;
-  --color-ember: #e8867f;
+
+/* ---------------------------------------------------------------------------
+ * The two palettes, as raw values. Written once, referenced twice below.
+ * ------------------------------------------------------------------------- */
+:root {
+  /* Dark: the original room. */
+  --dark-ground: #0f1320;
+  --dark-panel: #171c2e;
+  --dark-edge: #2b3350;
+  --dark-copy: #ede7dc;
+  --dark-apricot: #f2a277;
+  --dark-sprout: #86d3a8;
+  --dark-ember: #e8867f;
+  /* What sits on top of an apricot fill. Dark here, light on the light theme. */
+  --dark-on-accent: #0f1320;
+  /* Shadows stay dark in both themes; only how dark changes. */
+  --dark-shade: #05070d;
+  /* The two ends of the Trainer invite's lit gradient. */
+  --dark-filament: #fff1dc;
+  --dark-filament-deep: #b4622f;
+  --dark-der: #85aee3;
+  --dark-die: #e298b4;
+  --dark-das: #8fd3a8;
+
+  /* Light: the same room with the curtains open. Warm paper, not white. */
+  --light-ground: #faf6ef;
+  --light-panel: #efe7d9;
+  --light-edge: #d6cbb8;
+  --light-copy: #12172a;
+  --light-apricot: #9e4713;
+  --light-sprout: #1d7a4c;
+  --light-ember: #b3362c;
+  --light-on-accent: #fffaf3;
+  --light-shade: #57503f;
+  --light-filament: #b9581c;
+  --light-filament-deep: #7d340c;
+  --light-der: #2b5ea8;
+  --light-die: #a5316a;
+  --light-das: #24704a;
+}
+
+/* ---------------------------------------------------------------------------
+ * Which palette is in force.
+ *
+ * Dark is the base, so a page with no JavaScript and no stated OS preference
+ * gets the product's own identity rather than a half-applied fallback. Light
+ * arrives two ways: the OS asks for it and nothing has overridden that, or the
+ * reader picked it. `color-scheme` rides along so scrollbars, form controls
+ * and the space beyond the page follow too.
+ * ------------------------------------------------------------------------- */
+:root {
+  color-scheme: dark;
+  --ground: var(--dark-ground);
+  --panel: var(--dark-panel);
+  --edge: var(--dark-edge);
+  --copy: var(--dark-copy);
+  --apricot: var(--dark-apricot);
+  --sprout: var(--dark-sprout);
+  --ember: var(--dark-ember);
+  --on-accent: var(--dark-on-accent);
+  --shade: var(--dark-shade);
+  --filament: var(--dark-filament);
+  --filament-deep: var(--dark-filament-deep);
+  --der: var(--dark-der);
+  --die: var(--dark-die);
+  --das: var(--dark-das);
+}
+
+@media (prefers-color-scheme: light) {
+  /* The OS asks, and no explicit choice has overruled it. */
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --ground: var(--light-ground);
+    --panel: var(--light-panel);
+    --edge: var(--light-edge);
+    --copy: var(--light-copy);
+    --apricot: var(--light-apricot);
+    --sprout: var(--light-sprout);
+    --ember: var(--light-ember);
+    --on-accent: var(--light-on-accent);
+    --shade: var(--light-shade);
+    --filament: var(--light-filament);
+    --filament-deep: var(--light-filament-deep);
+    --der: var(--light-der);
+    --die: var(--light-die);
+    --das: var(--light-das);
+  }
+}
+
+/* The reader asked, whatever the OS says. Last, so it wins on equal weight. */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --ground: var(--light-ground);
+  --panel: var(--light-panel);
+  --edge: var(--light-edge);
+  --copy: var(--light-copy);
+  --apricot: var(--light-apricot);
+  --sprout: var(--light-sprout);
+  --ember: var(--light-ember);
+  --on-accent: var(--light-on-accent);
+  --shade: var(--light-shade);
+  --filament: var(--light-filament);
+  --filament-deep: var(--light-filament-deep);
+  --der: var(--light-der);
+  --die: var(--light-die);
+  --das: var(--light-das);
+}
+
+@theme inline {
+  --color-ground: var(--ground);
+  --color-panel: var(--panel);
+  --color-edge: var(--edge);
+  --color-copy: var(--copy);
+  --color-apricot: var(--apricot);
+  --color-sprout: var(--sprout);
+  --color-ember: var(--ember);
+  --color-on-accent: var(--on-accent);
+  --color-shade: var(--shade);
+  --color-filament: var(--filament);
 
   /* The three genders, in the colours German course books have printed for
-     decades — der blue, die red, das green — muted to sit on the ink ground.
-     They appear wherever an article does, so the association is learned by
-     exposure rather than taught. */
-  --color-der: #85aee3;
-  --color-die: #e298b4;
-  --color-das: #8fd3a8;
+     decades — der blue, die red, das green. They appear wherever an article
+     does, so the association is learned by exposure rather than taught, which
+     means the two themes must agree on which colour means which gender. */
+  --color-der: var(--der);
+  --color-die: var(--die);
+  --color-das: var(--das);
 
   --font-display: var(--font-display), ui-sans-serif, system-ui, sans-serif;
   --font-body: var(--font-body), ui-serif, Georgia, serif;
 }
 
-@custom-variant dark (&:is(.dark *));
+/*
+ * `light:` and `dark:` for the rare case where a token cannot express the
+ * difference — a gradient stop, a blend mode. Both follow the same two paths
+ * as the palette above, so a variant and a token never disagree. Dark is the
+ * base, so prefer an unprefixed utility over `dark:`.
+ */
+@custom-variant light {
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) & {
+      @slot;
+    }
+  }
+  :root[data-theme="light"] & {
+    @slot;
+  }
+}
+
+@custom-variant dark {
+  @media not all and (prefers-color-scheme: light) {
+    :root:not([data-theme="light"]) & {
+      @slot;
+    }
+  }
+  :root[data-theme="dark"] & {
+    @slot;
+  }
+}
 
 @theme inline {
   --color-background: var(--background);
@@ -80,41 +224,42 @@
 /*
  * The shadcn token names are kept and pointed at the palette above, so a
  * component pulled in later lands on this theme instead of importing a second
- * greyscale one alongside it.
+ * greyscale one alongside it. They reference the role variables rather than
+ * either palette, so they follow the theme without a second set of overrides.
  */
 :root {
-  --background: var(--color-ink);
-  --foreground: var(--color-chalk);
-  --card: var(--color-dusk);
-  --card-foreground: var(--color-chalk);
-  --popover: var(--color-dusk);
-  --popover-foreground: var(--color-chalk);
-  --primary: var(--color-apricot);
-  --primary-foreground: var(--color-ink);
-  --secondary: var(--color-haze);
-  --secondary-foreground: var(--color-chalk);
-  --muted: var(--color-dusk);
-  --muted-foreground: color-mix(in oklab, var(--color-chalk) 60%, transparent);
-  --accent: var(--color-haze);
-  --accent-foreground: var(--color-chalk);
-  --destructive: var(--color-ember);
-  --border: color-mix(in oklab, var(--color-haze) 60%, transparent);
-  --input: var(--color-haze);
-  --ring: var(--color-apricot);
-  --chart-1: var(--color-apricot);
-  --chart-2: var(--color-sprout);
-  --chart-3: var(--color-chalk);
-  --chart-4: var(--color-haze);
-  --chart-5: var(--color-ember);
+  --background: var(--ground);
+  --foreground: var(--copy);
+  --card: var(--panel);
+  --card-foreground: var(--copy);
+  --popover: var(--panel);
+  --popover-foreground: var(--copy);
+  --primary: var(--apricot);
+  --primary-foreground: var(--on-accent);
+  --secondary: var(--edge);
+  --secondary-foreground: var(--copy);
+  --muted: var(--panel);
+  --muted-foreground: color-mix(in oklab, var(--copy) 60%, transparent);
+  --accent: var(--edge);
+  --accent-foreground: var(--copy);
+  --destructive: var(--ember);
+  --border: color-mix(in oklab, var(--edge) 60%, transparent);
+  --input: var(--edge);
+  --ring: var(--apricot);
+  --chart-1: var(--apricot);
+  --chart-2: var(--sprout);
+  --chart-3: var(--copy);
+  --chart-4: var(--edge);
+  --chart-5: var(--ember);
   --radius: 0.75rem;
-  --sidebar: var(--color-dusk);
-  --sidebar-foreground: var(--color-chalk);
-  --sidebar-primary: var(--color-apricot);
-  --sidebar-primary-foreground: var(--color-ink);
-  --sidebar-accent: var(--color-haze);
-  --sidebar-accent-foreground: var(--color-chalk);
-  --sidebar-border: color-mix(in oklab, var(--color-haze) 60%, transparent);
-  --sidebar-ring: var(--color-apricot);
+  --sidebar: var(--panel);
+  --sidebar-foreground: var(--copy);
+  --sidebar-primary: var(--apricot);
+  --sidebar-primary-foreground: var(--on-accent);
+  --sidebar-accent: var(--edge);
+  --sidebar-accent-foreground: var(--copy);
+  --sidebar-border: color-mix(in oklab, var(--edge) 60%, transparent);
+  --sidebar-ring: var(--apricot);
 }
 
 @layer base {
@@ -122,12 +267,12 @@
     @apply border-border outline-ring/50;
   }
   html {
-    @apply bg-ink font-body;
+    @apply bg-ground font-body;
   }
   body {
-    @apply bg-ink font-body text-chalk;
+    @apply bg-ground font-body text-copy;
   }
   ::selection {
-    background-color: color-mix(in oklab, var(--color-apricot) 35%, transparent);
+    background-color: color-mix(in oklab, var(--apricot) 35%, transparent);
   }
 }

@@ -46,8 +46,8 @@ export default async function AuthenticatedLayout({
   const dueCount = summary.ok ? summary.data.vocabulary.due : 0;
 
   return (
-    <div className="flex h-dvh flex-col bg-ink font-body text-chalk">
-      <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-haze/60 px-6 py-4 md:px-10">
+    <div className="flex h-dvh flex-col bg-ground font-body text-copy">
+      <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-edge/60 px-6 py-4 md:px-10">
         <Wordmark href="/dashboard" />
         <AppNav dueCount={dueCount} />
         {/* Everything about the account rather than about German: which one

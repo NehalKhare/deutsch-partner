@@ -59,7 +59,7 @@ export function ComprehensionQuiz({
             <li key={question.question} className="flex flex-col gap-2">
               <label
                 htmlFor={`quiz-question-${index}`}
-                className="font-body leading-relaxed text-chalk"
+                className="font-body leading-relaxed text-copy"
               >
                 {index + 1}. {question.question}
               </label>
@@ -76,7 +76,7 @@ export function ComprehensionQuiz({
                 <p className="text-sm text-sprout">✓ Correct — {question.answer}</p>
               )}
               {grade === "review" && (
-                <p className="text-sm text-chalk/70">
+                <p className="text-sm text-copy/70">
                   Compare with the answer:{" "}
                   <span className="text-apricot">{question.answer}</span>
                 </p>
@@ -88,7 +88,7 @@ export function ComprehensionQuiz({
 
       {checked ? (
         <div className="flex items-center gap-4">
-          <p className="font-display text-sm text-chalk/70">
+          <p className="font-display text-sm text-copy/70">
             {correct} of {questions.length} matched the answer.
           </p>
           <button type="button" onClick={reset} className={buttonQuiet}>

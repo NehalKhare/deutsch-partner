@@ -31,22 +31,22 @@ export function TrainerInvite() {
       className={cn(
         styles.invite,
         "group flex w-full items-center gap-3 rounded-2xl px-4 py-3 sm:w-auto",
-        // Chalk, not apricot: an apricot ring inside this much apricot light
-        // is a focus ring that is drawn correctly and cannot be seen.
+        // The on-accent ring, not apricot: an apricot ring inside this much
+        // apricot light is drawn correctly and cannot be seen.
         focusRingOnAccent,
       )}
     >
       <span className="flex flex-col text-left">
-        <span className="font-display text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-ink/80">
+        <span className="font-display text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-on-accent/80">
           Your personal trainer
         </span>
-        <span className="font-display text-[0.95rem] leading-tight font-semibold text-ink">
+        <span className="font-display text-[0.95rem] leading-tight font-semibold text-on-accent">
           Perfect your mistakes
         </span>
       </span>
       <span
         aria-hidden
-        className="ml-auto font-display text-ink/70 transition-transform group-hover:translate-x-0.5 sm:ml-0"
+        className="ml-auto font-display text-on-accent/70 transition-transform group-hover:translate-x-0.5 sm:ml-0"
       >
         →
       </span>

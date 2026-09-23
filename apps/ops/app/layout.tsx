@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Bricolage_Grotesque, Geist, Geist_Mono, Newsreader } from "next/font/google";
 import "./globals.css";
+import { ThemeScript } from "@dp/ui/theme-script";
 import { cn } from "@dp/ui/utils";
 
 /** The same faces as the learner app, so the two products read as one house. */
@@ -46,7 +47,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         "font-body",
       )}
     >
-      <body className="flex min-h-full flex-col bg-ink text-chalk">{children}</body>
+      <head>
+        {/* Before anything paints: see ThemeScript. */}
+        <ThemeScript />
+      </head>
+      <body className="flex min-h-full flex-col bg-ground text-copy">{children}</body>
     </html>
   );
 }

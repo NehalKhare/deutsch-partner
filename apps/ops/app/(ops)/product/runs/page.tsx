@@ -122,7 +122,7 @@ export default async function ProductOpsRunsPage() {
           </label>
           <PendingButton className={buttonPrimary}>Run a scan</PendingButton>
         </form>
-        <p className="font-display text-xs text-chalk/45">
+        <p className="font-display text-xs text-copy/45">
           Several model calls, so it runs in the background and this page
           follows it. Every stage is recorded, so a scan that stops halfway is
           one you can nudge on rather than restart.
@@ -137,7 +137,7 @@ export default async function ProductOpsRunsPage() {
           {tiles.map((tile) => (
             <div key={tile.label} className={stat}>
               <dt className={eyebrow}>{tile.label}</dt>
-              <dd className="mt-1 font-display text-xl font-semibold tabular-nums text-chalk">
+              <dd className="mt-1 font-display text-xl font-semibold tabular-nums text-copy">
                 {tile.value}
               </dd>
             </div>
@@ -158,7 +158,7 @@ export default async function ProductOpsRunsPage() {
           <h2 id="feedback-heading" className={sectionTitle}>
             What learners say about the trainer
           </h2>
-          <p className="text-sm text-chalk/55">
+          <p className="text-sm text-copy/60">
             The last {FEEDBACK_WINDOW_DAYS} days of votes under trainer replies. Every
             scan records this as its first finding, before it searches the web.
           </p>
@@ -166,7 +166,7 @@ export default async function ProductOpsRunsPage() {
         {learnerFeedback.ok ? (
           <FeedbackPanel summary={learnerFeedback.data} />
         ) : (
-          <p className={cn(card, "text-sm text-chalk/70")}>
+          <p className={cn(card, "text-sm text-copy/70")}>
             Learner feedback could not be read.
           </p>
         )}

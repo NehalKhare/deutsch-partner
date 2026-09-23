@@ -11,7 +11,12 @@
     "./wordmark": "./src/wordmark.tsx",
     "./quiet-shell": "./src/quiet-shell.tsx",
     "./markdown/parse": "./src/markdown/parse.ts",
-    "./theme.css": "./src/theme.css"
+    "./theme.css": "./src/theme.css",
+    "./theme": "./src/theme.ts",
+    "./theme-script": "./src/theme-script.tsx",
+    "./theme-toggle": "./src/theme-toggle.tsx",
+    "./device-preference": "./src/device-preference.ts",
+    "./theme-store": "./src/theme-store.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -27,15 +32,16 @@
   },
   "devDependencies": {
     "@dp/config": "workspace:*",
-    "@types/node": "catalog:",
-    "eslint": "catalog:",
-    "typescript": "catalog:",
-    "vitest": "catalog:",
-    "@types/react": "catalog:",
-    "@types/react-dom": "catalog:",
+    "@dp/test-support": "workspace:*",
     "@testing-library/jest-dom": "catalog:",
     "@testing-library/react": "catalog:",
-    "@dp/test-support": "workspace:*",
-    "jsdom": "catalog:"
+    "@testing-library/user-event": "catalog:",
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "eslint": "catalog:",
+    "jsdom": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }

@@ -39,7 +39,7 @@ export function OpsSkeleton({
         <div
           key={band}
           aria-hidden
-          className="h-24 animate-pulse rounded-2xl border border-haze/70 bg-dusk/40"
+          className="h-24 animate-pulse rounded-2xl border border-edge/70 bg-panel/40"
         />
       ))}
     </main>

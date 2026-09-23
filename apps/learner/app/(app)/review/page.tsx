@@ -141,7 +141,7 @@ export default async function ReviewPage() {
               <span aria-hidden className="size-2 shrink-0 rounded-full bg-sprout" />
               Words to practise
             </h2>
-            <span className="text-sm tabular-nums text-chalk/45">
+            <span className="text-sm tabular-nums text-copy/45">
               {words.length}
             </span>
           </div>
@@ -154,7 +154,7 @@ export default async function ReviewPage() {
                 <p className={eyebrow}>
                   {WORD_KIND_LABELS[activity.kind] ?? activity.kind.replace(/_/gu, " ")}
                 </p>
-                <p className="mt-2 text-lg leading-relaxed text-chalk">
+                <p className="mt-2 text-lg leading-relaxed text-copy">
                   {activity.prompt}
                 </p>
               </li>
@@ -173,7 +173,7 @@ export default async function ReviewPage() {
               <span aria-hidden className="size-2 shrink-0 rounded-full bg-ember" />
               Mistakes that keep coming back
             </h2>
-            <span className="text-sm tabular-nums text-chalk/45">
+            <span className="text-sm tabular-nums text-copy/45">
               {mistakes.length}
             </span>
           </div>
@@ -183,10 +183,10 @@ export default async function ReviewPage() {
                 trainer writes the exercise when this is drilled. */}
             {mistakes.map((activity, index) => (
               <li key={`${activity.subject}:${index}`} className={card}>
-                <p className="font-display font-semibold tracking-tight text-chalk">
+                <p className="font-display font-semibold tracking-tight text-copy">
                   {activity.subject}
                 </p>
-                <p className="mt-1.5 leading-relaxed text-chalk/65">
+                <p className="mt-1.5 leading-relaxed text-copy/65">
                   {activity.prompt}
                 </p>
               </li>
@@ -197,12 +197,12 @@ export default async function ReviewPage() {
 
       <section
         aria-labelledby="due-heading"
-        className="flex flex-col gap-2 border-t border-haze/60 pt-6"
+        className="flex flex-col gap-2 border-t border-edge/60 pt-6"
       >
         <h2 id="due-heading" className={sectionTitle}>
           Overdue
         </h2>
-        <p className="text-sm text-chalk/55">
+        <p className="text-sm text-copy/60">
           {overdue} word{overdue === 1 ? "" : "s"} past their review date
           {plan.due[0] ? `, the oldest by ${plan.due[0].overdueDays} day${plan.due[0].overdueDays === 1 ? "" : "s"}` : ""}
           .

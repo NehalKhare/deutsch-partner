@@ -24,7 +24,14 @@ an AI-powered German-learning web application for English-speaking learners.
 - **Styling:** Tailwind v4, CSS-first — there is no `tailwind.config.*`; the theme is
   the `@theme` block in `packages/ui/src/theme.css`, imported by each app's
   `globals.css`. The house style is composing the class strings exported from
-  `@dp/ui/styles`. There is one theme and deliberately no light mode.
+  `@dp/ui/styles`. There are two themes, dark and light, and the colour tokens
+  are named for the **role** they play (`ground`, `panel`, `edge`, `copy`,
+  `on-accent`) rather than the material they are made of — a class cannot say
+  `bg-ink` and mean a near-white page. Both palettes are defined in that one
+  file and a test holds them level. Dark is the base; light arrives either from
+  `prefers-color-scheme` or from an explicit `data-theme` on `<html>`, which is
+  what `@dp/ui/theme-toggle` writes and `@dp/ui/theme-script` restores before
+  the first paint.
 - **Model access:** OpenRouter, reached only through the in-house `ModelGateway`
   (`packages/gateway`) over a hand-written transport. Only the learner app and the
   worker hold a model key; the operator app enqueues work and calls no model. There is no Vercel AI SDK in this

@@ -62,11 +62,11 @@ export function CompanionDemo() {
         <p
           data-testid="companion-line"
           lang="de"
-          className="font-body text-xl text-chalk"
+          className="font-body text-xl text-copy"
         >
           {turn.line}
         </p>
-        <p data-testid="companion-gloss" className="text-sm text-chalk/50">
+        <p data-testid="companion-gloss" className="text-sm text-copy/60">
           {turn.gloss}
         </p>
       </div>
@@ -83,7 +83,7 @@ export function CompanionDemo() {
               "focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-apricot",
               index === turnIndex
                 ? "border-apricot bg-apricot/15 text-apricot"
-                : "border-haze text-chalk/60 hover:border-chalk/40 hover:text-chalk",
+                : "border-edge text-copy/60 hover:border-copy/40 hover:text-copy",
             ].join(" ")}
           >
             <input

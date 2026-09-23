@@ -77,7 +77,7 @@ function NavLink({
       aria-current={active ? "page" : undefined}
       className={cn(
         PILL,
-        active ? "bg-apricot/15 text-apricot" : "text-chalk/55 hover:text-chalk",
+        active ? "bg-apricot/15 text-apricot" : "text-copy/60 hover:text-copy",
         focusRing,
         className,
       )}
@@ -122,7 +122,7 @@ export function AppNav({ dueCount = 0 }: AppNavProps) {
       <span
         role="group"
         aria-label="Talk with your tutor"
-        className="flex items-center gap-1 rounded-full border border-haze/60 bg-dusk/60 p-0.5"
+        className="flex items-center gap-1 rounded-full border border-edge/60 bg-panel/60 p-0.5"
       >
         {TALK.map((room) => (
           <NavLink

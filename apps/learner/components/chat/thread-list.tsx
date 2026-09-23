@@ -28,7 +28,7 @@ export interface RecentThread {
 }
 
 const rowClass =
-  "flex items-center justify-between gap-3 rounded-xl border border-haze/60 " +
+  "flex items-center justify-between gap-3 rounded-xl border border-edge/60 " +
   "px-4 py-2.5 transition-colors hover:border-apricot/50";
 
 const quietControl =
@@ -109,7 +109,7 @@ export function ThreadList({
         ref={announcer}
         role="status"
         tabIndex={-1}
-        className="px-4 text-xs text-chalk/45 outline-none empty:sr-only"
+        className="px-4 text-xs text-copy/45 outline-none empty:sr-only"
       >
         {announcement}
       </p>
@@ -156,7 +156,7 @@ function ThreadRow({
       <div className={rowClass}>
         <Link
           href={`/chat/${thread.id}`}
-          className={`min-w-0 flex-1 truncate text-chalk/80 hover:text-chalk ${focusRing} rounded-sm`}
+          className={`min-w-0 flex-1 truncate text-copy/80 hover:text-copy ${focusRing} rounded-sm`}
         >
           {thread.title}
         </Link>
@@ -166,7 +166,7 @@ function ThreadRow({
 
           {confirming ? (
             <>
-              <span className="hidden text-xs text-chalk/50 sm:inline">
+              <span className="hidden text-xs text-copy/60 sm:inline">
                 This cannot be undone.
               </span>
               <button
@@ -181,7 +181,7 @@ function ThreadRow({
               <button
                 type="button"
                 onClick={() => setConfirming(false)}
-                className={`${quietControl} text-chalk/55 hover:text-chalk`}
+                className={`${quietControl} text-copy/60 hover:text-copy`}
               >
                 Keep it
               </button>
@@ -191,7 +191,7 @@ function ThreadRow({
               type="button"
               onClick={() => setConfirming(true)}
               aria-label={`Delete “${thread.title}”`}
-              className={`${quietControl} text-chalk/40 hover:text-ember`}
+              className={`${quietControl} text-copy/40 hover:text-ember`}
             >
               Delete
             </button>

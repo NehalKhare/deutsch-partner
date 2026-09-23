@@ -57,9 +57,9 @@ export default async function ScenarioPage({
           {KIND_LABELS[item.kind]} · {item.targetLevel}
         </p>
         <h1 className={pageTitle}>{item.title}</h1>
-        <p className="font-display text-lg text-chalk/50">{item.titleEnglish}</p>
+        <p className="font-display text-lg text-copy/60">{item.titleEnglish}</p>
         <p className={cn(prose, "mt-2")}>{item.description}</p>
-        <p className="mt-1 text-xs text-chalk/40">
+        <p className="mt-1 text-xs text-copy/40">
           Source: {scenarioCitation(item)}
         </p>
       </header>
@@ -81,11 +81,11 @@ export default async function ScenarioPage({
               {item.content.lines.map((line, index) => (
                 <li key={`${index}-${line.german}`} className={card}>
                   <p className={eyebrow}>{line.speaker}</p>
-                  <p className="mt-1 font-body leading-relaxed text-chalk">
+                  <p className="mt-1 font-body leading-relaxed text-copy">
                     {line.german}
                   </p>
                   {line.english && (
-                    <p className="mt-1 text-sm leading-relaxed text-chalk/55">
+                    <p className="mt-1 text-sm leading-relaxed text-copy/60">
                       {line.english}
                     </p>
                   )}
@@ -112,15 +112,15 @@ export default async function ScenarioPage({
               Read
             </h2>
             <div className={card}>
-              <p className="font-body text-lg leading-relaxed text-chalk">
+              <p className="font-body text-lg leading-relaxed text-copy">
                 {item.content.passage}
               </p>
               {item.content.passageEnglish && (
                 <details className="mt-4">
-                  <summary className="cursor-pointer font-display text-sm text-chalk/55 hover:text-chalk">
+                  <summary className="cursor-pointer font-display text-sm text-copy/60 hover:text-copy">
                     Show English translation
                   </summary>
-                  <p className="mt-2 text-sm leading-relaxed text-chalk/70">
+                  <p className="mt-2 text-sm leading-relaxed text-copy/70">
                     {item.content.passageEnglish}
                   </p>
                 </details>
@@ -140,7 +140,7 @@ export default async function ScenarioPage({
       {item.vocabulary.length > 0 && (
         <section
           aria-labelledby="vocabulary-heading"
-          className="flex flex-col gap-2 border-t border-haze/60 pt-6"
+          className="flex flex-col gap-2 border-t border-edge/60 pt-6"
         >
           <h2 id="vocabulary-heading" className={sectionTitle}>
             Key vocabulary
@@ -148,8 +148,8 @@ export default async function ScenarioPage({
           <ul className="flex flex-col gap-1">
             {item.vocabulary.map((entry) => (
               <li key={entry.term} className="text-sm leading-relaxed">
-                <span className="text-chalk">{entry.term}</span>
-                <span className="text-chalk/55"> — {entry.meaning}</span>
+                <span className="text-copy">{entry.term}</span>
+                <span className="text-copy/60"> — {entry.meaning}</span>
               </li>
             ))}
           </ul>

@@ -42,8 +42,8 @@ import {
  * rule the form let you break.
  */
 
-const legendClass = "font-display text-sm font-medium text-chalk/80";
-const hintText = "text-xs text-chalk/45";
+const legendClass = "font-display text-sm font-medium text-copy/80";
+const hintText = "text-xs text-copy/45";
 
 /** Says where the learner is against the limit, without nagging at zero. */
 function countHint(chosen: number, max: number): string {
@@ -93,7 +93,7 @@ function CheckboxGroup({
                 choice,
                 "items-center rounded-full px-3.5 py-1.5 text-sm",
                 disabled &&
-                  "cursor-not-allowed opacity-40 hover:border-haze/70",
+                  "cursor-not-allowed opacity-40 hover:border-edge/70",
               )}
             >
               <input
@@ -169,10 +169,10 @@ export function OnboardingForm({ action, initialState }: OnboardingFormProps) {
                 className={cn(control, "mt-1")}
               />
               <span className="flex flex-col gap-0.5">
-                <span className="font-display text-sm font-medium text-chalk">
+                <span className="font-display text-sm font-medium text-copy">
                   {option.label}
                 </span>
-                <span className="text-xs text-chalk/50">
+                <span className="text-xs text-copy/60">
                   {option.description}
                 </span>
               </span>

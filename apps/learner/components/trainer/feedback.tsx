@@ -121,7 +121,7 @@ export function ReplyFeedback({
       <p
         role="status"
         data-role="feedback-outcome"
-        className={cn("px-1 text-xs", stage.kind === "failed" ? "text-ember" : "text-chalk/55")}
+        className={cn("px-1 text-xs", stage.kind === "failed" ? "text-ember" : "text-copy/60")}
       >
         {stage.said}
       </p>
@@ -130,7 +130,7 @@ export function ReplyFeedback({
 
   return (
     <div data-role="feedback" className="flex flex-col gap-2 px-1">
-      <div className="flex items-center gap-1.5 text-xs text-chalk/45">
+      <div className="flex items-center gap-1.5 text-xs text-copy/45">
         <span>Was this helpful?</span>
         <button
           type="button"
@@ -168,14 +168,14 @@ export function ReplyFeedback({
       {stage.kind === "reasons" || stage.kind === "sending" ? (
         <form
           data-role="feedback-reasons"
-          className="flex flex-col gap-2 rounded-xl border border-haze/60 bg-dusk/60 p-3"
+          className="flex flex-col gap-2 rounded-xl border border-edge/60 bg-panel/60 p-3"
           onSubmit={(event) => {
             event.preventDefault();
             void send("unhelpful");
           }}
         >
           <fieldset className="flex flex-wrap gap-1.5">
-            <legend className="mb-1.5 text-xs text-chalk/55">What went wrong?</legend>
+            <legend className="mb-1.5 text-xs text-copy/60">What went wrong?</legend>
             {FEEDBACK_REASONS.map((reason) => {
               const on = reasons.includes(reason);
               return (
@@ -188,7 +188,7 @@ export function ReplyFeedback({
                     "rounded-full border px-2.5 py-0.5 text-xs transition-colors",
                     on
                       ? "border-apricot bg-apricot/15 text-apricot"
-                      : "border-haze/70 text-chalk/70 hover:text-chalk",
+                      : "border-edge/70 text-copy/70 hover:text-copy",
                     focusRing,
                   )}
                 >
@@ -217,7 +217,7 @@ export function ReplyFeedback({
               type="submit"
               disabled={stage.kind === "sending"}
               className={cn(
-                "rounded-full bg-apricot px-3 py-1.5 text-xs font-medium text-ink",
+                "rounded-full bg-apricot px-3 py-1.5 text-xs font-medium text-on-accent",
                 "disabled:opacity-60",
                 focusRing,
               )}
