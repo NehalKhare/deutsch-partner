@@ -15,16 +15,6 @@ export interface Option {
   readonly label: string;
 }
 
-export const NATIVE_LANGUAGE_OPTIONS: readonly Option[] = [
-  { value: "en", label: "English" },
-  { value: "es", label: "Spanish" },
-  { value: "fr", label: "French" },
-  { value: "pt", label: "Portuguese" },
-  { value: "hi", label: "Hindi" },
-  { value: "zh", label: "Chinese" },
-  { value: "other", label: "Another language" },
-];
-
 export const TOPIC_OPTIONS: readonly Option[] = [
   { value: "travel", label: "Travel and getting around" },
   { value: "daily_life", label: "Everyday life" },
@@ -80,7 +70,6 @@ export const MAX_SELECTED_TOPICS = 5;
 export const MAX_SELECTED_INTERESTS = 5;
 
 export interface OnboardingDraft {
-  nativeLanguage: string;
   learningGoal: string;
   selectedLevel: CEFRLevel;
   targetTopics: string[];
@@ -97,7 +86,6 @@ export interface OnboardingDraft {
  */
 export function defaultOnboardingDraft(): OnboardingDraft {
   return {
-    nativeLanguage: "en",
     learningGoal: "",
     selectedLevel: "A1",
     targetTopics: [],

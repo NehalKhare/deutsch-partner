@@ -42,7 +42,6 @@ const LEARNER = "11111111-1111-4111-8111-111111111111";
 
 const STORED: LearnerProfile = {
   id: LEARNER,
-  nativeLanguage: "en",
   learningGoal: "Old goal",
   selectedLevel: "A2",
   targetTopics: ["travel"],
@@ -60,7 +59,6 @@ const IDLE = { message: null, status: "idle" } as const;
 function form(over: Record<string, string> = {}): FormData {
   const data = new FormData();
   const fields: Record<string, string> = {
-    nativeLanguage: "en",
     learningGoal: "Hold a job interview in German",
     inputPreference: "voice",
     outputPreference: "voice",

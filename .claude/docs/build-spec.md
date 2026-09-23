@@ -305,7 +305,6 @@ Implement onboarding state.
 
 Fields:
 
-- native language
 - learning goal
 - selected CEFR
 - target topics

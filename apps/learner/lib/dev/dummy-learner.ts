@@ -43,7 +43,6 @@ export function usesReservedDomain(email: string): boolean {
  */
 export const DUMMY_LEARNER_ONBOARDING: OnboardingInput =
   onboardingInputSchema.parse({
-    nativeLanguage: "en",
     learningGoal:
       "Hold a relaxed conversation with my colleagues in Berlin without switching to English.",
     selectedLevel: "A2",

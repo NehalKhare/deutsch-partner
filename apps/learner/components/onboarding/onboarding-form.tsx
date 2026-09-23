@@ -11,7 +11,6 @@ import {
   LEVEL_OPTIONS,
   MAX_SELECTED_INTERESTS,
   MAX_SELECTED_TOPICS,
-  NATIVE_LANGUAGE_OPTIONS,
   TOPIC_OPTIONS,
   defaultOnboardingDraft,
   type Option,
@@ -201,30 +200,6 @@ export function OnboardingForm({ action, initialState }: OnboardingFormProps) {
           }
           className={field}
         />
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="nativeLanguage" className={legendClass}>
-          Your strongest language
-        </label>
-        <select
-          id="nativeLanguage"
-          name="nativeLanguage"
-          defaultValue={draft.nativeLanguage}
-          onChange={(event) =>
-            setDraft((current) => ({
-              ...current,
-              nativeLanguage: event.target.value,
-            }))
-          }
-          className={field}
-        >
-          {NATIVE_LANGUAGE_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
       </div>
 
       <CheckboxGroup

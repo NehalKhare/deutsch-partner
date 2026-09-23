@@ -10,7 +10,6 @@ import {
   INTEREST_OPTIONS,
   MAX_SELECTED_INTERESTS,
   MAX_SELECTED_TOPICS,
-  NATIVE_LANGUAGE_OPTIONS,
   TOPIC_OPTIONS,
 } from "@dp/domain/onboarding/defaults";
 
@@ -28,7 +27,6 @@ const distinct = <T>(list: T[]) => new Set(list).size === list.length;
  * of surprise. No learner id either — it comes from the verified session.
  */
 export const settingsInputSchema = z.strictObject({
-  nativeLanguage: z.enum(values(NATIVE_LANGUAGE_OPTIONS)),
   learningGoal: z.string().trim().min(1).max(500),
   targetTopics: z
     .array(z.enum(values(TOPIC_OPTIONS)))
@@ -58,7 +56,6 @@ export type SettingsParseResult =
   | { readonly success: false; readonly message: string };
 
 const FIELD_LABELS: Readonly<Record<string, string>> = {
-  nativeLanguage: "native language",
   learningGoal: "learning goal",
   targetTopics: "topics",
   interests: "interests",
@@ -77,7 +74,6 @@ const OVER_LIMIT: Readonly<Record<string, string>> = {
 
 export function parseSettingsForm(formData: FormData): SettingsParseResult {
   const parsed = settingsInputSchema.safeParse({
-    nativeLanguage: formData.get("nativeLanguage"),
     learningGoal: formData.get("learningGoal"),
     // An unchecked checkbox group submits nothing at all, which is an empty
     // selection rather than a missing field.

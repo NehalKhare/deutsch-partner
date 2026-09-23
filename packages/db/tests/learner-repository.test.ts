@@ -7,7 +7,6 @@ const LEARNER = "11111111-1111-4111-8111-111111111111";
 
 const profileRow = {
   id: LEARNER,
-  native_language: "en",
   learning_goal: "Hold a conversation in Berlin",
   selected_level: "A2",
   target_topics: ["travel"],
@@ -165,7 +164,6 @@ describe("upsertProfile", () => {
 
     await createLearnerRepository(fake.client).upsertProfile({
       id: LEARNER,
-      nativeLanguage: "en",
       learningGoal: "Hold a conversation in Berlin",
       selectedLevel: "A2",
       targetTopics: ["travel"],
@@ -181,13 +179,11 @@ describe("upsertProfile", () => {
     const [[payload]] = fake.methodArgs("profiles", "upsert");
     expect(payload).toMatchObject({
       id: LEARNER,
-      native_language: "en",
       correction_preference: "gentle",
       voice_preference: "male",
       trainer_personality: "strict",
       selected_level: "A2",
     });
-    expect(payload).not.toHaveProperty("nativeLanguage");
   });
 
   it("validates its input before touching the database", async () => {
@@ -195,7 +191,6 @@ describe("upsertProfile", () => {
 
     const result = await createLearnerRepository(fake.client).upsertProfile({
       id: "not-a-uuid",
-      nativeLanguage: "en",
       learningGoal: "x",
       selectedLevel: "A2",
       targetTopics: [],
@@ -218,7 +213,6 @@ describe("upsertProfile", () => {
 
     const result = await createLearnerRepository(fake.client).upsertProfile({
       id: LEARNER,
-      nativeLanguage: "en",
       learningGoal: "x",
       trainerPersonality: "friendly",
       selectedLevel: "A2",

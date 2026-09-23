@@ -43,7 +43,6 @@ export function createOnboardingRepository(
       // argument — the function reads it from the verified session, so this
       // call cannot be aimed at somebody else.
       const { error } = await client.rpc("complete_onboarding", {
-        p_native_language: parsed.data.nativeLanguage,
         p_learning_goal: parsed.data.learningGoal,
         p_selected_level: parsed.data.selectedLevel,
         p_target_topics: parsed.data.targetTopics,

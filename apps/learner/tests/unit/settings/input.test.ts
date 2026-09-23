@@ -19,7 +19,6 @@ import { parseSettingsForm, settingsInputSchema } from "@/lib/settings/input";
 function form(over: Record<string, string | string[]> = {}): FormData {
   const data = new FormData();
   const defaults: Record<string, string | string[]> = {
-    nativeLanguage: "en",
     learningGoal: "Order food in Vienna",
     targetTopics: ["travel"],
     interests: ["cooking"],

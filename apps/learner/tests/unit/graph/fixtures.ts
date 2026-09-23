@@ -52,7 +52,6 @@ export const EVALUATION: LearningEvaluation = {
 
 const PROFILE = {
   id: INPUT.learnerId,
-  nativeLanguage: "en",
   learningGoal: "Talk to colleagues in German",
   selectedLevel: "A2" as const,
   targetTopics: ["travel"],

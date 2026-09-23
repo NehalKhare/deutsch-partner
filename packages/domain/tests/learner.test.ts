@@ -8,7 +8,6 @@ import {
 
 const validProfile = {
   id: "11111111-1111-4111-8111-111111111111",
-  nativeLanguage: "en",
   learningGoal: "Hold a conversation on holiday in Berlin",
   selectedLevel: "A2",
   targetTopics: ["travel", "food"],

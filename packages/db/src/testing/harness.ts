@@ -146,10 +146,10 @@ export async function createTestDatabase(): Promise<TestDatabase> {
       );
       await db.query(
         `insert into public.profiles
-           (id, native_language, learning_goal, selected_level,
+           (id, learning_goal, selected_level,
             target_topics, interests, input_preference, output_preference,
             correction_preference)
-         values ($1, 'en', 'Learn German', 'A1',
+         values ($1, 'Learn German', 'A1',
                  array[]::text[], array[]::text[], 'text', 'text', 'gentle')
          on conflict (id) do nothing`,
         [learnerId],

@@ -17,7 +17,6 @@ import {
   INTEREST_OPTIONS,
   MAX_SELECTED_INTERESTS,
   MAX_SELECTED_TOPICS,
-  NATIVE_LANGUAGE_OPTIONS,
   TOPIC_OPTIONS,
   type Option,
 } from "@dp/domain/onboarding/defaults";
@@ -48,7 +47,6 @@ import {
 /** The saved profile, as the form holds it while it is being edited. */
 function draftFrom(profile: LearnerProfile) {
   return {
-    nativeLanguage: profile.nativeLanguage,
     learningGoal: profile.learningGoal,
     targetTopics: profile.targetTopics,
     interests: profile.interests,
@@ -443,30 +441,6 @@ function SettingsFields({ profile }: { readonly profile: LearnerProfile }) {
           ))}
         </div>
       </fieldset>
-
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="nativeLanguage" className={legendClass}>
-          Your strongest language
-        </label>
-        <select
-          id="nativeLanguage"
-          name="nativeLanguage"
-          defaultValue={draft.nativeLanguage}
-          onChange={(event) =>
-            setDraft((current) => ({
-              ...current,
-              nativeLanguage: event.target.value,
-            }))
-          }
-          className={field}
-        >
-          {NATIVE_LANGUAGE_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </div>
 
     </>
   );

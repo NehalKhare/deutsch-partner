@@ -12,7 +12,6 @@ import { ALICE, BOB, createTestDatabase, type TestDatabase } from "../../src/tes
 let database: TestDatabase;
 
 const ARGS = [
-  "en",
   "Hold a conversation on holiday in Berlin",
   "A2",
   ["travel", "food"],
@@ -22,7 +21,7 @@ const ARGS = [
   "gentle",
 ];
 
-const CALL = `select public.complete_onboarding($1,$2,$3,$4,$5,$6,$7,$8)`;
+const CALL = `select public.complete_onboarding($1,$2,$3,$4,$5,$6,$7)`;
 
 beforeAll(async () => {
   database = await createTestDatabase();
@@ -130,7 +129,7 @@ describe("complete_onboarding", () => {
   it("can be run twice without creating a second profile", async () => {
     await database.asLearner(ALICE, async () => {
       await database.db.query(CALL, ARGS);
-      await database.db.query(CALL, [...ARGS.slice(0, 1), "Changed my goal", ...ARGS.slice(2)]);
+      await database.db.query(CALL, ["Changed my goal", ...ARGS.slice(1)]);
 
       const profiles = await database.db.query(
         `select learning_goal from public.profiles where id = $1`,
@@ -171,7 +170,7 @@ describe("complete_onboarding", () => {
   it("rejects an invalid CEFR selection at the database", async () => {
     await expect(
       database.asLearner(ALICE, () =>
-        database.db.query(CALL, [...ARGS.slice(0, 2), "C1", ...ARGS.slice(3)]),
+        database.db.query(CALL, [...ARGS.slice(0, 1), "C1", ...ARGS.slice(2)]),
       ),
     ).rejects.toThrow();
   });
@@ -181,7 +180,7 @@ describe("complete_onboarding", () => {
     // not survive it.
     await database.asLearner(BOB, async () => {
       await expect(
-        database.db.query(CALL, [...ARGS.slice(0, 2), "C1", ...ARGS.slice(3)]),
+        database.db.query(CALL, [...ARGS.slice(0, 1), "C1", ...ARGS.slice(2)]),
       ).rejects.toThrow();
     });
 

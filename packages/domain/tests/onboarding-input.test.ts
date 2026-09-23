@@ -9,7 +9,6 @@ import {
 import { onboardingInputSchema, parseOnboardingForm } from "../src/onboarding/input";
 
 const valid = {
-  nativeLanguage: "en",
   learningGoal: "Hold a conversation on holiday in Berlin",
   selectedLevel: "A2",
   targetTopics: ["travel"],
@@ -92,7 +91,6 @@ describe("parseOnboardingForm", () => {
   it("collects repeated checkbox values into a list", () => {
     const result = parseOnboardingForm(
       formData([
-        ["nativeLanguage", "en"],
         ["learningGoal", "Talk to my colleagues"],
         ["selectedLevel", "A1"],
         ["targetTopics", "travel"],
@@ -111,7 +109,6 @@ describe("parseOnboardingForm", () => {
   it("treats absent checkbox groups as empty rather than missing", () => {
     const result = parseOnboardingForm(
       formData([
-        ["nativeLanguage", "en"],
         ["learningGoal", "Talk to my colleagues"],
         ["selectedLevel", "A1"],
         ["inputPreference", "text"],
@@ -128,7 +125,6 @@ describe("parseOnboardingForm", () => {
   it("reports a readable message for a missing goal", () => {
     const result = parseOnboardingForm(
       formData([
-        ["nativeLanguage", "en"],
         ["learningGoal", ""],
         ["selectedLevel", "A1"],
         ["inputPreference", "text"],
@@ -145,7 +141,6 @@ describe("parseOnboardingForm", () => {
   it("rejects a forged level submitted outside the form", () => {
     const result = parseOnboardingForm(
       formData([
-        ["nativeLanguage", "en"],
         ["learningGoal", "Talk to my colleagues"],
         ["selectedLevel", "C2"],
         ["inputPreference", "text"],
@@ -162,7 +157,6 @@ describe("a list over its cap", () => {
   /** A submission that did not come from the form, since the form prevents it. */
   function overLimit(name: "targetTopics" | "interests", count: number): FormData {
     const data = new FormData();
-    data.set("nativeLanguage", "en");
     data.set("learningGoal", "Order coffee in Vienna");
     data.set("selectedLevel", "A1");
     data.set("inputPreference", "text");

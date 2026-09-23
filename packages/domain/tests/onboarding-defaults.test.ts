@@ -4,7 +4,6 @@ import {
   CORRECTION_PREFERENCE_OPTIONS,
   INTEREST_OPTIONS,
   MAX_SELECTED_TOPICS,
-  NATIVE_LANGUAGE_OPTIONS,
   TOPIC_OPTIONS,
   defaultOnboardingDraft,
   initialLearnerState,
@@ -54,7 +53,6 @@ describe("option lists", () => {
   it.each([
     ["topics", TOPIC_OPTIONS],
     ["interests", INTEREST_OPTIONS],
-    ["native languages", NATIVE_LANGUAGE_OPTIONS],
     ["correction preferences", CORRECTION_PREFERENCE_OPTIONS],
   ])("offers a usable set of %s", (_label, options) => {
     expect(options.length).toBeGreaterThanOrEqual(3);

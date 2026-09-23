@@ -6,7 +6,6 @@ import { createOnboardingRepository } from "../src/onboarding-repository";
 const LEARNER = "11111111-1111-4111-8111-111111111111";
 
 const INPUT = {
-  nativeLanguage: "en",
   learningGoal: "Hold a conversation on holiday in Berlin",
   selectedLevel: "A2",
   targetTopics: ["travel"],
@@ -50,7 +49,6 @@ describe("completeOnboarding", () => {
 
     expect(result.ok).toBe(true);
     expect(fake.rpc).toHaveBeenCalledWith("complete_onboarding", {
-      p_native_language: "en",
       p_learning_goal: "Hold a conversation on holiday in Berlin",
       p_selected_level: "A2",
       p_target_topics: ["travel"],

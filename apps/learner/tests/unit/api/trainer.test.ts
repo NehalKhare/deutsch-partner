@@ -136,7 +136,6 @@ function fakeDeps(options: {
         if (options.profileFails) throw new Error("down");
         return ok({
           id: IDENTITY.learnerId,
-          nativeLanguage: "en",
           learningGoal: "Order food in Vienna",
           selectedLevel: "A2" as const,
           targetTopics: [],

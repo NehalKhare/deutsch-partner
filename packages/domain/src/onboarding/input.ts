@@ -6,7 +6,6 @@ import {
   INTEREST_OPTIONS,
   MAX_SELECTED_INTERESTS,
   MAX_SELECTED_TOPICS,
-  NATIVE_LANGUAGE_OPTIONS,
   TOPIC_OPTIONS,
 } from "./defaults";
 
@@ -24,7 +23,6 @@ const distinct = <T>(list: T[]) => new Set(list).size === list.length;
  * retrieval filters and prompt content on every turn.
  */
 export const onboardingInputSchema = z.strictObject({
-  nativeLanguage: z.enum(values(NATIVE_LANGUAGE_OPTIONS)),
   learningGoal: z.string().trim().min(1).max(500),
   selectedLevel: cefrLevelSchema,
   targetTopics: z
@@ -48,7 +46,6 @@ export type OnboardingParseResult =
 
 /** Field labels, so a validation message names something the learner can see. */
 const FIELD_LABELS: Readonly<Record<string, string>> = {
-  nativeLanguage: "native language",
   learningGoal: "learning goal",
   selectedLevel: "current level",
   targetTopics: "topics",
@@ -73,7 +70,6 @@ const OVER_LIMIT: Readonly<Record<string, string>> = {
 
 export function parseOnboardingForm(formData: FormData): OnboardingParseResult {
   const parsed = onboardingInputSchema.safeParse({
-    nativeLanguage: formData.get("nativeLanguage"),
     learningGoal: formData.get("learningGoal"),
     selectedLevel: formData.get("selectedLevel"),
     // An unchecked checkbox group submits nothing at all, which is an empty

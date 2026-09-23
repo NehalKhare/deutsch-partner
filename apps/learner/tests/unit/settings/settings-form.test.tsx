@@ -22,7 +22,6 @@ import { MAX_SELECTED_TOPICS, TOPIC_OPTIONS } from "@dp/domain/onboarding/defaul
 
 const PROFILE: LearnerProfile = {
   id: "11111111-1111-4111-8111-111111111111",
-  nativeLanguage: "en",
   learningGoal: "Order food and chat with my neighbours in Vienna",
   selectedLevel: "A2",
   targetTopics: ["travel", "food"],

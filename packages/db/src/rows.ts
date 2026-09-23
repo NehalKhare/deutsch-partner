@@ -83,7 +83,6 @@ const timestampColumn = z.union([
 
 export const profileRowSchema = z.object({
   id: z.uuid(),
-  native_language: z.string(),
   learning_goal: z.string(),
   selected_level: cefrLevelSchema,
   target_topics: z.array(z.string()),
@@ -104,7 +103,6 @@ export const profileRowSchema = z.object({
 export const profileFromRow = profileRowSchema.transform((row, ctx) =>
   validated(learnerProfileSchema, {
     id: row.id,
-    nativeLanguage: row.native_language,
     learningGoal: row.learning_goal,
     selectedLevel: row.selected_level,
     targetTopics: row.target_topics,
@@ -121,7 +119,6 @@ export const profileFromRow = profileRowSchema.transform((row, ctx) =>
 export function profileToRow(profile: LearnerProfile) {
   return {
     id: profile.id,
-    native_language: profile.nativeLanguage,
     learning_goal: profile.learningGoal,
     selected_level: profile.selectedLevel,
     target_topics: profile.targetTopics,

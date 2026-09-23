@@ -142,7 +142,6 @@ async function main(): Promise<void> {
     say("  Onboarding already complete. Progress left untouched.");
   } else {
     const { error } = await learner.rpc("complete_onboarding", {
-      p_native_language: DUMMY_LEARNER_ONBOARDING.nativeLanguage,
       p_learning_goal: DUMMY_LEARNER_ONBOARDING.learningGoal,
       p_selected_level: DUMMY_LEARNER_ONBOARDING.selectedLevel,
       p_target_topics: DUMMY_LEARNER_ONBOARDING.targetTopics,

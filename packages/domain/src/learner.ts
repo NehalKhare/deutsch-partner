@@ -59,7 +59,6 @@ export const masteryThresholdSchema = z.union([
  */
 export const learnerProfileSchema = z.strictObject({
   id: uuidSchema,
-  nativeLanguage: nonEmptyTextSchema(16),
   learningGoal: nonEmptyTextSchema(500),
   selectedLevel: cefrLevelSchema,
   targetTopics: z.array(nonEmptyTextSchema(64)).max(20),
