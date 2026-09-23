@@ -1,30 +1,33 @@
 import { Wordmark } from "@dp/ui/wordmark";
 import { accountLabel } from "@dp/auth/account";
 
+import { HOME_PATH } from "@/lib/auth/routes";
 import { OpsAccountMenu } from "@/components/ops-account-menu";
-import { OpsNav } from "@/components/ops-nav";
+import { OpsNav, tabBarSpace } from "@/components/ops-nav";
 
 /**
- * The operator shell: a rail down the left, and the page beside it.
+ * The operator shell: a header across the top, and the page below it.
  *
- * A sidebar rather than a top bar because this is a tool somebody has open all
- * day across four rooms. A row of tabs has to stay short to stay a row, and it
- * had already stopped being one — the fourth room would have pushed the
- * account controls onto a second line at any window narrower than a desktop.
- * Down the side there is room for the names to be the names, and where you are
- * stays on the screen while you read a proposal that is ten screens long.
+ * The same frame as the learner's, in the operator's palette, so the two
+ * products are one pattern to learn. Four rooms fit a centred row with room to
+ * spare, which is what the rail was for; the rail had stopped earning the
+ * 15rem of width it took from a ten-screen proposal.
+ *
+ * Mobile first. On a phone the header holds the wordmark and the account, and
+ * the rooms move to a tab bar at the foot (OpsNav pins itself there). From
+ * `md` up the header is three columns with the outer two equal, so the rooms
+ * sit on the true centre however long the account name is. No
+ * backdrop-filter or transform on the header: either would become the
+ * containing block for the fixed tab bar and drag it up here.
  *
  * Only the two leaves that need the browser are client components: the nav,
  * because the current page should say so, and the account menu, because it
  * opens and closes. The shell itself stays on the server.
  *
- * The rail is exactly one viewport tall and scrolls nothing; the region beside
- * it carries the overflow. That is what lets the live run feed and the
- * proposal outline keep a fixed head above a scrolling body.
- *
- * Below `md` the rail lies down and becomes a strip across the top, with the
- * rooms in a horizontal scroller. An operator on a phone is rare, but a
- * laptop at half width is not.
+ * The shell is exactly one viewport tall and scrolls nothing; the region below
+ * the header carries the overflow. That is what lets the live run feed and the
+ * proposal outline keep a fixed head above a scrolling body. The spacer under
+ * it keeps the tab bar's height clear on a phone.
  */
 export interface OpsShellProps {
   readonly email: string | null;
@@ -34,28 +37,24 @@ export interface OpsShellProps {
 
 export function OpsShell({ email, signOut, children }: OpsShellProps) {
   return (
-    <div className="flex min-h-dvh flex-col bg-ground font-body text-copy md:h-dvh md:flex-row">
-      <aside className="flex shrink-0 flex-col gap-4 border-b border-edge/60 px-4 py-4 md:h-dvh md:w-60 md:border-r md:border-b-0 md:px-5 md:py-6">
+    <div className="flex h-dvh flex-col bg-ground font-body text-copy">
+      <header className="flex items-center justify-between gap-4 border-b border-edge/60 px-4 py-2.5 sm:px-6 md:grid md:grid-cols-[1fr_auto_1fr] md:justify-items-start md:py-3 lg:px-10">
         <div className="flex items-center gap-3">
-          <Wordmark href="/product" />
-          <span className="rounded-full border border-brand/40 px-2 py-0.5 font-display text-xs uppercase tracking-wide text-brand">
+          <Wordmark href={HOME_PATH} />
+          <span className="hidden rounded-full border border-brand/40 px-2 py-0.5 font-display text-xs uppercase tracking-wide text-brand sm:inline">
             Operations
           </span>
         </div>
 
         <OpsNav />
 
-        {/* Pinned to the foot on a rail, inline on the strip. */}
-        <div className="md:mt-auto">
-          <OpsAccountMenu
-            label={accountLabel(email)}
-            email={email}
-            signOut={signOut}
-          />
+        <div className="md:justify-self-end">
+          <OpsAccountMenu label={accountLabel(email)} email={email} signOut={signOut} />
         </div>
-      </aside>
+      </header>
 
-      <div className="flex min-h-0 flex-1 flex-col md:overflow-y-auto">{children}</div>
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">{children}</div>
+      <div aria-hidden className={tabBarSpace} />
     </div>
   );
 }

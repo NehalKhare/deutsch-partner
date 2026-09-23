@@ -225,13 +225,18 @@ and the operator app is a tool somebody has open beside Jira all day, and
 making an operator learn a second visual language for the same job costs more
 than borrowing the one they already read.
 
-**The operator app navigates from a rail, not a bar.** `OpsShell` puts the four
-rooms down the left and pins the account menu — the address, the theme and the
-way out — to its foot, behind one button. A row of tabs has to stay short to
-stay a row, and the fourth room is what ended that. Below `md` the rail lies
-down into a strip across the top. Only the two leaves that need the browser are
-client components: the nav, because the current page should say so, and the
-menu, because it opens.
+**Both products navigate from the same header.** `OpsShell` and the learner's
+`(app)` layout draw one frame: the wordmark on the left, the rooms centred, and
+the account menu — the address, the theme and the way out — on the right behind
+one avatar button. Below `md` the rooms leave the header for a tab bar pinned to
+the foot of the screen, one tree of links in both shapes so there is a single
+landmark and a single `aria-current`; the bar is `fixed`, and an in-flow spacer
+under the scrolling region keeps its height clear so a page's `sticky bottom-0`
+composer rests above it. The operator's rooms run in order of attention — AI
+spend, which is the front page (`HOME_PATH` is `/costs`), then Trainer
+feedback, Feature proposals and Market Scan. Only the two leaves that need the
+browser are client components: the nav, because the current page should say
+so, and the menu, because it opens.
 
 **Nothing writes a file without two approvals.** The proposal is approved before
 a PRD exists, and the plan is approved before a file is written. The approved

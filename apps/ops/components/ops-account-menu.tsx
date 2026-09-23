@@ -1,6 +1,7 @@
 "use client";
 
 import { useId } from "react";
+import { ChevronDown } from "lucide-react";
 
 import { focusRing } from "@dp/ui/styles";
 import { ThemeToggle } from "@dp/ui/theme-toggle";
@@ -10,14 +11,12 @@ import { cn } from "@dp/ui/utils";
 /**
  * Who is signed in, the theme, and the way out.
  *
- * The three of these used to sit in the open along the top bar. None of them
- * is navigation and none is read more than once a session, so on a rail they
- * would take the foot of the sidebar and outrank the four rooms above them.
- * Behind one button they cost a line.
+ * None of them is navigation and none is read more than once a session, so
+ * in the open they would outrank the four rooms beside them. Behind one button
+ * at the right of the header they cost an avatar.
  *
- * It opens upward, because it is pinned to the bottom of the rail and a panel
- * opening downward from there is a panel off the screen. Below `md` the rail
- * is a strip across the top instead, and it opens downward again.
+ * It opens downward against the right edge, as the learner's does. On a phone
+ * the button is the avatar alone; the name joins it from `sm` up.
  *
  * A disclosure rather than an ARIA menu, and the opening and closing is
  * `useDisclosure` from `@dp/ui`, shared with the learner's account menu.
@@ -46,7 +45,7 @@ export function OpsAccountMenu({ label, email, signOut }: OpsAccountMenuProps) {
         aria-haspopup="true"
         onClick={() => setOpen((was) => !was)}
         className={cn(
-          "flex w-full items-center gap-1.5 rounded-lg border px-3 py-2",
+          "flex max-w-[13rem] items-center gap-2 rounded-full border p-1 sm:pr-3",
           "font-display text-sm transition-colors",
           open
             ? "border-brand/50 bg-brand/10 text-copy"
@@ -54,13 +53,26 @@ export function OpsAccountMenu({ label, email, signOut }: OpsAccountMenuProps) {
           focusRing,
         )}
       >
-        <span className="truncate">{label}</span>
         <span
           aria-hidden
-          className={cn("ml-auto text-xs transition-transform", open && "rotate-180")}
+          className="flex size-8 shrink-0 items-center justify-center rounded-full bg-brand/15 font-semibold text-brand uppercase"
         >
-          ▾
+          {label.charAt(0)}
         </span>
+        {/* Visually hidden rather than display:none on a phone, so the
+            button's accessible name is still whose account it is. The
+            truncation is on the inner span because not-sr-only resets the
+            overflow and wrapping that truncate relies on. */}
+        <span className="sr-only sm:not-sr-only sm:min-w-0">
+          <span className="block truncate">{label}</span>
+        </span>
+        <ChevronDown
+          aria-hidden
+          className={cn(
+            "hidden size-3.5 shrink-0 transition-transform sm:block",
+            open && "rotate-180",
+          )}
+        />
       </button>
 
       <div
@@ -68,11 +80,8 @@ export function OpsAccountMenu({ label, email, signOut }: OpsAccountMenuProps) {
         aria-labelledby={labelId}
         hidden={!open}
         className={cn(
-          "absolute right-0 left-0 z-20 rounded-2xl border border-edge/70 bg-raised p-1.5",
-          "shadow-lg shadow-shade/40",
-          // Down from the strip on a narrow screen, up from the rail's foot
-          // on a wide one.
-          "top-full mt-2 md:top-auto md:bottom-full md:mt-0 md:mb-2",
+          "absolute right-0 z-40 mt-2 w-[min(15rem,calc(100vw-2rem))] rounded-2xl border",
+          "border-edge/70 bg-raised p-1.5 shadow-lg shadow-shade/40",
         )}
       >
         {email ? (

@@ -4,13 +4,12 @@ import { render, screen } from "@testing-library/react";
 import { activeRoom, OpsNav, OPS_ROOMS } from "@/components/ops-nav";
 
 /**
- * The rail.
+ * The operator nav.
  *
  * The rule worth a test is which room lights up. `/product/runs` sits under
  * `/product`, so the obvious prefix test lights two at once; and a proposal at
  * `/product/<id>` has no room of its own and has to light the board it came
- * from rather than nothing at all. Both were wrong in the top bar this
- * replaced, where nothing was ever marked as current.
+ * from rather than nothing at all.
  */
 
 const { pathname } = vi.hoisted(() => ({ pathname: { current: "/product" } }));
@@ -23,19 +22,31 @@ function renderNav(at: string) {
 }
 
 describe("the rooms it offers", () => {
-  it("names all four, each pointing at its own page", () => {
-    renderNav("/product");
+  it("names all four in the order of attention, each pointing at its own page", () => {
+    // Spend first — it is the front page — then feedback, proposals, scans.
+    renderNav("/costs");
 
     const expected = [
+      ["AI spend", "/costs"],
+      ["Trainer feedback", "/feedback"],
       ["Feature proposals", "/product"],
       ["Market Scan", "/product/runs"],
-      ["Trainer feedback", "/feedback"],
-      ["AI spend", "/costs"],
     ] as const;
+    const links = screen.getAllByRole("link");
 
-    for (const [label, href] of expected) {
-      expect(screen.getByRole("link", { name: label })).toHaveAttribute("href", href);
-    }
+    expect(links).toHaveLength(expected.length);
+    expected.forEach(([label, href], i) => {
+      expect(links[i]).toHaveAccessibleName(label);
+      expect(links[i]).toHaveAttribute("href", href);
+    });
+  });
+
+  it("names each tab in full, whatever the phone shows under the icon", () => {
+    renderNav("/costs");
+
+    // "Scan" is what fits a quarter of a phone; the accessible name is the room.
+    expect(screen.getByRole("link", { name: "Market Scan" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /^Scan$/ })).not.toBeInTheDocument();
   });
 
   it("is one named navigation landmark, not a loose row of links", () => {

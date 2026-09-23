@@ -21,6 +21,7 @@
     "@dp/ui": "workspace:*",
     "@supabase/ssr": "catalog:",
     "@supabase/supabase-js": "catalog:",
+    "lucide-react": "^1.33.0",
     "next": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",

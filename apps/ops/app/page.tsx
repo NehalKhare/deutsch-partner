@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 
-/** The board is the front page. The proxy has already sent the signed-out to sign in. */
+import { HOME_PATH } from "@/lib/auth/routes";
+
+/** The spend is the front page. The proxy has already sent the signed-out to sign in. */
 export default function IndexPage() {
-  redirect("/product");
+  redirect(HOME_PATH);
 }

@@ -92,7 +92,7 @@ const LINK =
 
 const INDICATOR =
   "flex h-7 w-12 items-center justify-center rounded-full transition-colors " +
-  "md:h-auto md:w-auto md:bg-transparent";
+  "md:h-auto md:w-auto md:bg-transparent md:group-hover:bg-transparent";
 
 /** A thread under /chat/[id] is still Chat: the room, not the page. */
 const isHere = (pathname: string, href: string) =>

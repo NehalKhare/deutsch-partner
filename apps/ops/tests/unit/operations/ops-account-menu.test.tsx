@@ -5,7 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { OpsAccountMenu } from "@/components/ops-account-menu";
 
 /**
- * The menu at the foot of the rail.
+ * The account menu at the right of the header.
  *
  * Two things it must get right. Ending a session is behind a deliberate
  * second action rather than one stray click in the chrome — that was the point

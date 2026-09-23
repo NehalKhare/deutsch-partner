@@ -41,7 +41,7 @@ const BOARD_LIMIT = 50;
  * are next door under "Market Scan", because the runs panel polls itself while
  * anything is working and a page that redraws under a person is the wrong page
  * to be deciding on. The two numbers here that belong to that page say so, and
- * the rail is the way over.
+ * the nav is the way over.
  *
  * The counts ride in the header as pills rather than as a band of tiles across
  * the page. They are context — how much is waiting — and a band of four tiles
@@ -113,7 +113,7 @@ export default async function ProductOpsPage() {
             ))}
           </dl>
           {/* The last two pills are counts of runs, and a run is read, nudged
-              and retried on the other page. Quiet, because the rail already
+              and retried on the other page. Quiet, because the nav already
               offers the room — this only says which figures live there. */}
           <p className="font-display text-xs text-copy/60">
             <Link href="/product/runs" className={linkInline}>

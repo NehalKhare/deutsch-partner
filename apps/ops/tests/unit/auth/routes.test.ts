@@ -34,9 +34,9 @@ describe("a session with the second factor", () => {
   it("passes everywhere and is sent home from the sign-in pages", () => {
     expect(opsRouteDecision("/product", both)).toBeNull();
     expect(opsRouteDecision("/costs", both)).toBeNull();
-    expect(opsRouteDecision("/login", both)).toBe("/product");
-    expect(opsRouteDecision("/login/mfa", both)).toBe("/product");
-    expect(opsRouteDecision("/mfa/enrol", both)).toBe("/product");
+    expect(opsRouteDecision("/login", both)).toBe("/costs");
+    expect(opsRouteDecision("/login/mfa", both)).toBe("/costs");
+    expect(opsRouteDecision("/mfa/enrol", both)).toBe("/costs");
   });
 });
 

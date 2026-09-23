@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, Geist, Geist_Mono, Newsreader } from "next/font/google";
 import "./globals.css";
 import { ThemeScript } from "@dp/ui/theme-script";
@@ -32,6 +32,15 @@ export const metadata: Metadata = {
   description:
     "Feature proposals, market scans, trainer feedback and AI spend for Deutsch Partner. Operators only.",
   robots: { index: false, follow: false },
+};
+
+/**
+ * Edge to edge on a notched phone, so env(safe-area-inset-*) reports real
+ * insets. The tab bar pads itself clear of the home indicator with them;
+ * without cover they are always zero.
+ */
+export const viewport: Viewport = {
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

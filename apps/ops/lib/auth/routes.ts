@@ -10,7 +10,8 @@ import type { AssuranceLevel } from "@dp/auth/claims";
 export const LOGIN_PATH = "/login";
 export const MFA_PATH = "/login/mfa";
 export const ENROL_PATH = "/mfa/enrol";
-export const HOME_PATH = "/product";
+/** The spend is the front page: the first thing an operator checks. */
+export const HOME_PATH = "/costs";
 
 /** The session cookie's name. See @dp/auth/cookies for why it is distinct. */
 export const OPS_COOKIE_NAME = "dp-ops-auth";
