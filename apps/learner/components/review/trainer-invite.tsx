@@ -30,7 +30,7 @@ export function TrainerInvite() {
       href="/trainer"
       className={cn(
         styles.invite,
-        "group flex w-full items-center gap-3 rounded-2xl px-4 py-3 sm:w-auto",
+        "group flex w-full items-center gap-3 rounded-2xl px-4 py-2.5 sm:w-auto",
         // The on-accent ring, not the accent itself: an accent-coloured ring
         // inside this much accent light is drawn correctly and cannot be seen.
         focusRingOnAccent,

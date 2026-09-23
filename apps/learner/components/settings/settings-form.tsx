@@ -86,7 +86,17 @@ const TRAINER_PERSONALITY_OPTIONS: ReadonlyArray<{
 ];
 
 const legendClass = "font-display text-sm font-medium text-copy/80";
-const hintText = "text-xs text-copy/45";
+const hintText = "text-xs leading-snug text-copy/45";
+
+/** One group of settings. The page is a grid of these rather than one long column. */
+const group =
+  "flex min-w-0 flex-col gap-2.5 rounded-2xl border border-edge/70 bg-panel/50 p-4";
+
+/** A choice drawn as a pill: for short answers that fit on one line. */
+const pill = cn(choice, "items-center gap-2 rounded-full px-3 py-1.5 text-sm");
+
+/** A choice drawn as a small tile: for answers that carry a line of detail. */
+const tile = cn(choice, "items-start gap-2.5 p-2.5 text-sm");
 
 /** What each pass mark is called when the slider stands on it. */
 const THRESHOLD_LABELS: Readonly<Record<MasteryThreshold, string>> = {
@@ -94,6 +104,17 @@ const THRESHOLD_LABELS: Readonly<Record<MasteryThreshold, string>> = {
   50: "Balanced",
   80: "Thorough",
 };
+
+/**
+ * Grows a textarea to its content, so a long goal is read in the page rather
+ * than in a two-line box with a scrollbar of its own. Measured by hand rather
+ * than with `field-sizing: content`, which Firefox does not support yet.
+ */
+function fitToContent(element: HTMLTextAreaElement | null) {
+  if (!element) return;
+  element.style.height = "auto";
+  element.style.height = `${element.scrollHeight + element.offsetHeight - element.clientHeight}px`;
+}
 
 function countHint(chosen: number, max: number): string {
   if (chosen === 0) return "";
@@ -122,12 +143,12 @@ function CheckboxGroup({
   const full = selected.length >= max;
 
   return (
-    <fieldset className="flex flex-col gap-3" aria-describedby={hintId}>
-      <legend className={legendClass}>{legend}</legend>
+    <fieldset className={group} aria-describedby={hintId}>
+      <legend className={cn(legendClass, "float-left w-full")}>{legend}</legend>
       <p id={hintId} className={hintText}>
         {`${hint} ${countHint(selected.length, max)}`.trim()}
       </p>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-1.5">
         {options.map((option) => {
           const checked = selected.includes(option.value);
           const disabled = full && !checked;
@@ -136,8 +157,8 @@ function CheckboxGroup({
             <label
               key={option.value}
               className={cn(
-                choice,
-                "items-center rounded-full px-3.5 py-1.5 text-sm",
+                pill,
+                "px-2.5 py-1",
                 disabled && "cursor-not-allowed opacity-40 hover:border-edge/70",
               )}
             >
@@ -176,23 +197,30 @@ export function SettingsForm({
   const stored = JSON.stringify(draftFrom(profile));
 
   return (
-    <form action={formAction} className="flex w-full flex-col gap-8">
+    <form action={formAction} className="flex w-full flex-col gap-3">
       <SettingsFields key={stored} profile={profile} />
 
-      <div className="flex items-center gap-4">
-        <button type="submit" disabled={pending} className={buttonPrimary}>
-          {pending ? "Saving…" : "Save settings"}
-        </button>
+      {/* Held at the foot of the screen while the form is on it: on a phone
+          the fields run past the fold, and a save button you have to go
+          looking for is how a change gets made and never kept. */}
+      <div className="sticky bottom-0 z-10 -mx-4 flex items-center justify-between gap-3 border-t border-edge/60 bg-ground/90 px-4 py-2.5 backdrop-blur md:mx-0 md:rounded-2xl md:border">
         <p
           role="status"
           aria-live="polite"
           className={cn(
-            "text-sm empty:sr-only",
+            "min-w-0 truncate text-sm empty:sr-only",
             state.status === "error" ? "text-ember" : "text-sprout",
           )}
         >
           {state.message}
         </p>
+        <button
+          type="submit"
+          disabled={pending}
+          className={cn(buttonPrimary, "ml-auto shrink-0 px-5 py-2 text-sm")}
+        >
+          {pending ? "Saving…" : "Save settings"}
+        </button>
       </div>
     </form>
   );
@@ -214,9 +242,36 @@ function SettingsFields({ profile }: { readonly profile: LearnerProfile }) {
         return { ...current, [key]: [...chosen, value] };
       });
 
+
+  /** A two-answer question drawn as a label and a pair of pills on one line. */
+  const pillRow = <K extends "inputPreference" | "outputPreference" | "voicePreference">(
+    key: K,
+    legend: string,
+    options: ReadonlyArray<readonly [(typeof draft)[K], string]>,
+  ) => (
+    <fieldset className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+      <legend className={cn(legendClass, "float-left")}>{legend}</legend>
+      <div className="flex gap-1.5">
+        {options.map(([value, label]) => (
+          <label key={value} className={pill}>
+            <input
+              type="radio"
+              name={key}
+              value={value}
+              defaultChecked={draft[key] === value}
+              onChange={() => setDraft((current) => ({ ...current, [key]: value }))}
+              className={control}
+            />
+            {label}
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+
   return (
-    <>
-      <div className="flex flex-col gap-1.5">
+    <div className="grid gap-3 md:grid-cols-2">
+      <div className={cn(group, "md:col-span-2")}>
         <label htmlFor="learningGoal" className={legendClass}>
           What do you want to be able to do?
         </label>
@@ -225,26 +280,30 @@ function SettingsFields({ profile }: { readonly profile: LearnerProfile }) {
           name="learningGoal"
           required
           maxLength={500}
-          rows={3}
+          rows={2}
           defaultValue={draft.learningGoal}
-          onChange={(event) =>
+          ref={fitToContent}
+          onChange={(event) => {
+            fitToContent(event.target);
             setDraft((current) => ({
               ...current,
               learningGoal: event.target.value,
-            }))
-          }
-          className={field}
+            }));
+          }}
+          className={cn(field, "resize-none overflow-hidden py-2 text-sm")}
         />
         <p className={hintText}>
           The tutor reads this before every reply, so keep it concrete.
         </p>
       </div>
 
-      <fieldset className="flex flex-col gap-3">
-        <legend className={legendClass}>How should {TUTOR.name} correct you?</legend>
-        <div className="flex flex-col gap-2">
+      <fieldset className={group}>
+        <legend className={cn(legendClass, "float-left w-full")}>
+          How should {TUTOR.name} correct you?
+        </legend>
+        <div className="flex flex-col gap-1.5">
           {CORRECTION_PREFERENCE_OPTIONS.map((option) => (
-            <label key={option.value} className={cn(choice, "items-center text-sm")}>
+            <label key={option.value} className={cn(tile, "items-center")}>
               <input
                 type="radio"
                 name="correctionPreference"
@@ -265,15 +324,17 @@ function SettingsFields({ profile }: { readonly profile: LearnerProfile }) {
         </div>
       </fieldset>
 
-      <fieldset className="flex flex-col gap-3">
-        <legend className={legendClass}>How your trainer treats you</legend>
+      <fieldset className={group}>
+        <legend className={cn(legendClass, "float-left w-full")}>
+          How your trainer treats you
+        </legend>
         <p className={hintText}>
           Manner only: the same agenda, the same material, and the same
           judgement of your answers, delivered in a different tone.
         </p>
-        <div className="flex flex-col gap-2">
+        <div className="grid grid-cols-2 gap-1.5">
           {TRAINER_PERSONALITY_OPTIONS.map((option) => (
-            <label key={option.value} className={cn(choice, "items-start text-sm")}>
+            <label key={option.value} className={tile}>
               <input
                 type="radio"
                 name="trainerPersonality"
@@ -284,9 +345,9 @@ function SettingsFields({ profile }: { readonly profile: LearnerProfile }) {
                 }
                 className={cn(control, "mt-0.5")}
               />
-              <span className="flex flex-col gap-0.5">
-                <span>{option.label}</span>
-                <span className="text-xs text-copy/45">{option.detail}</span>
+              <span className="flex min-w-0 flex-col gap-0.5">
+                <span className="font-medium">{option.label}</span>
+                <span className="text-xs leading-snug text-copy/45">{option.detail}</span>
               </span>
             </label>
           ))}
@@ -297,13 +358,10 @@ function SettingsFields({ profile }: { readonly profile: LearnerProfile }) {
           stop is a stance on how to learn, and the gate can explain a stance.
           The submitted value is the percent itself, carried by the hidden
           field, so the wire format is meaningful and the slider stays UI. */}
-      <fieldset className="flex flex-col gap-3">
-        <legend className={legendClass}>How high is the bar to move up?</legend>
-        <p id="masteryThreshold-hint" className={hintText}>
-          The share of your evaluated turns that must be error-free before a
-          mini-level counts as cleared. At least seven turns are needed,
-          whatever you choose.
-        </p>
+      <fieldset className={group}>
+        <legend className={cn(legendClass, "float-left w-full")}>
+          How high is the bar to move up?
+        </legend>
         <input
           type="range"
           min={0}
@@ -320,26 +378,48 @@ function SettingsFields({ profile }: { readonly profile: LearnerProfile }) {
           aria-label="Pass mark for moving up"
           aria-describedby="masteryThreshold-hint"
           aria-valuetext={`${THRESHOLD_LABELS[draft.masteryThreshold]} — ${draft.masteryThreshold}% of turns error-free`}
-          className="w-full max-w-xs accent-brand"
+          className="w-full accent-brand"
         />
-        <p className="text-sm text-copy/70" aria-hidden>
-          {MASTERY_THRESHOLDS.map((value, index) => (
-            <span key={value}>
-              {index > 0 ? " · " : ""}
-              <span
-                className={cn(
-                  draft.masteryThreshold === value
-                    ? "font-semibold text-brand"
-                    : "text-copy/45",
-                )}
-              >
-                {THRESHOLD_LABELS[value]} {value}%
-              </span>
+        <p className="flex justify-between text-xs" aria-hidden>
+          {MASTERY_THRESHOLDS.map((value) => (
+            <span
+              key={value}
+              className={cn(
+                draft.masteryThreshold === value
+                  ? "font-semibold text-brand"
+                  : "text-copy/45",
+              )}
+            >
+              {THRESHOLD_LABELS[value]} {value}%
             </span>
           ))}
         </p>
+        <p id="masteryThreshold-hint" className={hintText}>
+          The share of your evaluated turns that must be error-free before a
+          mini-level counts as cleared. At least seven turns are needed,
+          whatever you choose.
+        </p>
         <input type="hidden" name="masteryThreshold" value={draft.masteryThreshold} />
       </fieldset>
+
+      <div className={group}>
+        {pillRow("inputPreference", "You answer by", [
+          ["text", "Typing"],
+          ["voice", "Speaking"],
+        ])}
+        {pillRow("outputPreference", "Replies arrive as", [
+          ["text", "Text"],
+          ["voice", "Read aloud"],
+        ])}
+        {pillRow("voicePreference", "Tutor's voice", [
+          ["male", "Male voice"],
+          ["female", "Female voice"],
+        ])}
+        <p className={hintText}>
+          The voice applies to read-aloud replies. {TUTOR.name} stays{" "}
+          {TUTOR.name} either way.
+        </p>
+      </div>
 
       <CheckboxGroup
         name="targetTopics"
@@ -360,88 +440,6 @@ function SettingsFields({ profile }: { readonly profile: LearnerProfile }) {
         selected={draft.interests}
         onToggle={toggle("interests", MAX_SELECTED_INTERESTS)}
       />
-
-      <div className="grid gap-6 sm:grid-cols-2">
-        <fieldset className="flex flex-col gap-3">
-          <legend className={legendClass}>You prefer to answer by</legend>
-          <div className="flex gap-2">
-            {(["text", "voice"] as const).map((mode) => (
-              <label
-                key={mode}
-                className={cn(choice, "items-center rounded-full px-3.5 py-1.5 text-sm")}
-              >
-                <input
-                  type="radio"
-                  name="inputPreference"
-                  value={mode}
-                  defaultChecked={draft.inputPreference === mode}
-                  onChange={() =>
-                    setDraft((current) => ({ ...current, inputPreference: mode }))
-                  }
-                  className={control}
-                />
-                {mode === "text" ? "Typing" : "Speaking"}
-              </label>
-            ))}
-          </div>
-        </fieldset>
-
-        <fieldset className="flex flex-col gap-3">
-          <legend className={legendClass}>Replies should arrive as</legend>
-          <div className="flex gap-2">
-            {(["text", "voice"] as const).map((mode) => (
-              <label
-                key={mode}
-                className={cn(choice, "items-center rounded-full px-3.5 py-1.5 text-sm")}
-              >
-                <input
-                  type="radio"
-                  name="outputPreference"
-                  value={mode}
-                  defaultChecked={draft.outputPreference === mode}
-                  onChange={() =>
-                    setDraft((current) => ({ ...current, outputPreference: mode }))
-                  }
-                  className={control}
-                />
-                {mode === "text" ? "Text" : "Read aloud"}
-              </label>
-            ))}
-          </div>
-        </fieldset>
-      </div>
-
-      <fieldset className="flex flex-col gap-3">
-        <legend className={legendClass}>How the tutor sounds</legend>
-        <p className={hintText}>
-          Applies to read-aloud replies. {TUTOR.name} stays {TUTOR.name} either
-          way — this only changes the voice.
-        </p>
-        <div className="flex gap-2">
-          {([
-            ["male", "Male voice"],
-            ["female", "Female voice"],
-          ] as const).map(([value, label]) => (
-            <label
-              key={value}
-              className={cn(choice, "items-center rounded-full px-3.5 py-1.5 text-sm")}
-            >
-              <input
-                type="radio"
-                name="voicePreference"
-                value={value}
-                defaultChecked={draft.voicePreference === value}
-                onChange={() =>
-                  setDraft((current) => ({ ...current, voicePreference: value }))
-                }
-                className={control}
-              />
-              {label}
-            </label>
-          ))}
-        </div>
-      </fieldset>
-
-    </>
+    </div>
   );
 }

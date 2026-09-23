@@ -42,13 +42,13 @@ export function VoiceSourceSetting() {
   const engine = useDevicePreference(voiceEngineStore);
 
   return (
-    <fieldset className="flex flex-col gap-3">
-      <legend className="font-display text-sm font-medium text-copy/80">
+    <fieldset className="flex flex-col gap-2">
+      <legend className="float-left w-full font-display text-sm font-medium text-copy/80">
         Where the read-aloud voice comes from
       </legend>
-      <div className="flex flex-col gap-2">
+      <div className="grid grid-cols-2 gap-1.5">
         {OPTIONS.map((option) => (
-          <label key={option.value} className={cn(choice, "items-start text-sm")}>
+          <label key={option.value} className={cn(choice, "items-start gap-2.5 p-2.5 text-sm")}>
             <input
               type="radio"
               name="voiceEngine"
@@ -57,14 +57,14 @@ export function VoiceSourceSetting() {
               onChange={() => voiceEngineStore.write(option.value)}
               className={cn(control, "mt-0.5")}
             />
-            <span className="flex flex-col gap-0.5">
-              <span>{option.label}</span>
-              <span className="text-xs text-copy/45">{option.detail}</span>
+            <span className="flex min-w-0 flex-col gap-0.5">
+              <span className="font-medium">{option.label}</span>
+              <span className="text-xs leading-snug text-copy/45">{option.detail}</span>
             </span>
           </label>
         ))}
       </div>
-      <p className="text-xs text-copy/45">
+      <p className="text-xs leading-snug text-copy/45">
         Saved straight away, and only on this device — each of your devices can
         answer this differently.
       </p>

@@ -1,14 +1,7 @@
 import Link from "next/link";
 
 import { TrainerInvite } from "@/components/review/trainer-invite";
-import {
-  buttonQuiet,
-  card,
-  eyebrow,
-  pageTitle,
-  prose,
-  sectionTitle,
-} from "@dp/ui/styles";
+import { buttonQuiet, focusRing } from "@dp/ui/styles";
 import { cn } from "@dp/ui/utils";
 import { MAX_REVIEW_ITEMS, buildReviewPlan, dueForReview } from "@dp/learning/review";
 import { requireAuthenticatedUserId } from "@/lib/auth/current-user";
@@ -33,6 +26,53 @@ const WORD_KIND_LABELS: Readonly<Record<string, string>> = {
 };
 
 /**
+ * How many words the page previews. The sitting can hold twenty; a phone
+ * screen holds about six rows beside everything else, and the Trainer works
+ * through the whole list anyway — so the rest are counted, not drawn.
+ */
+const WORD_PREVIEW = 6;
+
+const tile = "flex flex-col gap-0.5 rounded-xl border px-3 py-2";
+const tileLabel =
+  "font-display text-[0.65rem] font-medium uppercase tracking-[0.14em] text-copy/55";
+const tileValue =
+  "font-display text-2xl font-semibold leading-none tabular-nums text-copy";
+const tileNote = "truncate text-[0.7rem] text-copy/50";
+
+const listPanel = "flex flex-col overflow-hidden rounded-2xl border border-edge/70 bg-panel/70";
+const listHeader =
+  "flex items-center justify-between gap-3 border-b border-edge/50 px-4 py-2";
+const listTitle =
+  "flex items-center gap-2 font-display text-sm font-semibold tracking-tight text-copy";
+const listCount = "font-display text-xs tabular-nums text-copy/45";
+
+/**
+ * A row that folds open to its full text. Native <details>, so it works
+ * before React loads and needs no client component. The ring is drawn inset:
+ * the panel clips overflow, and an outset ring would be cut off.
+ */
+const rowSummary =
+  "flex cursor-pointer list-none gap-2.5 px-4 py-2 transition-colors " +
+  "hover:bg-panel [&::-webkit-details-marker]:hidden " +
+  "focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 " +
+  "focus-visible:outline-brand";
+
+function RowChevron() {
+  return (
+    <span
+      aria-hidden
+      className="ml-auto shrink-0 self-center font-display text-copy/40 transition-transform group-open:rotate-90"
+    >
+      ›
+    </span>
+  );
+}
+
+function plural(count: number, word: string): string {
+  return `${count} ${word}${count === 1 ? "" : "s"}`;
+}
+
+/**
  * The review session.
  *
  * Two reads and one pure function. What is due, what is weak and what keeps
@@ -40,11 +80,11 @@ const WORD_KIND_LABELS: Readonly<Record<string, string>> = {
  * arithmetic that turns them into a session is in learning/review.ts, where it
  * is unit-tested without a database.
  *
- * Shown in two sections rather than one list — the words to practise and the
- * mistakes that keep coming back are different kinds of work, and a learner
- * scanning the page should see at a glance how much of each is waiting. The
- * mistakes take their places first: a backlog of vocabulary must not push
- * them off the page, for the same reason the trainer reserves them slots.
+ * Laid out to be read without scrolling: the counts first, as a strip of
+ * tiles, then the mistakes and the words as dense lists — side by side where
+ * the screen allows. The mistakes come first: a backlog of vocabulary must
+ * not push them off the page, for the same reason the trainer reserves them
+ * slots.
  */
 export default async function ReviewPage() {
   const learnerId = await requireAuthenticatedUserId();
@@ -85,14 +125,14 @@ export default async function ReviewPage() {
     Math.max(0, MAX_REVIEW_ITEMS - mistakes.length),
   );
   const total = words.length + mistakes.length;
+  const shownWords = words.slice(0, WORD_PREVIEW);
+  const hiddenWords = words.length - shownWords.length;
 
   // "5 words and 2 mistakes to go over." — the sections, counted in the
   // sentence that introduces them.
   const summary = [
-    words.length > 0 ? `${words.length} word${words.length === 1 ? "" : "s"}` : null,
-    mistakes.length > 0
-      ? `${mistakes.length} mistake${mistakes.length === 1 ? "" : "s"}`
-      : null,
+    words.length > 0 ? plural(words.length, "word") : null,
+    mistakes.length > 0 ? plural(mistakes.length, "mistake") : null,
   ]
     .filter((part) => part !== null)
     .join(" and ");
@@ -105,16 +145,19 @@ export default async function ReviewPage() {
   // would have this page say twenty while the nav badge — counted in the
   // database — said the truth.
   const overdue = dueForReview(records, now, records.length).length;
+  const oldestDays = plan.due[0]?.overdueDays;
 
   return (
-    <main className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-6 py-10 md:px-10 md:py-14">
+    <main className="mx-auto flex w-full max-w-4xl flex-col gap-4 px-4 py-4 md:gap-5 md:px-8 md:py-8">
       {/* Title and trainer on one line. The Trainer is what this page is for
-          — the list below is what it works through — so it stands beside the
-          heading rather than queueing behind it. */}
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex flex-col gap-2">
-          <h1 className={pageTitle}>Catch up</h1>
-          <p className={prose}>
+          — the lists below are what it works through — so it stands beside
+          the heading rather than queueing behind it. */}
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <h1 className="font-display text-2xl font-semibold leading-tight tracking-tight md:text-3xl">
+            Catch up
+          </h1>
+          <p className="text-sm leading-snug text-copy/65">
             {total === 0
               ? "Nothing is due. Come back after your next conversation."
               : `${summary} to go over.`}
@@ -123,91 +166,125 @@ export default async function ReviewPage() {
         <TrainerInvite />
       </header>
 
+      {/* The counts, before the content. Overdue leads: it is the one number
+          that says how far behind the learner is, and it used to sit at the
+          very bottom of the page. */}
+      <div className="grid grid-cols-3 gap-2">
+        <section
+          aria-labelledby="due-heading"
+          className={cn(
+            tile,
+            overdue > 0 ? "border-ember/40 bg-ember/10" : "border-edge/70 bg-panel/70",
+          )}
+        >
+          <h2 id="due-heading" className={tileLabel}>
+            Overdue
+          </h2>
+          <p className={cn(tileValue, overdue > 0 && "text-ember")}>{overdue}</p>
+          <p className={tileNote}>
+            {oldestDays !== undefined
+              ? `oldest ${plural(oldestDays, "day")}`
+              : "all on time"}
+          </p>
+        </section>
+        <div className={cn(tile, "border-edge/70 bg-panel/70")}>
+          <p className={tileLabel}>Mistakes</p>
+          <p className={tileValue}>{mistakes.length}</p>
+          <p className={tileNote}>recurring</p>
+        </div>
+        <div className={cn(tile, "border-edge/70 bg-panel/70")}>
+          <p className={tileLabel}>Words</p>
+          <p className={tileValue}>{words.length}</p>
+          <p className={tileNote}>to practise</p>
+        </div>
+      </div>
+
       {total === 0 ? (
         <Link href="/chat" className={cn(buttonQuiet, "self-start")}>
           Have a conversation instead
         </Link>
       ) : null}
 
-      {/* The coloured dots are the trainer panel's: vocabulary wears the
-          growth green, a mistake wears ember. Two pages, one association. */}
-      {words.length > 0 ? (
-        <section aria-labelledby="words-heading" className="flex flex-col gap-3">
-          <div className="flex items-baseline justify-between gap-4">
-            <h2
-              id="words-heading"
-              className={cn(sectionTitle, "flex items-center gap-2.5")}
-            >
-              <span aria-hidden className="size-2 shrink-0 rounded-full bg-sprout" />
-              Words to practise
-            </h2>
-            <span className="text-sm tabular-nums text-copy/45">
-              {words.length}
-            </span>
-          </div>
-          <ol className="flex flex-col gap-3">
-            {words.map((activity, index) => (
-              <li
-                key={`${activity.kind}:${activity.subject}:${index}`}
-                className={card}
-              >
-                <p className={eyebrow}>
-                  {WORD_KIND_LABELS[activity.kind] ?? activity.kind.replace(/_/gu, " ")}
-                </p>
-                <p className="mt-2 text-lg leading-relaxed text-copy">
-                  {activity.prompt}
-                </p>
-              </li>
-            ))}
-          </ol>
-        </section>
-      ) : null}
+      {total > 0 ? (
+        <div className="grid gap-3 md:grid-cols-2">
+          {/* The coloured dots are the trainer panel's: vocabulary wears the
+              growth green, a mistake wears ember. Two pages, one association. */}
+          {mistakes.length > 0 ? (
+            <section aria-labelledby="mistakes-heading" className={listPanel}>
+              <div className={listHeader}>
+                <h2 id="mistakes-heading" className={listTitle}>
+                  <span aria-hidden className="size-2 shrink-0 rounded-full bg-ember" />
+                  Mistakes that keep coming back
+                </h2>
+                <span className={listCount}>{mistakes.length}</span>
+              </div>
+              <ol className="divide-y divide-edge/40">
+                {/* Named by what goes wrong, described by the recorded note.
+                    The note is a description of the pattern, not an exercise
+                    — the trainer writes the exercise when this is drilled. */}
+                {mistakes.map((activity, index) => (
+                  <li key={`${activity.subject}:${index}`}>
+                    <details className="group">
+                      <summary className={rowSummary}>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-display text-sm font-semibold tracking-tight text-copy group-open:whitespace-normal">
+                            {activity.subject}
+                          </span>
+                          <span className="line-clamp-1 text-sm leading-snug text-copy/60 group-open:line-clamp-none">
+                            {activity.prompt}
+                          </span>
+                        </span>
+                        <RowChevron />
+                      </summary>
+                    </details>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          ) : null}
 
-      {mistakes.length > 0 ? (
-        <section aria-labelledby="mistakes-heading" className="flex flex-col gap-3">
-          <div className="flex items-baseline justify-between gap-4">
-            <h2
-              id="mistakes-heading"
-              className={cn(sectionTitle, "flex items-center gap-2.5")}
-            >
-              <span aria-hidden className="size-2 shrink-0 rounded-full bg-ember" />
-              Mistakes that keep coming back
-            </h2>
-            <span className="text-sm tabular-nums text-copy/45">
-              {mistakes.length}
-            </span>
-          </div>
-          <ol className="flex flex-col gap-3">
-            {/* Named by what goes wrong, described by the recorded note. The
-                note is a description of the pattern, not an exercise — the
-                trainer writes the exercise when this is drilled. */}
-            {mistakes.map((activity, index) => (
-              <li key={`${activity.subject}:${index}`} className={card}>
-                <p className="font-display font-semibold tracking-tight text-copy">
-                  {activity.subject}
-                </p>
-                <p className="mt-1.5 leading-relaxed text-copy/65">
-                  {activity.prompt}
-                </p>
-              </li>
-            ))}
-          </ol>
-        </section>
+          {words.length > 0 ? (
+            <section aria-labelledby="words-heading" className={listPanel}>
+              <div className={listHeader}>
+                <h2 id="words-heading" className={listTitle}>
+                  <span aria-hidden className="size-2 shrink-0 rounded-full bg-sprout" />
+                  Words to practise
+                </h2>
+                <span className={listCount}>{words.length}</span>
+              </div>
+              <ol className="divide-y divide-edge/40">
+                {shownWords.map((activity, index) => (
+                  <li key={`${activity.kind}:${activity.subject}:${index}`}>
+                    <details className="group">
+                      <summary className={cn(rowSummary, "items-baseline")}>
+                        <span className="shrink-0 rounded-full bg-sprout/15 px-2 py-0.5 font-display text-[0.65rem] font-medium uppercase tracking-widest text-copy/70">
+                          {WORD_KIND_LABELS[activity.kind] ??
+                            activity.kind.replace(/_/gu, " ")}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-sm text-copy group-open:whitespace-normal">
+                          {activity.prompt}
+                        </span>
+                        <RowChevron />
+                      </summary>
+                    </details>
+                  </li>
+                ))}
+              </ol>
+              {hiddenWords > 0 ? (
+                <Link
+                  href="/trainer"
+                  className={cn(
+                    "mt-auto border-t border-edge/50 px-4 py-2 font-display text-xs text-copy/60 transition-colors hover:text-copy",
+                    focusRing,
+                  )}
+                >
+                  +{hiddenWords} more — the trainer works through them all →
+                </Link>
+              ) : null}
+            </section>
+          ) : null}
+        </div>
       ) : null}
-
-      <section
-        aria-labelledby="due-heading"
-        className="flex flex-col gap-2 border-t border-edge/60 pt-6"
-      >
-        <h2 id="due-heading" className={sectionTitle}>
-          Overdue
-        </h2>
-        <p className="text-sm text-copy/60">
-          {overdue} word{overdue === 1 ? "" : "s"} past their review date
-          {plan.due[0] ? `, the oldest by ${plan.due[0].overdueDays} day${plan.due[0].overdueDays === 1 ? "" : "s"}` : ""}
-          .
-        </p>
-      </section>
     </main>
   );
 }

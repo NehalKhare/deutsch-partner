@@ -32,14 +32,14 @@ export function TrainerCoachingSettings({
   const votes = profile === null ? 0 : profile.helpfulCount + profile.unhelpfulCount;
 
   return (
-    <div className="flex flex-col gap-3" data-role="trainer-coaching">
+    <div className="flex flex-col gap-2.5" data-role="trainer-coaching">
       {tuned ? (
-        <p className="leading-relaxed text-copy/70">
+        <p className="text-sm leading-relaxed text-copy/70">
           From your feedback, your trainer now gives you{" "}
           <span className="text-copy">{describeDials(profile).join(", ")}</span>.
         </p>
       ) : (
-        <p className="leading-relaxed text-copy/70">
+        <p className="text-sm leading-relaxed text-copy/70">
           Your trainer is on its default settings. Rate its replies during a
           session, or just ask it — for shorter explanations, harder exercises,
           a grammar focus — and it adjusts from then on.
@@ -62,7 +62,7 @@ export function TrainerCoachingSettings({
           <button
             type="submit"
             disabled={pending}
-            className={cn(buttonQuiet, "px-4 py-2 text-sm")}
+            className={cn(buttonQuiet, "px-3.5 py-1.5 text-xs")}
           >
             {pending ? "Forgetting…" : "Forget my feedback"}
           </button>

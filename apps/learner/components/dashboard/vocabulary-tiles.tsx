@@ -2,7 +2,7 @@
 
 import { useId, useState } from "react";
 
-import { ARTICLE_COLOR, eyebrow, focusRing, stat } from "@dp/ui/styles";
+import { ARTICLE_COLOR, focusRing } from "@dp/ui/styles";
 import { cn } from "@dp/ui/utils";
 import {
   VOCABULARY_BUCKETS,
@@ -49,7 +49,7 @@ export interface VocabularyTilesProps {
 
 function Word({ word }: { readonly word: PractisedWord }) {
   return (
-    <li className="flex items-baseline justify-between gap-4 py-1.5">
+    <li className="flex items-baseline justify-between gap-4 py-1 text-sm">
       <span lang="de" className="min-w-0">
         {word.article ? (
           <>
@@ -75,8 +75,10 @@ export function VocabularyTiles({ counts, words }: VocabularyTilesProps) {
   const missing = open === null ? 0 : Math.max(0, counts[open] - shown.length);
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <div className="flex flex-col gap-2">
+      {/* One row of four even on a phone: they are figures, not cards, and a
+          2×2 block doubles the height to say the same four numbers. */}
+      <div className="grid grid-cols-4 gap-2">
         {VOCABULARY_BUCKETS.map((bucket) => {
           const isOpen = open === bucket;
 
@@ -88,14 +90,16 @@ export function VocabularyTiles({ counts, words }: VocabularyTilesProps) {
               aria-controls={panelId}
               onClick={() => setOpen(isOpen ? null : bucket)}
               className={cn(
-                stat,
+                "flex flex-col gap-0.5 rounded-xl border border-edge/70 bg-panel/70 px-2.5 py-2",
                 "text-left transition-colors hover:border-brand/50",
                 isOpen && "border-brand/60 bg-brand/5",
                 focusRing,
               )}
             >
-              <span className={cn(eyebrow, "block")}>{LABELS[bucket]}</span>
-              <span className="mt-1 block font-display text-2xl font-semibold tabular-nums text-copy">
+              <span className="block truncate font-display text-[0.7rem] font-medium text-copy/55">
+                {LABELS[bucket]}
+              </span>
+              <span className="block font-display text-xl font-semibold leading-tight tabular-nums text-copy">
                 {counts[bucket]}
               </span>
             </button>
@@ -107,7 +111,7 @@ export function VocabularyTiles({ counts, words }: VocabularyTilesProps) {
           labelled by always points at something a screen reader can reach. */}
       <div id={panelId} hidden={open === null}>
         {open === null ? null : (
-          <div className="rounded-2xl border border-edge/60 bg-panel/50 px-5 py-3">
+          <div className="rounded-2xl border border-edge/60 bg-panel/50 px-4 py-2">
             {shown.length === 0 ? (
               <p className="py-1 text-sm text-copy/60">{WHEN_EMPTY[open]}</p>
             ) : (
