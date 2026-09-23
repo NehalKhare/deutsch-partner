@@ -9,8 +9,10 @@ import {
   jobStatusSchema,
   queueFor,
   retryDelaySeconds,
+  type JobKind,
   type JobPayload,
   type JobQueue,
+  type JobStatus,
 } from "@dp/domain/jobs";
 
 import { fail, mapDatabaseError, ok, repositoryError, type RepositoryResult } from "./errors";
@@ -85,13 +87,30 @@ export interface Enqueued {
   readonly queue: JobQueue;
 }
 
+export interface QueueStat {
+  readonly queue: JobQueue;
+  readonly status: JobStatus;
+  readonly count: number;
+}
+
 export interface JobsRepository {
   enqueue(request: EnqueueRequest): Promise<RepositoryResult<Enqueued>>;
   /** Puts expired running jobs back in the queue. Returns how many. */
   requeueExpired(): Promise<RepositoryResult<number>>;
-  claim(queue: JobQueue, worker: string, lockSeconds: number): Promise<RepositoryResult<ClaimedJob | null>>;
+  /**
+   * The oldest runnable job, skipping the given kinds. A worker whose slow
+   * slots are full excludes the slow kinds and keeps draining the fast ones.
+   */
+  claim(
+    queue: JobQueue,
+    worker: string,
+    lockSeconds: number,
+    excludedKinds?: readonly JobKind[],
+  ): Promise<RepositoryResult<ClaimedJob | null>>;
   heartbeat(jobId: number, worker: string, lockSeconds: number): Promise<RepositoryResult<boolean>>;
   complete(jobId: number, worker: string): Promise<RepositoryResult<boolean>>;
+  /** Row counts by queue and status, for the worker's telemetry. */
+  stats(): Promise<RepositoryResult<readonly QueueStat[]>>;
   /**
    * Records a failure as a code. Retries with backoff while attempts remain;
    * failed for good otherwise. Returns the status the job now has.
@@ -145,7 +164,7 @@ export function createJobsRepository(client: DatabaseClient): JobsRepository {
       return count.success ? ok(count.data) : fail(repositoryError("invalid_data"));
     },
 
-    async claim(queue, worker, lockSeconds) {
+    async claim(queue, worker, lockSeconds, excludedKinds) {
       const who = decodeInput(worker, workerSchema);
       if (!who.ok) return who;
 
@@ -153,6 +172,7 @@ export function createJobsRepository(client: DatabaseClient): JobsRepository {
         p_queue: queue,
         p_worker: who.data,
         p_lock_seconds: lockSeconds,
+        p_excluded_kinds: excludedKinds && excludedKinds.length > 0 ? [...excludedKinds] : null,
       });
       if (outcome.error) return fail(mapDatabaseError(outcome.error));
 
@@ -176,6 +196,17 @@ export function createJobsRepository(client: DatabaseClient): JobsRepository {
       const outcome = await client.rpc("complete_job", { p_job_id: jobId, p_worker: worker });
       if (outcome.error) return fail(mapDatabaseError(outcome.error));
       return ok(outcome.data === true);
+    },
+
+    async stats() {
+      const outcome = await client.rpc("job_queue_stats");
+      if (outcome.error) return fail(mapDatabaseError(outcome.error));
+
+      const rows = z
+        .array(z.object({ queue: jobQueueSchema, status: jobStatusSchema, count: z.coerce.number().int() }))
+        .safeParse(outcome.data ?? []);
+
+      return rows.success ? ok(rows.data) : fail(repositoryError("invalid_data"));
     },
 
     async fail(jobId, worker, errorCode, attempt, options = {}) {

@@ -228,3 +228,123 @@ describe("who may touch the queue", () => {
     ).rejects.toThrow();
   });
 });
+
+describe("the widened kind constraint", () => {
+  it("accepts a cost.rollup job, which the first constraint refused", async () => {
+    const job = await enqueue("cost.rollup");
+
+    expect(job.created).toBe(true);
+    expect((await statusOf(job.id)).status).toBe("queued");
+  });
+});
+
+describe("claiming around the slow kinds", () => {
+  const SLOW = ["productops.drive", "productops.implement", "ingest.knowledge"];
+
+  async function claimExcluding(worker: string, excluded: readonly string[]) {
+    const result = await database.db.query<{ id: number; kind: string }>(
+      `select id, kind from public.claim_job($1, $2, $3, $4)`,
+      ["jobs", worker, 90, excluded as string[]],
+    );
+    return result.rows[0] ?? null;
+  }
+
+  it("skips the excluded kinds and hands out the next fast job", async () => {
+    await enqueue("productops.drive", "productops.drive:run-1");
+    await enqueue("fx.refresh");
+
+    const claimed = await claimExcluding("w1", SLOW);
+
+    expect(claimed?.kind).toBe("fx.refresh");
+  });
+
+  it("hands out nothing when only excluded kinds wait", async () => {
+    await enqueue("ingest.knowledge");
+
+    expect(await claimExcluding("w1", SLOW)).toBeNull();
+    // The job is still there for a worker with a free slow slot.
+    expect((await claim("w2"))?.status).toBe("running");
+  });
+});
+
+describe("job_queue_stats", () => {
+  it("counts rows by queue and status", async () => {
+    await enqueue("fx.refresh");
+    await enqueue("ratelimit.purge");
+    const claimed = await claim("w1");
+    await database.db.query(`select public.fail_job($1, $2, $3, 0, true)`, [
+      claimed!.id,
+      "w1",
+      "store_unavailable",
+    ]);
+
+    const result = await database.db.query<{ queue: string; status: string; count: number }>(
+      `select queue, status, count from public.job_queue_stats() order by status`,
+    );
+
+    expect(result.rows).toEqual([
+      expect.objectContaining({ queue: "jobs", status: "failed", count: 1 }),
+      expect.objectContaining({ queue: "jobs", status: "queued", count: 1 }),
+    ]);
+  });
+
+  it("is not a learner's to call", async () => {
+    await expect(
+      database.asLearner("11111111-1111-4111-8111-111111111111", () =>
+        database.db.query("select * from public.job_queue_stats()"),
+      ),
+    ).rejects.toThrow();
+  });
+});
+
+describe("enqueue_scheduled_job", () => {
+  async function enqueueScheduled(kind: string, extra?: Record<string, unknown>) {
+    const result = await database.db.query<{ enqueue_scheduled_job: { id: number; created: boolean } }>(
+      `select public.enqueue_scheduled_job($1, $2::jsonb) as enqueue_scheduled_job`,
+      [kind, JSON.stringify(extra ?? {})],
+    );
+    return result.rows[0]!.enqueue_scheduled_job;
+  }
+
+  async function payloadOf(id: number): Promise<unknown> {
+    const result = await database.db.query<{ payload: unknown; correlation_id: string; dedupe_key: string }>(
+      `select payload, correlation_id, dedupe_key from public.ops_jobs where id = $1`,
+      [id],
+    );
+    return result.rows[0]!;
+  }
+
+  it("builds the envelope the worker's schema accepts", async () => {
+    const { jobPayloadSchema } = await import("@dp/domain/jobs");
+    const job = await enqueueScheduled("fx.refresh");
+    const row = (await payloadOf(job.id)) as {
+      payload: { kind: string; correlationId: string; source: string };
+      correlation_id: string;
+      dedupe_key: string;
+    };
+
+    const parsed = jobPayloadSchema.safeParse(row.payload);
+    expect(parsed.success).toBe(true);
+    expect(row.payload.source).toBe("scheduler");
+    // The row and the envelope tell one story.
+    expect(row.payload.correlationId).toBe(row.correlation_id);
+    expect(row.dedupe_key).toBe("fx.refresh");
+  });
+
+  it("collapses a second tick into the job already waiting", async () => {
+    const first = await enqueueScheduled("pricing.snapshot");
+    const second = await enqueueScheduled("pricing.snapshot");
+
+    expect(second.created).toBe(false);
+    expect(second.id).toBe(first.id);
+  });
+
+  it("carries extras like the rollup window into the payload", async () => {
+    const { jobPayloadSchema } = await import("@dp/domain/jobs");
+    const job = await enqueueScheduled("cost.rollup", { sinceDays: 2 });
+    const row = (await payloadOf(job.id)) as { payload: unknown };
+
+    const parsed = jobPayloadSchema.parse(row.payload);
+    expect(parsed).toMatchObject({ kind: "cost.rollup", sinceDays: 2 });
+  });
+});

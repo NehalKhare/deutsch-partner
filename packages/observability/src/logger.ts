@@ -96,6 +96,12 @@ export interface LoggerOptions {
   readonly level?: LogLevel;
   /** Fields stamped onto every line: service, environment, and the like. */
   readonly base?: LogFields;
+  /**
+   * A second destination fed the already-redacted fields — the telemetry
+   * bridge, where one is configured. It sees exactly what the sink sees, so
+   * it cannot leak what the sink would not.
+   */
+  readonly emit?: (level: LogLevel, event: string, fields: Record<string, unknown>) => void;
 }
 
 /** Serialises without throwing on a cycle or a value that cannot be encoded. */
@@ -121,7 +127,9 @@ export function createLogger(options: LoggerOptions = {}): Logger {
     if (SEVERITY[level] < threshold) return;
 
     try {
-      sink(encode({ level, event, ...base, ...redact(fields ?? {}) }));
+      const safe = { ...base, ...redact(fields ?? {}) };
+      sink(encode({ level, event, ...safe }));
+      options.emit?.(level, event, safe);
     } catch {
       // A logger that can break the request it is describing is worse than a
       // logger that occasionally loses a line.

@@ -16,7 +16,8 @@ beside it. Nothing in an example file is a real value, and none should ever be.
 | `OPERATOR_USER_IDS` | **never** | yes | — | Comma-separated account ids. Unset means nobody. The learner app refuses to boot with one |
 | `GITHUB_TOKEN`, `GITHUB_REPOSITORY` | **never** | **never** | coder only | Fine-grained, one repository, contents and pull-request write |
 | `REPO_CHECKOUT_PATH` | — | — | coder | Where the entrypoint clones the repository |
-| `WORKER_QUEUES`, `WORKER_CONCURRENCY`, `WORKER_POLL_MS`, `WORKER_LOCK_SECONDS`, `WORKER_SCHEDULER` | — | — | yes | `jobs`, `coder`, or both; how many jobs at once; whether this process enqueues the scheduled ones |
+| `WORKER_QUEUES`, `WORKER_CONCURRENCY`, `WORKER_SLOW_CONCURRENCY`, `WORKER_POLL_MS`, `WORKER_LOCK_SECONDS` | — | — | yes | `jobs`, `coder`, or both; how many jobs at once; how many of those may be slow kinds. Recurring jobs are pg_cron's, not the worker's |
+| `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_HEADERS`, `OTEL_SERVICE_NAME` | — | — | optional | Traces, metrics and logs over OTLP (Grafana Cloud). Unset means telemetry is off; the headers are a secret |
 | `MCP_SERVER_URL`, `MCP_SERVER_API_KEY` | optional | — | — | The Trainer's remote tools |
 | `FX_EUR_PER_USD_BOOTSTRAP` | optional | — | optional | Prices calls made before the first FX snapshot |
 | `OPENROUTER_MODEL_*` | optional | — | optional | Per-tier model overrides. Empty uses the registry |

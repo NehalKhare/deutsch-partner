@@ -110,6 +110,9 @@ importers:
 
   .:
     devDependencies:
+      '@opentelemetry/api':
+        specifier: ^1.9.1
+        version: 1.9.1
       turbo:
         specifier: ^2.5.0
         version: 2.11.2
@@ -145,16 +148,16 @@ importers:
         version: link:../../packages/ui
       '@langchain/core':
         specifier: 'catalog:'
-        version: 1.2.9(openai@7.5.0(zod@4.4.3))
+        version: 1.2.9(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-proto@0.222.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1))(openai@7.5.0(zod@4.4.3))
       '@langchain/mcp-adapters':
         specifier: 'catalog:'
-        version: 1.1.4(@cfworker/json-schema@4.1.1)(@langchain/core@1.2.9(openai@7.5.0(zod@4.4.3)))(@langchain/langgraph@1.4.12(@langchain/core@1.2.9(openai@7.5.0(zod@4.4.3)))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(zod@4.4.3))
+        version: 1.1.4(@cfworker/json-schema@4.1.1)(@langchain/core@1.2.9(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-proto@0.222.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1))(openai@7.5.0(zod@4.4.3)))(@langchain/langgraph@1.4.12(@langchain/core@1.2.9(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-proto@0.222.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1))(openai@7.5.0(zod@4.4.3)))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(zod@4.4.3))
       '@supabase/ssr':
         specifier: 'catalog:'
-        version: 0.12.4(@supabase/supabase-js@2.112.3)
+        version: 0.12.4(@supabase/supabase-js@2.112.3(@opentelemetry/api@1.9.1))
       '@supabase/supabase-js':
         specifier: 'catalog:'
-        version: 2.112.3
+        version: 2.112.3(@opentelemetry/api@1.9.1)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -166,16 +169,16 @@ importers:
         version: 13.4.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       langchain:
         specifier: 'catalog:'
-        version: 1.5.10(@langchain/core@1.2.9(openai@7.5.0(zod@4.4.3)))(openai@7.5.0(zod@4.4.3))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        version: 1.5.10(@langchain/core@1.2.9(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-proto@0.222.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1))(openai@7.5.0(zod@4.4.3)))(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-proto@0.222.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1))(openai@7.5.0(zod@4.4.3))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       langsmith:
         specifier: 'catalog:'
-        version: 0.9.0(openai@7.5.0(zod@4.4.3))
+        version: 0.9.0(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-proto@0.222.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1))(openai@7.5.0(zod@4.4.3))
       lucide-react:
         specifier: ^1.33.0
         version: 1.33.0(react@19.2.8)
       next:
         specifier: 'catalog:'
-        version: 16.3.1(@babel/core@7.29.7)(@playwright/test@1.62.1)(@types/node@20.19.43)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        version: 16.3.1(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@playwright/test@1.62.1)(@types/node@20.19.43)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       react:
         specifier: 'catalog:'
         version: 19.2.8
@@ -221,7 +224,7 @@ importers:
         version: 10.4.1
       '@testing-library/jest-dom':
         specifier: 'catalog:'
-        version: 7.0.1(@testing-library/dom@10.4.1)(vitest@4.1.11(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)))
+        version: 7.0.1(@testing-library/dom@10.4.1)(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)))
       '@testing-library/react':
         specifier: 'catalog:'
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -248,7 +251,7 @@ importers:
         version: 9.39.5(jiti@2.7.0)
       eslint-config-next:
         specifier: 'catalog:'
-        version: 16.3.1(@typescript-eslint/parser@8.67.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)
+        version: 16.3.1(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)
       jsdom:
         specifier: 'catalog:'
         version: 30.0.1(@noble/hashes@1.8.0)
@@ -266,7 +269,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: 'catalog:'
-        version: 4.1.11(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
 
   apps/ops:
     dependencies:
@@ -293,13 +296,13 @@ importers:
         version: link:../../packages/ui
       '@supabase/ssr':
         specifier: 'catalog:'
-        version: 0.12.4(@supabase/supabase-js@2.112.3)
+        version: 0.12.4(@supabase/supabase-js@2.112.3(@opentelemetry/api@1.9.1))
       '@supabase/supabase-js':
         specifier: 'catalog:'
-        version: 2.112.3
+        version: 2.112.3(@opentelemetry/api@1.9.1)
       next:
         specifier: 'catalog:'
-        version: 16.3.1(@babel/core@7.29.7)(@playwright/test@1.62.1)(@types/node@20.19.43)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        version: 16.3.1(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@playwright/test@1.62.1)(@types/node@20.19.43)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       react:
         specifier: 'catalog:'
         version: 19.2.8
@@ -333,7 +336,7 @@ importers:
         version: 10.4.1
       '@testing-library/jest-dom':
         specifier: 'catalog:'
-        version: 7.0.1(@testing-library/dom@10.4.1)(vitest@4.1.11(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)))
+        version: 7.0.1(@testing-library/dom@10.4.1)(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)))
       '@testing-library/react':
         specifier: 'catalog:'
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -372,7 +375,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: 'catalog:'
-        version: 4.1.11(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
 
   apps/worker:
     dependencies:
@@ -403,9 +406,12 @@ importers:
       '@dp/prompts':
         specifier: workspace:*
         version: link:../../packages/prompts
+      '@opentelemetry/api':
+        specifier: ^1.9.1
+        version: 1.9.1
       '@supabase/supabase-js':
         specifier: 'catalog:'
-        version: 2.112.3
+        version: 2.112.3(@opentelemetry/api@1.9.1)
       tsx:
         specifier: 'catalog:'
         version: 4.23.12
@@ -419,6 +425,15 @@ importers:
       '@dp/test-support':
         specifier: workspace:*
         version: link:../../packages/test-support
+      '@opentelemetry/sdk-metrics':
+        specifier: ^2.11.0
+        version: 2.11.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/sdk-trace-base':
+        specifier: ^2.11.0
+        version: 2.11.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/sdk-trace-node':
+        specifier: ^2.11.0
+        version: 2.11.0(@opentelemetry/api@1.9.1)
       '@types/node':
         specifier: 'catalog:'
         version: 20.19.43
@@ -430,16 +445,16 @@ importers:
         version: 5.9.3
       vitest:
         specifier: 'catalog:'
-        version: 4.1.11(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
 
   packages/auth:
     dependencies:
       '@supabase/ssr':
         specifier: 'catalog:'
-        version: 0.12.4(@supabase/supabase-js@2.112.3)
+        version: 0.12.4(@supabase/supabase-js@2.112.3(@opentelemetry/api@1.9.1))
       '@supabase/supabase-js':
         specifier: 'catalog:'
-        version: 2.112.3
+        version: 2.112.3(@opentelemetry/api@1.9.1)
       zod:
         specifier: 'catalog:'
         version: 4.4.3
@@ -458,13 +473,13 @@ importers:
         version: 9.39.5(jiti@2.7.0)
       next:
         specifier: 'catalog:'
-        version: 16.3.1(@babel/core@7.29.7)(@playwright/test@1.62.1)(@types/node@20.19.43)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        version: 16.3.1(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@playwright/test@1.62.1)(@types/node@20.19.43)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
       vitest:
         specifier: 'catalog:'
-        version: 4.1.11(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
 
   packages/config:
     dependencies:
@@ -476,7 +491,7 @@ importers:
         version: 9.39.5(jiti@2.7.0)
       eslint-config-next:
         specifier: 'catalog:'
-        version: 16.3.1(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)
+        version: 16.3.1(@typescript-eslint/parser@8.67.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)
       jsdom:
         specifier: 'catalog:'
         version: 30.0.1(@noble/hashes@1.8.0)
@@ -488,7 +503,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: 'catalog:'
-        version: 4.1.11(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
 
   packages/corpus: {}
 
@@ -524,7 +539,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: 'catalog:'
-        version: 4.1.11(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
 
   packages/domain:
     dependencies:
@@ -546,7 +561,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: 'catalog:'
-        version: 4.1.11(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
 
   packages/env:
     dependencies:
@@ -568,7 +583,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: 'catalog:'
-        version: 4.1.11(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
 
   packages/gateway:
     dependencies:
@@ -589,10 +604,10 @@ importers:
         version: link:../prompts
       '@langchain/core':
         specifier: 'catalog:'
-        version: 1.2.9(openai@7.5.0(zod@4.4.3))
+        version: 1.2.9(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-proto@0.222.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1))(openai@7.5.0(zod@4.4.3))
       '@langchain/openai':
         specifier: 'catalog:'
-        version: 1.5.10(@langchain/core@1.2.9(openai@7.5.0(zod@4.4.3)))
+        version: 1.5.10(@langchain/core@1.2.9(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-proto@0.222.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1))(openai@7.5.0(zod@4.4.3)))
       zod:
         specifier: 'catalog:'
         version: 4.4.3
@@ -614,7 +629,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: 'catalog:'
-        version: 4.1.11(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
 
   packages/learning:
     dependencies:
@@ -648,13 +663,46 @@ importers:
         version: 5.9.3
       vitest:
         specifier: 'catalog:'
-        version: 4.1.11(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
 
   packages/observability:
     dependencies:
       '@dp/env':
         specifier: workspace:*
         version: link:../env
+      '@opentelemetry/api':
+        specifier: ^1.9.1
+        version: 1.9.1
+      '@opentelemetry/api-logs':
+        specifier: ^0.222.0
+        version: 0.222.0
+      '@opentelemetry/exporter-logs-otlp-proto':
+        specifier: ^0.222.0
+        version: 0.222.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/exporter-metrics-otlp-proto':
+        specifier: ^0.222.0
+        version: 0.222.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/exporter-trace-otlp-proto':
+        specifier: ^0.222.0
+        version: 0.222.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/resources':
+        specifier: ^2.11.0
+        version: 2.11.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/sdk-logs':
+        specifier: ^0.222.0
+        version: 0.222.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/sdk-metrics':
+        specifier: ^2.11.0
+        version: 2.11.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/sdk-trace-base':
+        specifier: ^2.11.0
+        version: 2.11.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/sdk-trace-node':
+        specifier: ^2.11.0
+        version: 2.11.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/semantic-conventions':
+        specifier: ^1.43.0
+        version: 1.43.0
     devDependencies:
       '@dp/config':
         specifier: workspace:*
@@ -670,7 +718,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: 'catalog:'
-        version: 4.1.11(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
 
   packages/product-ops:
     dependencies:
@@ -691,16 +739,16 @@ importers:
         version: link:../prompts
       '@langchain/core':
         specifier: 'catalog:'
-        version: 1.2.9(openai@7.5.0(zod@4.4.3))
+        version: 1.2.9(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-proto@0.222.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1))(openai@7.5.0(zod@4.4.3))
       '@langchain/langgraph':
         specifier: 'catalog:'
-        version: 1.4.12(@langchain/core@1.2.9(openai@7.5.0(zod@4.4.3)))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(zod@4.4.3)
+        version: 1.4.12(@langchain/core@1.2.9(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-proto@0.222.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1))(openai@7.5.0(zod@4.4.3)))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(zod@4.4.3)
       '@langchain/langgraph-checkpoint':
         specifier: 'catalog:'
-        version: 1.1.5(@langchain/core@1.2.9(openai@7.5.0(zod@4.4.3)))
+        version: 1.1.5(@langchain/core@1.2.9(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-proto@0.222.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1))(openai@7.5.0(zod@4.4.3)))
       langchain:
         specifier: 'catalog:'
-        version: 1.5.10(@langchain/core@1.2.9(openai@7.5.0(zod@4.4.3)))(openai@7.5.0(zod@4.4.3))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        version: 1.5.10(@langchain/core@1.2.9(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-proto@0.222.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1))(openai@7.5.0(zod@4.4.3)))(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-proto@0.222.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1))(openai@7.5.0(zod@4.4.3))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       zod:
         specifier: 'catalog:'
         version: 4.4.3
@@ -722,7 +770,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: 'catalog:'
-        version: 4.1.11(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
 
   packages/prompts:
     dependencies:
@@ -747,7 +795,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: 'catalog:'
-        version: 4.1.11(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
 
   packages/security-tests:
     devDependencies:
@@ -765,16 +813,16 @@ importers:
         version: 5.9.3
       vitest:
         specifier: 'catalog:'
-        version: 4.1.11(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
 
   packages/test-support:
     dependencies:
       '@langchain/core':
         specifier: 'catalog:'
-        version: 1.2.9(openai@7.5.0(zod@4.4.3))
+        version: 1.2.9(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-proto@0.222.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1))(openai@7.5.0(zod@4.4.3))
       '@testing-library/jest-dom':
         specifier: 'catalog:'
-        version: 7.0.1(@testing-library/dom@10.4.1)(vitest@4.1.11(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)))
+        version: 7.0.1(@testing-library/dom@10.4.1)(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)))
       '@testing-library/react':
         specifier: 'catalog:'
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -783,7 +831,7 @@ importers:
         version: 2.15.0(@types/node@20.19.43)(typescript@5.9.3)
       vitest:
         specifier: 'catalog:'
-        version: 4.1.11(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
     devDependencies:
       '@dp/config':
         specifier: workspace:*
@@ -814,7 +862,7 @@ importers:
         version: 2.1.1
       next:
         specifier: 'catalog:'
-        version: 16.3.1(@babel/core@7.29.7)(@playwright/test@1.62.1)(@types/node@20.19.43)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        version: 16.3.1(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@playwright/test@1.62.1)(@types/node@20.19.43)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       react:
         specifier: 'catalog:'
         version: 19.2.8
@@ -833,7 +881,7 @@ importers:
         version: link:../test-support
       '@testing-library/jest-dom':
         specifier: 'catalog:'
-        version: 7.0.1(@testing-library/dom@10.4.1)(vitest@4.1.11(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)))
+        version: 7.0.1(@testing-library/dom@10.4.1)(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)))
       '@testing-library/react':
         specifier: 'catalog:'
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -860,7 +908,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: 'catalog:'
-        version: 4.1.11(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
 
 packages:
 
@@ -1712,6 +1760,102 @@ packages:
 
   '@open-draft/until@2.1.0':
     resolution: {integrity: sha512-U69T3ItWHvLwGg5eJ0n3I62nWuE6ilHlmz7zM0npLBRvPRd7e6NYmg54vvRtP5mZG7kZqZCFVdsTWo7BPtBujg==}
+
+  '@opentelemetry/api-logs@0.222.0':
+    resolution: {integrity: sha512-9mb1If+IF6u0ZVXkHQ6ogEae5HwA6ajIVUgpSDQyRASxft6BSXHvBvPooRle3yFN/fKnCdSOnuu0OC3PLcF6+g==}
+    engines: {node: '>=8.0.0'}
+
+  '@opentelemetry/api@1.9.1':
+    resolution: {integrity: sha512-gLyJlPHPZYdAk1JENA9LeHejZe1Ti77/pTeFm/nMXmQH/HFZlcS/O2XJB+L8fkbrNSqhdtlvjBVjxwUYanNH5Q==}
+    engines: {node: '>=8.0.0'}
+
+  '@opentelemetry/context-async-hooks@2.11.0':
+    resolution: {integrity: sha512-Tr79DyWI8itsBdg+jH+opjfrwLzX+erk1/ExkIwhWoAVjVrJIn2y5+cGjTC0Vy8fyNIA/y8wuJPZwr1T3xCZeQ==}
+    engines: {node: ^18.19.0 || >=20.6.0}
+    peerDependencies:
+      '@opentelemetry/api': '>=1.0.0 <1.10.0'
+
+  '@opentelemetry/core@2.11.0':
+    resolution: {integrity: sha512-7YP44XH0tV6+Mb54x2YGf84i7yi+31MBZlE8JwvozkxyTvXbSp10X7cI7YE49ChJ3shMJoBmCJF3+1QFBJctGA==}
+    engines: {node: ^18.19.0 || >=20.6.0}
+    peerDependencies:
+      '@opentelemetry/api': '>=1.0.0 <1.10.0'
+
+  '@opentelemetry/exporter-logs-otlp-proto@0.222.0':
+    resolution: {integrity: sha512-LlCDJuaznfFPzjHoKXjN/r9T5pgCZpmVheZ/EmwMUhMvpxI7RXDmsdLXoYpl5suYQNkwyXAUZhVEXKe3lev8Hg==}
+    engines: {node: ^18.19.0 || >=20.6.0}
+    peerDependencies:
+      '@opentelemetry/api': ^1.3.0
+
+  '@opentelemetry/exporter-metrics-otlp-http@0.222.0':
+    resolution: {integrity: sha512-6Ko+0bgNP6V4G/RsmNBSk5lO1B/lo9z6tvLpFY3ykPPevXNzFmOW3C9hEmTt0zKCvHovyrol3TYlg4HVb5gwjg==}
+    engines: {node: ^18.19.0 || >=20.6.0}
+    peerDependencies:
+      '@opentelemetry/api': ^1.3.0
+
+  '@opentelemetry/exporter-metrics-otlp-proto@0.222.0':
+    resolution: {integrity: sha512-s1ZPwS8Ig7cpRmL3kCobPaFbemM81dJ03LNPrsuN32h3mCDvNF2NQ1pRHruOju0P0o1TZ24LkZA685rtQal1KA==}
+    engines: {node: ^18.19.0 || >=20.6.0}
+    peerDependencies:
+      '@opentelemetry/api': ^1.3.0
+
+  '@opentelemetry/exporter-trace-otlp-proto@0.222.0':
+    resolution: {integrity: sha512-imLrLzNhnABJt3tUyT63h6MqfZrG3Gdv3TE7+OUQTvwD088RfCUx3rF01lcgfu2KXBFk13vwi0yKZLvFEalkIA==}
+    engines: {node: ^18.19.0 || >=20.6.0}
+    peerDependencies:
+      '@opentelemetry/api': ^1.3.0
+
+  '@opentelemetry/otlp-exporter-base@0.222.0':
+    resolution: {integrity: sha512-YbywG3veEm2Fb6TbdxRkuquWob6eVWXuA8/Ba1tXz9jHfUqpdE3keilOHEtPboC4CvS1bjeeVfNkWGOOrLj+lw==}
+    engines: {node: ^18.19.0 || >=20.6.0}
+    peerDependencies:
+      '@opentelemetry/api': ^1.3.0
+
+  '@opentelemetry/otlp-transformer@0.222.0':
+    resolution: {integrity: sha512-/F3BZ89+CJQnZkMh2tCrtcdB+XT2Dxhj4FFE+WPQ//413hmFL0/RfEX6vgOIWGhiSzrkHWTK3+6SiT7K5/g/jQ==}
+    engines: {node: ^18.19.0 || >=20.6.0}
+    peerDependencies:
+      '@opentelemetry/api': ^1.3.0
+
+  '@opentelemetry/resources@2.11.0':
+    resolution: {integrity: sha512-Ie7+8q8MDF4FAEQCKVMTx3ReUvxiIAgIiiW3c9JdmP8+HMcDy20puT+AHjexnExgnbvBxjQ9fjkFDWrikJ2jQA==}
+    engines: {node: ^18.19.0 || >=20.6.0}
+    peerDependencies:
+      '@opentelemetry/api': '>=1.3.0 <1.10.0'
+
+  '@opentelemetry/sdk-logs@0.222.0':
+    resolution: {integrity: sha512-+19YHODIjaUCArxleaJtuufFZVpz/xvvK+VllQqE+W8hHolxdoRwHfK/s667zezwh1hkx6FFF+oYzetYgqK+Bg==}
+    engines: {node: ^18.19.0 || >=20.6.0}
+    peerDependencies:
+      '@opentelemetry/api': '>=1.4.0 <1.10.0'
+
+  '@opentelemetry/sdk-metrics@2.11.0':
+    resolution: {integrity: sha512-7GXXcObyHyDUUSG+L+kJoquty01bzm7ivE7+SSgXXJcHuPzGviptxwARmI2c+bnnxjexGQbJnyNlN8HxBP/Y7A==}
+    engines: {node: ^18.19.0 || >=20.6.0}
+    peerDependencies:
+      '@opentelemetry/api': '>=1.9.0 <1.10.0'
+
+  '@opentelemetry/sdk-trace-base@2.11.0':
+    resolution: {integrity: sha512-H19x/TX/LZdqiYOjM7fqtSxwlplC5pgelavqbQdHbhdq0q/AI/TGkM2dfGuuynTXmJPeF2HoZVoPDu+TGoW78A==}
+    engines: {node: ^18.19.0 || >=20.6.0}
+    peerDependencies:
+      '@opentelemetry/api': '>=1.3.0 <1.10.0'
+
+  '@opentelemetry/sdk-trace-node@2.11.0':
+    resolution: {integrity: sha512-CuvCMJmZxswhNLlM2LfuLOW3h3fZujA4hsG4B+Sz4dX2zvaXO8Ng74cnDHWD64gLszTlhiG3c0iNUjj4g+0/sA==}
+    engines: {node: ^18.19.0 || >=20.6.0}
+    peerDependencies:
+      '@opentelemetry/api': '>=1.0.0 <1.10.0'
+
+  '@opentelemetry/sdk-trace@2.11.0':
+    resolution: {integrity: sha512-fFnTqGm8/G73GQVnxYi7LXa1ZVYEUvgL6XI1LpvV0bPC7WQ/ZGgKxCSl8FnlZBKto9JHHEFTO6s6CUpvvtwFrA==}
+    engines: {node: ^18.19.0 || >=20.6.0}
+    peerDependencies:
+      '@opentelemetry/api': '>=1.3.0 <1.10.0'
+
+  '@opentelemetry/semantic-conventions@1.43.0':
+    resolution: {integrity: sha512-eSYWTm620tTk45EKSedaUL8MFYI8hW164hIXsgIHyxu3VobUB3fFCu5t0hQby6OoWRPsG1KkKUG2M5UadiLiVg==}
+    engines: {node: '>=14'}
 
   '@oxc-project/types@0.146.0':
     resolution: {integrity: sha512-XC0QsnnhVe7sLIWmYmdPw7x5P0h4W8vUU3Nv1ySgWXtvCz8NizoAEpGXA0sOYoJQV2Rl13LgURAHQ5cI5ILCSA==}
@@ -5625,12 +5769,12 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
-  '@langchain/core@1.2.9(openai@7.5.0(zod@4.4.3))':
+  '@langchain/core@1.2.9(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-proto@0.222.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1))(openai@7.5.0(zod@4.4.3))':
     dependencies:
       '@cfworker/json-schema': 4.1.1
       '@standard-schema/spec': 1.1.0
       js-tiktoken: 1.0.21
-      langsmith: 0.9.0(openai@7.5.0(zod@4.4.3))
+      langsmith: 0.9.0(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-proto@0.222.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1))(openai@7.5.0(zod@4.4.3))
       mustache: 4.2.0
       p-queue: 6.6.2
       zod: 4.4.3
@@ -5641,13 +5785,13 @@ snapshots:
       - openai
       - ws
 
-  '@langchain/langgraph-checkpoint@1.1.5(@langchain/core@1.2.9(openai@7.5.0(zod@4.4.3)))':
+  '@langchain/langgraph-checkpoint@1.1.5(@langchain/core@1.2.9(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-proto@0.222.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1))(openai@7.5.0(zod@4.4.3)))':
     dependencies:
-      '@langchain/core': 1.2.9(openai@7.5.0(zod@4.4.3))
+      '@langchain/core': 1.2.9(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-proto@0.222.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1))(openai@7.5.0(zod@4.4.3))
 
-  '@langchain/langgraph-sdk@1.9.31(@langchain/core@1.2.9(openai@7.5.0(zod@4.4.3)))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
+  '@langchain/langgraph-sdk@1.9.31(@langchain/core@1.2.9(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-proto@0.222.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1))(openai@7.5.0(zod@4.4.3)))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
     dependencies:
-      '@langchain/core': 1.2.9(openai@7.5.0(zod@4.4.3))
+      '@langchain/core': 1.2.9(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-proto@0.222.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1))(openai@7.5.0(zod@4.4.3))
       '@langchain/protocol': 0.0.18
       '@types/json-schema': 7.0.15
       p-queue: 9.3.3
@@ -5656,11 +5800,11 @@ snapshots:
       react: 19.2.8
       react-dom: 19.2.8(react@19.2.8)
 
-  '@langchain/langgraph@1.4.12(@langchain/core@1.2.9(openai@7.5.0(zod@4.4.3)))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(zod@4.4.3)':
+  '@langchain/langgraph@1.4.12(@langchain/core@1.2.9(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-proto@0.222.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1))(openai@7.5.0(zod@4.4.3)))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(zod@4.4.3)':
     dependencies:
-      '@langchain/core': 1.2.9(openai@7.5.0(zod@4.4.3))
-      '@langchain/langgraph-checkpoint': 1.1.5(@langchain/core@1.2.9(openai@7.5.0(zod@4.4.3)))
-      '@langchain/langgraph-sdk': 1.9.31(@langchain/core@1.2.9(openai@7.5.0(zod@4.4.3)))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@langchain/core': 1.2.9(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-proto@0.222.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1))(openai@7.5.0(zod@4.4.3))
+      '@langchain/langgraph-checkpoint': 1.1.5(@langchain/core@1.2.9(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-proto@0.222.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1))(openai@7.5.0(zod@4.4.3)))
+      '@langchain/langgraph-sdk': 1.9.31(@langchain/core@1.2.9(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-proto@0.222.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1))(openai@7.5.0(zod@4.4.3)))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@langchain/protocol': 0.0.18
       '@standard-schema/spec': 1.1.0
       zod: 4.4.3
@@ -5670,10 +5814,10 @@ snapshots:
       - svelte
       - vue
 
-  '@langchain/mcp-adapters@1.1.4(@cfworker/json-schema@4.1.1)(@langchain/core@1.2.9(openai@7.5.0(zod@4.4.3)))(@langchain/langgraph@1.4.12(@langchain/core@1.2.9(openai@7.5.0(zod@4.4.3)))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(zod@4.4.3))':
+  '@langchain/mcp-adapters@1.1.4(@cfworker/json-schema@4.1.1)(@langchain/core@1.2.9(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-proto@0.222.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1))(openai@7.5.0(zod@4.4.3)))(@langchain/langgraph@1.4.12(@langchain/core@1.2.9(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-proto@0.222.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1))(openai@7.5.0(zod@4.4.3)))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(zod@4.4.3))':
     dependencies:
-      '@langchain/core': 1.2.9(openai@7.5.0(zod@4.4.3))
-      '@langchain/langgraph': 1.4.12(@langchain/core@1.2.9(openai@7.5.0(zod@4.4.3)))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(zod@4.4.3)
+      '@langchain/core': 1.2.9(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-proto@0.222.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1))(openai@7.5.0(zod@4.4.3))
+      '@langchain/langgraph': 1.4.12(@langchain/core@1.2.9(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-proto@0.222.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1))(openai@7.5.0(zod@4.4.3)))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(zod@4.4.3)
       '@modelcontextprotocol/sdk': 1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
       debug: 4.4.3
       zod: 4.4.3
@@ -5683,9 +5827,9 @@ snapshots:
       - '@cfworker/json-schema'
       - supports-color
 
-  '@langchain/openai@1.5.10(@langchain/core@1.2.9(openai@7.5.0(zod@4.4.3)))':
+  '@langchain/openai@1.5.10(@langchain/core@1.2.9(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-proto@0.222.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1))(openai@7.5.0(zod@4.4.3)))':
     dependencies:
-      '@langchain/core': 1.2.9(openai@7.5.0(zod@4.4.3))
+      '@langchain/core': 1.2.9(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-proto@0.222.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1))(openai@7.5.0(zod@4.4.3))
       js-tiktoken: 1.0.21
       openai: 7.5.0(zod@4.4.3)
       zod: 4.4.3
@@ -5829,6 +5973,111 @@ snapshots:
 
   '@open-draft/until@2.1.0': {}
 
+  '@opentelemetry/api-logs@0.222.0':
+    dependencies:
+      '@opentelemetry/api': 1.9.1
+
+  '@opentelemetry/api@1.9.1': {}
+
+  '@opentelemetry/context-async-hooks@2.11.0(@opentelemetry/api@1.9.1)':
+    dependencies:
+      '@opentelemetry/api': 1.9.1
+
+  '@opentelemetry/core@2.11.0(@opentelemetry/api@1.9.1)':
+    dependencies:
+      '@opentelemetry/api': 1.9.1
+      '@opentelemetry/semantic-conventions': 1.43.0
+
+  '@opentelemetry/exporter-logs-otlp-proto@0.222.0(@opentelemetry/api@1.9.1)':
+    dependencies:
+      '@opentelemetry/api': 1.9.1
+      '@opentelemetry/otlp-exporter-base': 0.222.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/otlp-transformer': 0.222.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/sdk-logs': 0.222.0(@opentelemetry/api@1.9.1)
+
+  '@opentelemetry/exporter-metrics-otlp-http@0.222.0(@opentelemetry/api@1.9.1)':
+    dependencies:
+      '@opentelemetry/api': 1.9.1
+      '@opentelemetry/core': 2.11.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/otlp-exporter-base': 0.222.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/otlp-transformer': 0.222.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/resources': 2.11.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/sdk-metrics': 2.11.0(@opentelemetry/api@1.9.1)
+
+  '@opentelemetry/exporter-metrics-otlp-proto@0.222.0(@opentelemetry/api@1.9.1)':
+    dependencies:
+      '@opentelemetry/api': 1.9.1
+      '@opentelemetry/exporter-metrics-otlp-http': 0.222.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/otlp-exporter-base': 0.222.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/otlp-transformer': 0.222.0(@opentelemetry/api@1.9.1)
+
+  '@opentelemetry/exporter-trace-otlp-proto@0.222.0(@opentelemetry/api@1.9.1)':
+    dependencies:
+      '@opentelemetry/api': 1.9.1
+      '@opentelemetry/otlp-exporter-base': 0.222.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/otlp-transformer': 0.222.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/sdk-trace': 2.11.0(@opentelemetry/api@1.9.1)
+
+  '@opentelemetry/otlp-exporter-base@0.222.0(@opentelemetry/api@1.9.1)':
+    dependencies:
+      '@opentelemetry/api': 1.9.1
+      '@opentelemetry/core': 2.11.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/otlp-transformer': 0.222.0(@opentelemetry/api@1.9.1)
+
+  '@opentelemetry/otlp-transformer@0.222.0(@opentelemetry/api@1.9.1)':
+    dependencies:
+      '@opentelemetry/api': 1.9.1
+      '@opentelemetry/api-logs': 0.222.0
+      '@opentelemetry/core': 2.11.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/resources': 2.11.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/sdk-logs': 0.222.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/sdk-metrics': 2.11.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/sdk-trace': 2.11.0(@opentelemetry/api@1.9.1)
+
+  '@opentelemetry/resources@2.11.0(@opentelemetry/api@1.9.1)':
+    dependencies:
+      '@opentelemetry/api': 1.9.1
+      '@opentelemetry/core': 2.11.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/semantic-conventions': 1.43.0
+
+  '@opentelemetry/sdk-logs@0.222.0(@opentelemetry/api@1.9.1)':
+    dependencies:
+      '@opentelemetry/api': 1.9.1
+      '@opentelemetry/api-logs': 0.222.0
+      '@opentelemetry/core': 2.11.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/resources': 2.11.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/semantic-conventions': 1.43.0
+
+  '@opentelemetry/sdk-metrics@2.11.0(@opentelemetry/api@1.9.1)':
+    dependencies:
+      '@opentelemetry/api': 1.9.1
+      '@opentelemetry/core': 2.11.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/resources': 2.11.0(@opentelemetry/api@1.9.1)
+
+  '@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1)':
+    dependencies:
+      '@opentelemetry/api': 1.9.1
+      '@opentelemetry/core': 2.11.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/resources': 2.11.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/sdk-trace': 2.11.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/semantic-conventions': 1.43.0
+
+  '@opentelemetry/sdk-trace-node@2.11.0(@opentelemetry/api@1.9.1)':
+    dependencies:
+      '@opentelemetry/api': 1.9.1
+      '@opentelemetry/context-async-hooks': 2.11.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/core': 2.11.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/sdk-trace-base': 2.11.0(@opentelemetry/api@1.9.1)
+
+  '@opentelemetry/sdk-trace@2.11.0(@opentelemetry/api@1.9.1)':
+    dependencies:
+      '@opentelemetry/api': 1.9.1
+      '@opentelemetry/core': 2.11.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/resources': 2.11.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/semantic-conventions': 1.43.0
+
+  '@opentelemetry/semantic-conventions@1.43.0': {}
+
   '@oxc-project/types@0.146.0': {}
 
   '@playwright/test@1.62.1':
@@ -5937,9 +6186,9 @@ snapshots:
       '@supabase/phoenix': 0.4.5
       tslib: 2.8.1
 
-  '@supabase/ssr@0.12.4(@supabase/supabase-js@2.112.3)':
+  '@supabase/ssr@0.12.4(@supabase/supabase-js@2.112.3(@opentelemetry/api@1.9.1))':
     dependencies:
-      '@supabase/supabase-js': 2.112.3
+      '@supabase/supabase-js': 2.112.3(@opentelemetry/api@1.9.1)
       cookie: 1.1.1
 
   '@supabase/storage-js@2.112.3':
@@ -5947,13 +6196,15 @@ snapshots:
       iceberg-js: 0.8.1
       tslib: 2.8.1
 
-  '@supabase/supabase-js@2.112.3':
+  '@supabase/supabase-js@2.112.3(@opentelemetry/api@1.9.1)':
     dependencies:
       '@supabase/auth-js': 2.112.3
       '@supabase/functions-js': 2.112.3
       '@supabase/postgrest-js': 2.112.3
       '@supabase/realtime-js': 2.112.3
       '@supabase/storage-js': 2.112.3
+    optionalDependencies:
+      '@opentelemetry/api': 1.9.1
 
   '@swc/helpers@0.5.23':
     dependencies:
@@ -6039,7 +6290,7 @@ snapshots:
       picocolors: 1.1.1
       pretty-format: 27.5.1
 
-  '@testing-library/jest-dom@7.0.1(@testing-library/dom@10.4.1)(vitest@4.1.11(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)))':
+  '@testing-library/jest-dom@7.0.1(@testing-library/dom@10.4.1)(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)))':
     dependencies:
       '@adobe/css-tools': 4.5.0
       '@testing-library/dom': 10.4.1
@@ -6049,7 +6300,7 @@ snapshots:
       picocolors: 1.1.1
       redent: 3.0.0
     optionalDependencies:
-      vitest: 4.1.11(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
+      vitest: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
 
   '@testing-library/react@16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
     dependencies:
@@ -7832,12 +8083,12 @@ snapshots:
 
   kleur@4.1.5: {}
 
-  langchain@1.5.10(@langchain/core@1.2.9(openai@7.5.0(zod@4.4.3)))(openai@7.5.0(zod@4.4.3))(react-dom@19.2.8(react@19.2.8))(react@19.2.8):
+  langchain@1.5.10(@langchain/core@1.2.9(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-proto@0.222.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1))(openai@7.5.0(zod@4.4.3)))(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-proto@0.222.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1))(openai@7.5.0(zod@4.4.3))(react-dom@19.2.8(react@19.2.8))(react@19.2.8):
     dependencies:
-      '@langchain/core': 1.2.9(openai@7.5.0(zod@4.4.3))
-      '@langchain/langgraph': 1.4.12(@langchain/core@1.2.9(openai@7.5.0(zod@4.4.3)))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(zod@4.4.3)
-      '@langchain/langgraph-checkpoint': 1.1.5(@langchain/core@1.2.9(openai@7.5.0(zod@4.4.3)))
-      langsmith: 0.9.0(openai@7.5.0(zod@4.4.3))
+      '@langchain/core': 1.2.9(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-proto@0.222.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1))(openai@7.5.0(zod@4.4.3))
+      '@langchain/langgraph': 1.4.12(@langchain/core@1.2.9(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-proto@0.222.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1))(openai@7.5.0(zod@4.4.3)))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(zod@4.4.3)
+      '@langchain/langgraph-checkpoint': 1.1.5(@langchain/core@1.2.9(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-proto@0.222.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1))(openai@7.5.0(zod@4.4.3)))
+      langsmith: 0.9.0(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-proto@0.222.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1))(openai@7.5.0(zod@4.4.3))
       zod: 4.4.3
     transitivePeerDependencies:
       - '@opentelemetry/api'
@@ -7850,10 +8101,13 @@ snapshots:
       - vue
       - ws
 
-  langsmith@0.9.0(openai@7.5.0(zod@4.4.3)):
+  langsmith@0.9.0(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-proto@0.222.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1))(openai@7.5.0(zod@4.4.3)):
     dependencies:
       p-queue: 6.6.2
     optionalDependencies:
+      '@opentelemetry/api': 1.9.1
+      '@opentelemetry/exporter-trace-otlp-proto': 0.222.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/sdk-trace-base': 2.11.0(@opentelemetry/api@1.9.1)
       openai: 7.5.0(zod@4.4.3)
 
   language-subtag-registry@0.3.23: {}
@@ -8091,7 +8345,7 @@ snapshots:
     dependencies:
       content-type: 2.1.0
 
-  next@16.3.1(@babel/core@7.29.7)(@playwright/test@1.62.1)(@types/node@20.19.43)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8):
+  next@16.3.1(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@playwright/test@1.62.1)(@types/node@20.19.43)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8):
     dependencies:
       '@next/env': 16.3.1
       '@swc/helpers': 0.5.23
@@ -8110,6 +8364,7 @@ snapshots:
       '@next/swc-linux-x64-musl': 16.3.1
       '@next/swc-win32-arm64-msvc': 16.3.1
       '@next/swc-win32-x64-msvc': 16.3.1
+      '@opentelemetry/api': 1.9.1
       '@playwright/test': 1.62.1
       babel-plugin-react-compiler: 1.0.0
       sharp: 0.35.3(@types/node@20.19.43)
@@ -9129,7 +9384,7 @@ snapshots:
       jiti: 2.7.0
       tsx: 4.23.12
 
-  vitest@4.1.11(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)):
+  vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(jsdom@30.0.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)):
     dependencies:
       '@vitest/expect': 4.1.11
       '@vitest/mocker': 4.1.11(msw@2.15.0(@types/node@20.19.43)(typescript@5.9.3))(vite@8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
@@ -9152,6 +9407,7 @@ snapshots:
       vite: 8.2.2(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)
       why-is-node-running: 2.3.0
     optionalDependencies:
+      '@opentelemetry/api': 1.9.1
       '@types/node': 20.19.43
       jsdom: 30.0.1(@noble/hashes@1.8.0)
     transitivePeerDependencies:

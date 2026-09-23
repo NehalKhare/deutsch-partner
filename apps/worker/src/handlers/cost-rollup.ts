@@ -12,17 +12,16 @@ const dayKey = (at: Date) => at.toISOString().slice(0, 10);
 /**
  * Rebuilds the daily cost rollup the spend calendar reads.
  *
- * The window is the database's business, not this handler's: left to itself
- * the function redoes the newest day it holds plus the one before it, and
- * backfills the entire ledger when the rollup is empty. So the scheduled job
- * passes nothing and the first run after deploy fills in whatever history
- * exists. `sinceDays` is for an operator who knows a particular window needs
- * redoing — after a retention purge, or a day that was rolled up while the
- * ledger was still being written.
+ * The hourly pg_cron schedule passes `sinceDays: 2` — yesterday and today,
+ * the window an operator is actually watching. Left null, the database
+ * redoes the newest day it holds plus the one before it, and backfills the
+ * entire ledger when the rollup is empty, so the first run after deploy
+ * fills in whatever history exists. A larger `sinceDays` is for an operator
+ * who knows a particular window needs redoing — after a retention purge, or
+ * a day that was rolled up while the ledger was still being written.
  *
- * Idempotent, which the scheduler needs rather than merely likes: it is an
- * in-process clock, so two replicas can tick the same hour, and the rebuild
- * recomputes a day from the ledger rather than adding to it.
+ * Idempotent, which the queue needs rather than merely likes: a retried or
+ * duplicated tick recomputes a day from the ledger rather than adding to it.
  */
 export const rebuildCostRollup: JobHandler<CostRollup> = async (
   payload,

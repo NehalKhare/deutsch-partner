@@ -10,6 +10,7 @@ import {
   type PreparedDocument,
   type SourceDocumentInput,
 } from "./document";
+import { mapBounded } from "./parallel";
 import { withRetry } from "./retry";
 import type { ChunkRecord, IngestionStore } from "./store";
 import { nullLogger, type Logger } from "@dp/observability/logger";
@@ -64,6 +65,8 @@ export interface IngestionDeps {
   readonly logger?: Logger;
   readonly retry?: { readonly attempts: number; readonly baseDelayMs: number };
   readonly sleep?: (ms: number) => Promise<void>;
+  /** How many documents are embedded and written at once. */
+  readonly concurrency?: number;
 }
 
 export interface IngestionOptions {
@@ -122,9 +125,8 @@ export async function ingestDocuments(
 ): Promise<IngestionReport> {
   const logger = deps.logger ?? nullLogger;
   const retry = deps.retry ?? { attempts: 3, baseDelayMs: 250 };
-  const outcomes: DocumentOutcome[] = [];
 
-  for (const input of inputs) {
+  const processOne = async (input: SourceDocumentInput): Promise<DocumentOutcome> => {
     // Enough of the document to name it in a failure report even when the
     // validation that would give us the rest is what failed.
     const label = {
@@ -145,7 +147,7 @@ export async function ingestDocuments(
       if (!options.force && existing && sameSet(existing.chunkHashes, hashes)) {
         // Nothing changed. Skipped before embedding, which is the only step
         // that costs anything.
-        outcomes.push({
+        return {
           ...label,
           status: "unchanged",
           documentId: existing.id,
@@ -155,12 +157,11 @@ export async function ingestDocuments(
           embedded: 0,
           costEur: 0,
           error: null,
-        });
-        continue;
+        };
       }
 
       if (options.dryRun) {
-        outcomes.push({
+        return {
           ...label,
           status: "ingested",
           documentId: existing?.id ?? null,
@@ -170,8 +171,7 @@ export async function ingestDocuments(
           embedded: 0,
           costEur: 0,
           error: null,
-        });
-        continue;
+        };
       }
 
       const embedded = await withRetry(
@@ -226,7 +226,7 @@ export async function ingestDocuments(
         },
       );
 
-      outcomes.push({
+      return {
         ...label,
         status: "ingested",
         documentId: saved.documentId,
@@ -236,7 +236,7 @@ export async function ingestDocuments(
         embedded: embedded.embeddedCount,
         costEur: embedded.costEur,
         error: null,
-      });
+      };
     } catch (error) {
       // One bad source does not end the run. It is named, and the rest
       // continue: an ingestion that stops at the first failure is one that
@@ -246,7 +246,7 @@ export async function ingestDocuments(
         errorCode: shortReason(error),
       });
 
-      outcomes.push({
+      return {
         ...label,
         status: "failed",
         documentId: null,
@@ -256,9 +256,15 @@ export async function ingestDocuments(
         embedded: 0,
         costEur: 0,
         error: shortReason(error),
-      });
+      };
     }
-  }
+  };
+
+  // Bounded parallelism, results in input order: embedding is a network wait,
+  // so a handful in flight cuts a corpus run to a fraction without reordering
+  // the report. The corpus holds unique sources, so no two inputs race one
+  // document row.
+  const outcomes = await mapBounded(inputs, deps.concurrency ?? 4, processOne);
 
   const sum = (pick: (outcome: DocumentOutcome) => number) =>
     outcomes.reduce((total, outcome) => total + pick(outcome), 0);

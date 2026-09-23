@@ -9,12 +9,26 @@ const base = {
 };
 
 describe("the worker's environment", () => {
-  it("defaults to the jobs queue with the scheduler on", () => {
+  it("defaults to the jobs queue with one slow slot", () => {
     const env = workerEnv(base);
 
     expect(env.worker.WORKER_QUEUES).toEqual(["jobs"]);
-    expect(env.worker.WORKER_SCHEDULER).toBe(true);
     expect(env.worker.WORKER_CONCURRENCY).toBe(2);
+    expect(env.worker.WORKER_SLOW_CONCURRENCY).toBe(1);
+  });
+
+  it("reads a slow-concurrency override and refuses a silly one", () => {
+    expect(workerEnv({ ...base, WORKER_SLOW_CONCURRENCY: "3" }).worker.WORKER_SLOW_CONCURRENCY).toBe(3);
+    expect(() => workerEnv({ ...base, WORKER_SLOW_CONCURRENCY: "0" })).toThrow();
+    expect(() => workerEnv({ ...base, WORKER_SLOW_CONCURRENCY: "99" })).toThrow();
+  });
+
+  it("no longer knows the in-process scheduler flag", () => {
+    // pg_cron schedules the recurring jobs; a stale WORKER_SCHEDULER in a
+    // deployment's env is simply ignored, like any unknown variable.
+    const env = workerEnv({ ...base, WORKER_SCHEDULER: "true" });
+
+    expect("WORKER_SCHEDULER" in env.worker).toBe(false);
   });
 
   it("reads a comma-separated queue list", () => {

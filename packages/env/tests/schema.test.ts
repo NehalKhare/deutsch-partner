@@ -258,6 +258,45 @@ describe("parseEnv", () => {
     });
   });
 
+  describe("OpenTelemetry", () => {
+    it("is off by default: no endpoint, no headers, no service name", () => {
+      const env = parseEnv({});
+
+      expect(env.OTEL_EXPORTER_OTLP_ENDPOINT).toBeUndefined();
+      expect(env.OTEL_EXPORTER_OTLP_HEADERS).toBeUndefined();
+      expect(env.OTEL_SERVICE_NAME).toBeUndefined();
+    });
+
+    it("accepts a gateway with its credential", () => {
+      const env = parseEnv({
+        OTEL_EXPORTER_OTLP_ENDPOINT: "https://otlp-gateway-prod-eu-west-2.grafana.net/otlp",
+        OTEL_EXPORTER_OTLP_HEADERS: "Authorization=Basic dXNlcjpwYXNz",
+        OTEL_SERVICE_NAME: "worker",
+      });
+
+      expect(env.OTEL_EXPORTER_OTLP_ENDPOINT).toBe(
+        "https://otlp-gateway-prod-eu-west-2.grafana.net/otlp",
+      );
+      expect(env.OTEL_SERVICE_NAME).toBe("worker");
+    });
+
+    it("rejects a credential with no gateway to send it to", () => {
+      expect(() =>
+        parseEnv({ OTEL_EXPORTER_OTLP_HEADERS: "Authorization=Basic dXNlcjpwYXNz" }),
+      ).toThrow(/OTEL_EXPORTER_OTLP_ENDPOINT/);
+    });
+
+    it("rejects a malformed endpoint", () => {
+      expect(() => parseEnv({ OTEL_EXPORTER_OTLP_ENDPOINT: "not a url" })).toThrow(
+        /OTEL_EXPORTER_OTLP_ENDPOINT/,
+      );
+    });
+
+    it("counts the headers among the server-only secrets", () => {
+      expect(SERVER_ENV_KEYS).toContain("OTEL_EXPORTER_OTLP_HEADERS");
+    });
+  });
+
   describe("blank values", () => {
     // A `KEY=` line in a .env file arrives as "", and it means "not set" —
     // a placeholder must never validate as content or fail as too short.

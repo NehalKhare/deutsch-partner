@@ -71,6 +71,7 @@
         "OPERATOR_USER_IDS",
         "OPS_COOKIE_NAME",
         "LANGSMITH_*",
+        "OTEL_*",
         "MCP_SERVER_*",
         "GITHUB_*",
         "APP_*",

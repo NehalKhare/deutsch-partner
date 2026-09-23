@@ -126,3 +126,52 @@ describe("redaction", () => {
     expect(lines).toHaveLength(1);
   });
 });
+
+describe("the second destination", () => {
+  it("receives the level, the event and the already-redacted fields", () => {
+    const seen: Array<{ level: string; event: string; fields: Record<string, unknown> }> = [];
+    const logger = createLogger({
+      sink: () => {},
+      base: { service: "worker" },
+      emit: (level, event, fields) => seen.push({ level, event, fields }),
+    });
+
+    logger.warn("worker.job_retry", { errorCode: "store_unavailable", apiKey: "sk-live-123" });
+
+    expect(seen).toEqual([
+      {
+        level: "warn",
+        event: "worker.job_retry",
+        fields: { service: "worker", errorCode: "store_unavailable", apiKey: "[redacted]" },
+      },
+    ]);
+  });
+
+  it("respects the level threshold", () => {
+    const seen: string[] = [];
+    const logger = createLogger({
+      sink: () => {},
+      level: "warn",
+      emit: (_level, event) => seen.push(event),
+    });
+
+    logger.info("dropped");
+    logger.error("kept");
+
+    expect(seen).toEqual(["kept"]);
+  });
+
+  it("never lets the bridge take down the caller, or the sink", () => {
+    const lines: string[] = [];
+    const logger = createLogger({
+      sink: (line) => lines.push(line),
+      emit: () => {
+        throw new Error("collector down");
+      },
+    });
+
+    expect(() => logger.info("worker.job_done")).not.toThrow();
+    // The sink already ran when the bridge threw; the line is not lost.
+    expect(lines).toHaveLength(1);
+  });
+});

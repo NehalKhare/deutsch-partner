@@ -22,19 +22,23 @@ export function migrationSql(): string {
 }
 
 /**
- * PGlite is real Postgres, but it does not ship pgvector. The embedding column
- * and its HNSW index are therefore substituted here so the rest of the schema —
- * every table, constraint, index and RLS policy — runs against a real engine.
+ * PGlite is real Postgres, but it ships neither pgvector nor pg_cron. The
+ * embedding column, its HNSW index, the cron extension and the $cron$-tagged
+ * schedule block are therefore substituted here so the rest of the schema —
+ * every table, constraint, index, function and RLS policy — runs against a
+ * real engine.
  *
- * The substitution can only hide the vector bits, so a static test asserts the
- * migrations really do declare pgvector and a cosine HNSW index. See
- * packages/security-tests/tests/migration-policy.test.ts.
+ * The substitution can only hide what it strips, so a static test asserts the
+ * migrations really do declare pgvector, a cosine HNSW index, pg_cron and the
+ * schedules. See packages/security-tests/tests/migration-policy.test.ts.
  */
-function withoutPgvector(sql: string): string {
+function withoutUnavailableExtensions(sql: string): string {
   return sql
     .replace(/create extension if not exists vector[^;]*;/gi, "")
     .replace(/\b(?:extensions\.)?vector\(\d+\)/gi, "text")
-    .replace(/create index[^;]*using hnsw[^;]*;/gi, "");
+    .replace(/create index[^;]*using hnsw[^;]*;/gi, "")
+    .replace(/create extension if not exists pg_cron[^;]*;/gi, "")
+    .replace(/do \$cron\$[\s\S]*?\$cron\$;/gi, "");
 }
 
 /**
@@ -94,7 +98,7 @@ export async function createTestDatabase(): Promise<TestDatabase> {
   for (const name of migrationFiles()) {
     const sql = readFileSync(join(MIGRATIONS_DIR, name), "utf8");
     try {
-      await db.exec(withoutPgvector(sql));
+      await db.exec(withoutUnavailableExtensions(sql));
     } catch (error) {
       throw new Error(`migration ${name} failed: ${(error as Error).message}`);
     }

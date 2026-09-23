@@ -32,6 +32,7 @@
     "dev:worker": "turbo run dev --filter=@dp/worker"
   },
   "devDependencies": {
+    "@opentelemetry/api": "^1.9.1",
     "turbo": "^2.5.0"
   },
   "packageManager": "pnpm@10.31.0",

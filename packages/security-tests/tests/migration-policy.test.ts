@@ -79,6 +79,40 @@ describe("pgvector", () => {
   });
 });
 
+describe("pg_cron", () => {
+  // Not observable at runtime either: the harness strips the extension and
+  // the $cron$ block for PGlite, so their presence is asserted on the text.
+  it("enables the pg_cron extension", () => {
+    expect(sql).toMatch(/create extension if not exists pg_cron/i);
+  });
+
+  it.each([
+    "dp_productops_reconcile",
+    "dp_fx_refresh",
+    "dp_ratelimit_purge",
+    "dp_cost_rollup",
+    "dp_pricing_snapshot",
+    "dp_checkpoints_prune",
+  ])("schedules %s", (name) => {
+    expect(sql).toMatch(new RegExp(`cron\\.schedule\\('${name}'`));
+  });
+
+  it("reconciles stalled runs every five minutes", () => {
+    expect(sql).toMatch(/'dp_productops_reconcile',\s*'\*\/5 \* \* \* \*'/);
+  });
+
+  it("keeps the schedule block strippable for the test harness", () => {
+    // The harness removes exactly `do $cron$ … $cron$;`. A schedule outside
+    // that block would break PGlite; a renamed tag would break the strip.
+    const block = sql.match(/do \$cron\$[\s\S]*?\$cron\$;/i)?.[0] ?? "";
+    const scheduled = sql.match(/cron\.schedule\(/g) ?? [];
+    const inBlock = block.match(/cron\.schedule\(/g) ?? [];
+
+    expect(scheduled.length).toBeGreaterThan(0);
+    expect(inBlock.length).toBe(scheduled.length);
+  });
+});
+
 describe("migration hygiene", () => {
   it("declares no SECURITY DEFINER function", () => {
     expect(statements).not.toMatch(/security\s+definer/i);

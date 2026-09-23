@@ -330,8 +330,8 @@ Stated here so nobody has to discover it by reading the code.
   non-model call; the row shape is parsed defensively and the job has been tested
   against a fake fetch only. Until it has run for real, `model_pricing_snapshots`
   is empty and the estimator behind the budget gate has nothing to read. The FX
-  job runs hourly from the same scheduler; the cost dashboard's refresh button
-  enqueues one more.
+  job runs hourly from the same pg_cron schedule; the cost dashboard's refresh
+  button enqueues one more.
 - **The spend calendar is only as old as the rollup job.** `cost_rollup_daily`
   was created, secured and schema-tested in the first cost migration and
   nothing wrote to it for months, so every historical view over it returned an
@@ -409,11 +409,14 @@ Stated here so nobody has to discover it by reading the code.
   `supabase/migrations/**` whatever the plan says, so a schema change is
   described in the document and written by a person. Per-run operator opt-in is
   the extension point.
-- **The scheduler is in-process and may double-run a job across replicas.** The
-  worker enqueues its scheduled kinds once a minute; two workers ticking at once
-  collide on the queue's per-kind deduplication, but a job that finished between
-  their ticks runs twice. Every scheduled job is idempotent, so the cost is a
-  query. A durable scheduler (pg_cron) is the next step if the replicas grow.
+- **The recurring jobs are scheduled by pg_cron, not by the worker.** The
+  migration `20260924120000_pg_cron_schedules.sql` schedules the six recurring
+  kinds in the database; each tick calls `enqueue_scheduled_job`, which builds
+  the same envelope the worker's in-process scheduler used to and deduplicates
+  on the kind. However many worker replicas run, they only ever drain. The
+  schedules have not yet fired against a hosted project; PGlite cannot run
+  pg_cron, so the harness strips the extension and the schedule block and a
+  static test asserts both are declared.
 - **The operator app's second factor has run only against a fake auth client.**
   Enrolment, the challenge and the step-up table are tested; nobody has enrolled
   a real authenticator against the linked project yet.

@@ -133,6 +133,17 @@ const baseSchema = z.object({
   LANGSMITH_ENDPOINT: z.url().optional(),
 
   /**
+   * OpenTelemetry over OTLP: traces, metrics and logs to whatever gateway the
+   * endpoint names (Grafana Cloud's, in this deployment). Absent means
+   * telemetry is off — the deployable runs identically, exporting nothing.
+   * The headers carry the gateway's basic-auth credential, so they are a
+   * server secret like any API key.
+   */
+  OTEL_EXPORTER_OTLP_ENDPOINT: z.url().optional(),
+  OTEL_EXPORTER_OTLP_HEADERS: secret(),
+  OTEL_SERVICE_NAME: z.string().min(1).max(120).optional(),
+
+  /**
    * A remote MCP server the Trainer's agent may borrow tools from, over
    * streamable HTTP. Unset means the Trainer runs on its local tools alone —
    * a thinner trainer, never a boot failure. The key is optional because the
@@ -175,6 +186,7 @@ export const SERVER_ENV_KEYS = [
   "LOG_PSEUDONYM_SALT",
   "MCP_SERVER_API_KEY",
   "GITHUB_TOKEN",
+  "OTEL_EXPORTER_OTLP_HEADERS",
 ] as const;
 
 type EnvKey = keyof z.infer<typeof baseSchema>;
@@ -215,6 +227,16 @@ const envSchemaFor = (required: readonly EnvKey[]) => baseSchema.superRefine((en
       code: "custom",
       path: ["LANGSMITH_API_KEY"],
       message: "is required when LANGSMITH_TRACING is enabled",
+    });
+  }
+
+  // A credential with no gateway to send it to is a configuration mistake:
+  // whoever set the headers expected telemetry to flow.
+  if (env.OTEL_EXPORTER_OTLP_HEADERS !== undefined && env.OTEL_EXPORTER_OTLP_ENDPOINT === undefined) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["OTEL_EXPORTER_OTLP_ENDPOINT"],
+      message: "is required when OTEL_EXPORTER_OTLP_HEADERS is set",
     });
   }
 

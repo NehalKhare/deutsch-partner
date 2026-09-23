@@ -17,12 +17,14 @@ import { createTaskModelLadder } from "@dp/gateway/langchain-model";
 import { createModelRegistry, registryOverridesFromEnv, type ModelRegistry } from "@dp/gateway/registry";
 import { createUsageAccounting, type UsageAccounting } from "@dp/gateway/repositories/usage-repository";
 import { createLogger, type Logger } from "@dp/observability/logger";
+import { nullTelemetry, type Telemetry } from "@dp/observability/telemetry";
 import { createLocalRepositoryBrowser } from "@dp/product-ops/browser";
 import type { LearnerFeedbackSource } from "@dp/product-ops/feedback";
 import { createProductOpsRepository, type ProductOpsRepository } from "@dp/product-ops/repository";
 import type { WorkflowDeps } from "@dp/product-ops/workflow";
 
 import type { WorkerEnv } from "./env";
+import { createWorkerTelemetry, type WorkerTelemetry } from "./instruments";
 
 /**
  * Wiring the worker's dependencies, once per process.
@@ -38,6 +40,7 @@ export interface WorkerContext {
   readonly env: WorkerEnv;
   readonly workerId: string;
   readonly logger: Logger;
+  readonly telemetry: WorkerTelemetry;
   readonly client: DatabaseClient;
   readonly jobs: JobsRepository;
   readonly runs: ProductOpsRepository;
@@ -76,10 +79,13 @@ export function createSecretClient(env: WorkerEnv): DatabaseClient {
   }) as unknown as DatabaseClient;
 }
 
-export function createWorkerContext(env: WorkerEnv): WorkerContext {
+export function createWorkerContext(env: WorkerEnv, telemetry: Telemetry = nullTelemetry): WorkerContext {
   const workerId = env.worker.WORKER_ID ?? `${hostname()}-${process.pid}`;
   const logger = createLogger({
     base: { service: "worker", environment: env.app.NODE_ENV, workerId },
+    // Every line the sink sees also reaches the OTLP logs pipeline, already
+    // redacted, when telemetry is on.
+    emit: telemetry.logEmitter,
   });
   const client = createSecretClient(env);
   const runs = createProductOpsRepository(client);
@@ -97,6 +103,7 @@ export function createWorkerContext(env: WorkerEnv): WorkerContext {
     env,
     workerId,
     logger,
+    telemetry: createWorkerTelemetry(telemetry.tracer, telemetry.meter),
     client,
     jobs: createJobsRepository(client),
     runs,

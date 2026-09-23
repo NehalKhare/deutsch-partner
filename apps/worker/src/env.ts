@@ -10,11 +10,6 @@ import { parseEnv, type AppEnv } from "@dp/env/schema";
  * receives a validated object.
  */
 
-const booleanish = z
-  .enum(["true", "1", "false", "0"])
-  .default("true")
-  .transform((value) => value === "true" || value === "1");
-
 const workerSchema = z.object({
   /** Comma-separated. A process that drains "coder" needs a checkout and a token. */
   WORKER_QUEUES: z
@@ -23,11 +18,15 @@ const workerSchema = z.object({
     .transform((value) => value.split(",").map((part) => part.trim()).filter(Boolean))
     .pipe(z.array(jobQueueSchema).min(1)),
   WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(16).default(2),
+  /**
+   * How many of the slow kinds (a run being driven, a build, the corpus
+   * ingest) this process holds at once. The fast kinds are never counted
+   * against it; capped by WORKER_CONCURRENCY where the loop reads it.
+   */
+  WORKER_SLOW_CONCURRENCY: z.coerce.number().int().min(1).max(8).default(1),
   WORKER_POLL_MS: z.coerce.number().int().min(250).max(60_000).default(2_000),
   /** How long a claim holds before another worker may take the job over. */
   WORKER_LOCK_SECONDS: z.coerce.number().int().min(15).max(3_600).default(90),
-  /** Whether this process also enqueues the scheduled jobs. */
-  WORKER_SCHEDULER: booleanish,
   WORKER_ID: z.string().min(1).max(120).optional(),
   /** A checkout of GITHUB_REPOSITORY, for planning and for cutting worktrees. */
   REPO_CHECKOUT_PATH: z.string().min(1).optional(),

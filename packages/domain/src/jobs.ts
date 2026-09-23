@@ -136,6 +136,26 @@ export function dedupeKeyFor(payload: JobPayload): string | null {
   }
 }
 
+/**
+ * The kinds that run for minutes rather than seconds: driving a run through
+ * model calls, building inside a worktree, embedding the corpus. A worker
+ * caps how many of these it holds at once so a slow job never starves the
+ * three-second ones, and holds their locks longer so a heartbeat hiccup does
+ * not hand a half-built worktree to a second worker.
+ */
+export const SLOW_JOB_KINDS: readonly JobKind[] = [
+  "productops.drive",
+  "productops.implement",
+  "ingest.knowledge",
+];
+
+export const SLOW_JOB_LOCK_SECONDS = 600;
+
+/** The lock a claimed kind should hold: the base, or longer for a slow kind. */
+export function lockSecondsFor(kind: JobKind, base: number): number {
+  return SLOW_JOB_KINDS.includes(kind) ? Math.max(base, SLOW_JOB_LOCK_SECONDS) : base;
+}
+
 /** How many times a job is tried before it is marked failed for good. */
 export const JOB_MAX_ATTEMPTS = 5;
 

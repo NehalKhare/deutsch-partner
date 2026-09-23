@@ -12,6 +12,8 @@ const SERVER_SECRET_NAMES = [
   // The credential a coding agent's work is ultimately pushed with. It is read
   // by the worker and by nothing the browser ever loads.
   "GITHUB_TOKEN",
+  // The OTLP gateway's basic-auth credential.
+  "OTEL_EXPORTER_OTLP_HEADERS",
 ];
 
 /** Modules that must never be imported from a Client Component. */

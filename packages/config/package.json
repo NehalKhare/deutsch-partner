@@ -17,7 +17,9 @@
     "eslint-config-next": "catalog:",
     "jsdom": "catalog:",
     "server-only": "catalog:",
-    "typescript": "catalog:",
+    "typescript": "catalog:"
+  },
+  "peerDependencies": {
     "vitest": "catalog:"
   }
 }
