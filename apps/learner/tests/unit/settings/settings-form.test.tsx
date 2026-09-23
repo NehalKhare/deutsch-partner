@@ -165,10 +165,10 @@ describe("the pass mark", () => {
     expect(seen[0]?.get("masteryThreshold")).toBe("33");
   });
 
-  it("says the five-turn minimum survives every setting", () => {
+  it("says the seven-turn minimum survives every setting", () => {
     renderForm();
 
-    expect(screen.getByText(/at least five turns/i)).toBeInTheDocument();
+    expect(screen.getByText(/at least seven turns/i)).toBeInTheDocument();
   });
 });
 

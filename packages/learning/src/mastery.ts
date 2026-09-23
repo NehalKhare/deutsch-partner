@@ -23,10 +23,10 @@ export interface LevelTally {
  * every function here takes the ratio as a parameter and falls back to this.
  *
  * The minimum is not negotiable at any setting: it is what "confident" means
- * here — two good sentences are a mood, five evaluated turns are evidence.
+ * here — two good sentences are a mood, seven evaluated turns are evidence.
  */
 export const MASTERY_RATIO = 0.8;
-export const MASTERY_MIN_TURNS = 5;
+export const MASTERY_MIN_TURNS = 7;
 
 /** The learner's chosen pass mark, stored as a percentage, as the ratio the gate compares. */
 export function thresholdRatio(percent: number): number {
@@ -56,14 +56,20 @@ export function hasMastered(
 }
 
 /**
- * How full the mastery bar is, as a fraction of the ratio the gate wants.
+ * How full the mastery bar is, as progress towards the whole gate.
  *
- * The bar shows the strong-turn ratio against the target — the learner's own
- * pass mark — because that is the part of the gate a learner can feel turn by
- * turn: an error-free turn raises it, a turn with errors lowers it. The other
- * half of the gate — at least five evaluated turns — is shown separately as
- * evidence collected, because folding both into one number makes an early
- * error look like progress, which is not a story anybody should be told.
+ * The bar is full exactly when hasMastered would say yes — a full bar that
+ * the gate then refuses is a promise the next message breaks, and two clean
+ * turns drawing 100% was precisely that lie.
+ *
+ * Before the evidence floor, every error-free turn fills one
+ * MASTERY_MIN_TURNS-th of the bar and a turn with errors adds nothing, so an
+ * early error never reads as progress. Once the floor is met the bar shows
+ * the strong-turn ratio against the target — the learner's own pass mark —
+ * which is the part of the gate a learner can feel turn by turn: an
+ * error-free turn raises it, a turn with errors lowers it. The pre-floor bar
+ * tops out at (MASTERY_MIN_TURNS - 1)/MASTERY_MIN_TURNS, so it can never
+ * show full while the gate is still shut on evidence.
  *
  * No turns is an empty bar, not a full one: a ratio over nothing is nothing.
  */
@@ -72,6 +78,9 @@ export function masteryFill(
   ratio: number = MASTERY_RATIO,
 ): number {
   if (!tally || tally.turns === 0) return 0;
+  if (tally.turns < MASTERY_MIN_TURNS) {
+    return tally.strongTurns / MASTERY_MIN_TURNS;
+  }
   return Math.min(1, tally.strongTurns / tally.turns / ratio);
 }
 

@@ -301,7 +301,7 @@ function SettingsFields({ profile }: { readonly profile: LearnerProfile }) {
         <legend className={legendClass}>How high is the bar to move up?</legend>
         <p id="masteryThreshold-hint" className={hintText}>
           The share of your evaluated turns that must be error-free before a
-          mini-level counts as cleared. At least five turns are needed,
+          mini-level counts as cleared. At least seven turns are needed,
           whatever you choose.
         </p>
         <input

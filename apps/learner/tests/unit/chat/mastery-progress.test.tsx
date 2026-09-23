@@ -6,8 +6,8 @@ import { MasteryProgress } from "@/components/chat/mastery-progress";
 /**
  * The mastery strip, on its own.
  *
- * What matters is that it never contradicts the gate: the bar is the ratio
- * against the 80% target, the dots are the five-turn evidence floor, and a
+ * What matters is that it never contradicts the gate: the bar is full only
+ * when the gate is open, the dots are the seven-turn evidence floor, and a
  * verdict appears only when the parent saw a turn get counted.
  */
 
@@ -23,16 +23,23 @@ describe("the bar", () => {
   });
 
   it("shows the strong-turn ratio against the gate's target", () => {
-    // 3 of 5 strong is 0.6 against the 0.8 bar: three quarters.
-    render(<MasteryProgress tally={{ turns: 5, strongTurns: 3 }} lastTurn={null} />);
+    // 4 of 7 strong is ~0.57 against the 0.8 bar.
+    render(<MasteryProgress tally={{ turns: 7, strongTurns: 4 }} lastTurn={null} />);
 
-    expect(bar()).toHaveAttribute("aria-valuenow", "75");
+    expect(bar()).toHaveAttribute("aria-valuenow", "71");
   });
 
-  it("is full at exactly four strong turns in five", () => {
-    render(<MasteryProgress tally={{ turns: 5, strongTurns: 4 }} lastTurn={null} />);
+  it("is full at six strong turns in seven", () => {
+    render(<MasteryProgress tally={{ turns: 7, strongTurns: 6 }} lastTurn={null} />);
 
     expect(bar()).toHaveAttribute("aria-valuenow", "100");
+  });
+
+  it("stays well short of full on two clean turns", () => {
+    // The bug this guards against: 2 for 2 error-free used to draw 100%.
+    render(<MasteryProgress tally={{ turns: 2, strongTurns: 2 }} lastTurn={null} />);
+
+    expect(bar()).toHaveAttribute("aria-valuenow", "29");
   });
 });
 
@@ -43,16 +50,16 @@ describe("the evidence floor", () => {
     );
 
     expect(container.querySelectorAll("[data-dot='filled']")).toHaveLength(3);
-    expect(container.querySelectorAll("[data-dot='empty']")).toHaveLength(2);
-    expect(screen.getByText("3 of 5 evaluated turns")).toBeInTheDocument();
+    expect(container.querySelectorAll("[data-dot='empty']")).toHaveLength(4);
+    expect(screen.getByText("3 of 7 evaluated turns")).toBeInTheDocument();
   });
 
-  it("never draws more than the five the gate asks for", () => {
+  it("never draws more than the seven the gate asks for", () => {
     const { container } = render(
       <MasteryProgress tally={{ turns: 12, strongTurns: 9 }} lastTurn={null} />,
     );
 
-    expect(container.querySelectorAll("[data-dot='filled']")).toHaveLength(5);
+    expect(container.querySelectorAll("[data-dot='filled']")).toHaveLength(7);
     expect(container.querySelectorAll("[data-dot='empty']")).toHaveLength(0);
   });
 });
@@ -89,10 +96,10 @@ describe("the verdict on the newest turn", () => {
 
 describe("the learner's own pass mark", () => {
   it("fills the bar against the chosen threshold, not the default", () => {
-    // 3 of 5 strong: three quarters of the 80% default, full at 50%.
+    // 4 of 7 strong: part-way up the 80% default, full at 50%.
     render(
       <MasteryProgress
-        tally={{ turns: 5, strongTurns: 3 }}
+        tally={{ turns: 7, strongTurns: 4 }}
         lastTurn={null}
         threshold={50}
       />,
@@ -105,7 +112,7 @@ describe("the learner's own pass mark", () => {
   it("names the threshold to a screen reader", () => {
     render(
       <MasteryProgress
-        tally={{ turns: 5, strongTurns: 3 }}
+        tally={{ turns: 7, strongTurns: 4 }}
         lastTurn={null}
         threshold={50}
       />,
@@ -117,13 +124,13 @@ describe("the learner's own pass mark", () => {
 
 describe("when the gate is open", () => {
   it("says the learner is ready, without promising a move they did not ask for", () => {
-    render(<MasteryProgress tally={{ turns: 5, strongTurns: 4 }} lastTurn={null} />);
+    render(<MasteryProgress tally={{ turns: 7, strongTurns: 6 }} lastTurn={null} />);
 
     expect(screen.getByText(/ready to move up/i)).toBeInTheDocument();
   });
 
-  it("does not promise a move on a full bar the evidence floor still blocks", () => {
-    // Two clean turns fill the bar, but the gate wants five turns of evidence.
+  it("promises nothing while the evidence floor blocks the gate", () => {
+    // Two clean turns are a mood; the gate wants seven turns of evidence.
     render(<MasteryProgress tally={{ turns: 2, strongTurns: 2 }} lastTurn={null} />);
 
     expect(screen.queryByText(/ready to move up/i)).not.toBeInTheDocument();

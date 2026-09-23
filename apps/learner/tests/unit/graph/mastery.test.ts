@@ -8,7 +8,7 @@ import type { LearnerState } from "@dp/domain/learner";
 /**
  * The gate a learner earns — and chooses to walk through.
  *
- * The arithmetic — five evaluated turns, four in five error-free — is pure
+ * The arithmetic — seven evaluated turns, four in five error-free — is pure
  * and tested with the progression engine. What is tested here is the wiring
  * of the choice: mastery by itself moves nobody, and when the learner does
  * ask to move, the tally decides the bookkeeping — a cleared level is left
@@ -25,7 +25,7 @@ async function turnSaying(message: string, options: FakeOptions = {}) {
   return { state, note, graph, before };
 }
 
-const MASTERED = { turns: 5, strongTurns: 4 };
+const MASTERED = { turns: 7, strongTurns: 6 };
 
 describe("mastery on its own moves nobody", () => {
   it("leaves a learner with a cleared level exactly where they are", async () => {
@@ -53,7 +53,7 @@ describe("confirming an earned move", () => {
 
   it("records the level as mastered, never as skipped", async () => {
     // They cleared it and then said "weiter". Booking that as a walkout
-    // because they did not write five more sentences would be a record
+    // because they did not write more sentences would be a record
     // against them.
     const { graph, before } = await turnSaying("weiter", { tally: MASTERED });
     const written = graph.upsertedStates as LearnerState[];
@@ -73,7 +73,7 @@ describe("confirming an earned move", () => {
 describe("asking without the evidence", () => {
   it("still moves them — asking is allowed — but books the level as skipped", async () => {
     const { state, graph, before } = await turnSaying("weiter", {
-      tally: { turns: 5, strongTurns: 3 },
+      tally: { turns: 7, strongTurns: 3 },
     });
 
     expect(state.learner?.state.miniLevel).toBe(before + 1);
@@ -97,10 +97,10 @@ describe("asking without the evidence", () => {
 
 describe("the learner's own pass mark", () => {
   it("books the move as earned against the bar they chose", async () => {
-    // 3 of 5 error-free clears a 50% bar even though it would not clear the
+    // 4 of 7 error-free clears a 50% bar even though it would not clear the
     // default: the offer the chat showed them is the bar the record keeps.
     const { state, graph, before } = await turnSaying("weiter", {
-      tally: { turns: 5, strongTurns: 3 },
+      tally: { turns: 7, strongTurns: 4 },
       masteryThreshold: 50,
     });
 

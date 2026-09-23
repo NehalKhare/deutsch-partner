@@ -23,35 +23,47 @@ describe("how full the bar is", () => {
     expect(masteryFill({ turns: 0, strongTurns: 0 })).toBe(0);
   });
 
-  it("shows the strong-turn ratio against the gate's own target", () => {
-    // 3 of 5 strong is a 0.6 ratio against a 0.8 bar: three quarters full.
-    expect(masteryFill({ turns: 5, strongTurns: 3 })).toBeCloseTo(0.75);
+  it("shows the strong-turn ratio once the evidence floor is met", () => {
+    // 4 of 7 strong is ~0.57 against a 0.8 bar.
+    expect(masteryFill({ turns: 7, strongTurns: 4 })).toBeCloseTo(4 / 7 / 0.8);
   });
 
-  it("is full exactly when the ratio the gate wants is met", () => {
-    expect(masteryFill({ turns: 5, strongTurns: 4 })).toBe(1);
+  it("is full exactly when the gate itself would open", () => {
+    const cleared = { turns: 7, strongTurns: 6 };
+    const short = { turns: 7, strongTurns: 5 };
+
+    expect(masteryFill(cleared)).toBe(1);
+    expect(hasMastered(cleared)).toBe(true);
+    expect(masteryFill(short)).toBeLessThan(1);
+    expect(hasMastered(short)).toBe(false);
   });
 
   it("never overfills, however clean the run", () => {
-    expect(masteryFill({ turns: 3, strongTurns: 3 })).toBe(1);
+    expect(masteryFill({ turns: 10, strongTurns: 10 })).toBe(1);
+  });
+
+  it("fills one seventh per error-free turn before the evidence floor", () => {
+    // A weak turn adds nothing pre-floor, so an early error never reads as
+    // progress — and no run, however clean, is full before seven turns.
+    expect(masteryFill({ turns: 2, strongTurns: 2 })).toBeCloseTo(2 / 7);
+    expect(masteryFill({ turns: 3, strongTurns: 2 })).toBeCloseTo(2 / 7);
+  });
+
+  it("is never full while the gate is shut on the evidence floor", () => {
+    // Six clean turns out of six beat every ratio and are still not evidence.
+    const tally = { turns: 6, strongTurns: 6 };
+
+    expect(masteryFill(tally)).toBeLessThan(1);
+    expect(hasMastered(tally)).toBe(false);
   });
 
   it("rises on an error-free turn and falls on one with errors", () => {
-    const before = { turns: 4, strongTurns: 3 };
-    const afterStrong = { turns: 5, strongTurns: 4 };
-    const afterWeak = { turns: 5, strongTurns: 3 };
+    const before = { turns: 7, strongTurns: 5 };
+    const afterStrong = { turns: 8, strongTurns: 6 };
+    const afterWeak = { turns: 8, strongTurns: 5 };
 
     expect(masteryFill(afterStrong)).toBeGreaterThan(masteryFill(before));
     expect(masteryFill(afterWeak)).toBeLessThan(masteryFill(before));
-  });
-
-  it("can be full while the gate is still shut on the evidence floor", () => {
-    // Two clean turns fill the bar but do not open the gate — which is why
-    // the strip shows the evidence dots separately rather than blending them.
-    const tally = { turns: 2, strongTurns: 2 };
-
-    expect(masteryFill(tally)).toBe(1);
-    expect(hasMastered(tally)).toBe(false);
   });
 });
 
@@ -90,7 +102,7 @@ describe("the constants the strip leans on", () => {
     // The strip draws MASTERY_MIN_TURNS dots and fills against MASTERY_RATIO.
     // If either moved without the other, the picture would lie about the gate.
     expect(MASTERY_RATIO).toBe(0.8);
-    expect(MASTERY_MIN_TURNS).toBe(5);
+    expect(MASTERY_MIN_TURNS).toBe(7);
   });
 });
 
@@ -102,7 +114,7 @@ describe("the learner's own pass mark", () => {
   });
 
   it("opens the gate at a lower bar when the learner set one", () => {
-    const tally = { turns: 5, strongTurns: 3 };
+    const tally = { turns: 7, strongTurns: 4 };
 
     expect(hasMastered(tally)).toBe(false);
     expect(hasMastered(tally, thresholdRatio(50))).toBe(true);
@@ -110,17 +122,17 @@ describe("the learner's own pass mark", () => {
 
   it("keeps the evidence floor whatever the bar", () => {
     // Two clean turns out of two beats every ratio — and still is not
-    // evidence. The five-turn minimum is not the learner's to lower.
+    // evidence. The seven-turn minimum is not the learner's to lower.
     const tally = { turns: 2, strongTurns: 2 };
 
     expect(hasMastered(tally, thresholdRatio(33))).toBe(false);
   });
 
   it("fills the bar against the learner's own target", () => {
-    // 3 of 5 strong is 0.6: three quarters of an 80% bar, full at 50%.
-    const tally = { turns: 5, strongTurns: 3 };
+    // 4 of 7 strong is ~0.57: part-way up an 80% bar, full at 50%.
+    const tally = { turns: 7, strongTurns: 4 };
 
-    expect(masteryFill(tally, thresholdRatio(80))).toBeCloseTo(0.75);
+    expect(masteryFill(tally, thresholdRatio(80))).toBeCloseTo(4 / 7 / 0.8);
     expect(masteryFill(tally, thresholdRatio(50))).toBe(1);
   });
 });

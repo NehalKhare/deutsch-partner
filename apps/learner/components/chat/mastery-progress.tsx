@@ -12,12 +12,12 @@ import {
 /**
  * How close this level is to being earned, said honestly.
  *
- * The gate has two parts and the strip shows both without blending them: the
- * bar is the strong-turn ratio against the learner's own pass mark — it rises
- * on an error-free turn and falls on one with errors, which is the feedback a
- * learner can act on — and the dots are the evidence floor, five evaluated
- * turns, which only ever fills. Folding the floor into the bar would make an
- * early error read as progress.
+ * The bar is progress towards the whole gate, so it reads 100% exactly when
+ * the gate is open — never on two lucky turns. Before the seven-turn evidence
+ * floor each error-free turn fills one seventh and an error adds nothing;
+ * from seven turns on it is the strong-turn ratio against the learner's own
+ * pass mark, rising on an error-free turn and falling on one with errors.
+ * The dots show the same floor as turns counted, which only ever fills.
  *
  * Nothing here decides anything. The tally arrives from the server, the same
  * numbers the mastery gate itself reads, and this draws them. A quality
@@ -67,9 +67,9 @@ export function MasteryProgress({
         />
       </div>
 
-      {/* The evidence floor: the gate will not open before five evaluated
-          turns however clean they were, and hiding that would make a full bar
-          into a promise the next message breaks. */}
+      {/* The evidence floor: the gate will not open before seven evaluated
+          turns however clean they were, and the dots say how much of that
+          evidence has been collected. */}
       <span className="flex items-center gap-1">
         {Array.from({ length: MASTERY_MIN_TURNS }, (_, index) => (
           <span

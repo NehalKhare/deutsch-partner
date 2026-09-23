@@ -171,9 +171,9 @@ standing on the last A1 level deserves to know the next click lands in A2.
 ### 5c. Earning the move
 
 Every evaluated turn adds one line to a per-level tally: evaluated, and
-error-free or not. When the tally at the current level reaches **five
+error-free or not. When the tally at the current level reaches **seven
 evaluated turns with the learner's pass mark met** — 80% error-free by
-default, lowerable to 50% or 33% with a slider in settings; the five-turn
+default, lowerable to 50% or 33% with a slider in settings; the seven-turn
 minimum is not negotiable — the gate is open, and the chat says so, plainly:
 a banner announces the level is cleared and offers the choice, **Move on** or
 **Keep practising**. Mastery moves nobody by itself. A learner who has just
@@ -188,14 +188,15 @@ different even though the click is the same.
 
 The gate is pure arithmetic over stored integers. The model's per-turn
 evaluation feeds the tally; it never decides the move. Formulaic messages the
-evaluator skips — *"Danke!"* — add nothing, so five pleasantries cannot open
+evaluator skips — *"Danke!"* — add nothing, so seven pleasantries cannot open
 the gate. And a level that was once skipped and later mastered is un-skipped:
 the record says where the learner is, not where they once gave up.
 
 The chat also draws the tally as it stands: a mastery strip under the header
-shows the strong-turn ratio against the four-in-five bar, the five evidence
-dots, and a per-turn verdict. It can be hidden, and the choice is remembered
-on the device.
+shows a bar that is full exactly when the gate is open — before the seven-turn
+floor each error-free turn fills one seventh; after it, the strong-turn ratio
+against the pass mark — plus the seven evidence dots and a per-turn verdict.
+It can be hidden, and the choice is remembered on the device.
 
 > `learning/mastery.ts` (`hasMastered`, `masteryFill`),
 > `learning/progression.ts` (`advanceOnMastery`),

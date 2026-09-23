@@ -289,16 +289,16 @@ describe("what one turn counts as", () => {
 });
 
 describe("when a tally counts as mastery", () => {
-  it("opens at four strong turns in five", () => {
-    expect(hasMastered({ turns: 5, strongTurns: 4 })).toBe(true);
+  it("opens at six strong turns in seven", () => {
+    expect(hasMastered({ turns: 7, strongTurns: 6 })).toBe(true);
   });
 
   it("stays closed one strong turn short", () => {
-    expect(hasMastered({ turns: 5, strongTurns: 3 })).toBe(false);
+    expect(hasMastered({ turns: 7, strongTurns: 5 })).toBe(false);
   });
 
   it("waits for the minimum evidence, however flawless", () => {
-    // A perfect two-for-two is a mood; five evaluated turns are evidence.
+    // A perfect run one turn short is a mood; seven evaluated turns are evidence.
     expect(
       hasMastered({ turns: MASTERY_MIN_TURNS - 1, strongTurns: MASTERY_MIN_TURNS - 1 }),
     ).toBe(false);
@@ -318,7 +318,7 @@ describe("when a tally counts as mastery", () => {
     // Absolute, not relative: a drifted constant passes every test that is
     // written in terms of itself.
     expect(MASTERY_RATIO).toBe(0.8);
-    expect(MASTERY_MIN_TURNS).toBe(5);
+    expect(MASTERY_MIN_TURNS).toBe(7);
   });
 });
 

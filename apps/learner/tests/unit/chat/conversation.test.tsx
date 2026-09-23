@@ -896,9 +896,9 @@ describe("progress towards mastery", () => {
       />,
     );
 
-    // 3 of 5 strong is 0.6 against the 0.8 target: three quarters full.
-    expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "75");
-    expect(screen.getByText("5 of 5 evaluated turns")).toBeInTheDocument();
+    // Pre-floor, 3 error-free turns are 3 sevenths of the bar.
+    expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "43");
+    expect(screen.getByText("5 of 7 evaluated turns")).toBeInTheDocument();
   });
 
   it("moves the bar and credits the turn when the tally arrives", async () => {
@@ -911,8 +911,9 @@ describe("progress towards mastery", () => {
 
     await sendMessage();
 
+    // One error-free turn is one seventh of the bar, not a full one.
     await waitFor(() => {
-      expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "100");
+      expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "14");
     });
     expect(container.querySelector("[data-turn-quality='strong']")).toBeInTheDocument();
   });
@@ -922,8 +923,8 @@ describe("progress towards mastery", () => {
       http.post(CHAT_ENDPOINT, () =>
         replyWithTally("Fast! Es heißt: mit dem Zug.", {
           miniLevel: 1,
-          turns: 3,
-          strongTurns: 2,
+          turns: 8,
+          strongTurns: 5,
         }),
       ),
     );
@@ -931,16 +932,17 @@ describe("progress towards mastery", () => {
       <Conversation
         threadId="1e2f0a4c-6b7d-4e8f-9a0b-1c2d3e4f5a6b"
         miniLevel={1}
-        initialTally={{ turns: 2, strongTurns: 2 }}
+        initialTally={{ turns: 7, strongTurns: 5 }}
       />,
     );
 
-    expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "100");
+    // 5 of 7 strong is ~0.71 against the 0.8 target.
+    expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "89");
     await sendMessage("Ich fahre mit den Zug.");
 
-    // 2 of 3 strong is ~0.67 against the 0.8 target.
+    // 5 of 8 strong is ~0.63 against the 0.8 target.
     await waitFor(() => {
-      expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "83");
+      expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "78");
     });
     expect(container.querySelector("[data-turn-quality='weak']")).toBeInTheDocument();
   });
@@ -977,7 +979,7 @@ describe("progress towards mastery", () => {
       <Conversation
         threadId="1e2f0a4c-6b7d-4e8f-9a0b-1c2d3e4f5a6b"
         miniLevel={1}
-        initialTally={{ turns: 5, strongTurns: 4 }}
+        initialTally={{ turns: 7, strongTurns: 6 }}
       />,
     );
 
@@ -989,7 +991,7 @@ describe("progress towards mastery", () => {
     await waitFor(() => {
       expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "0");
     });
-    expect(screen.getByText("0 of 5 evaluated turns")).toBeInTheDocument();
+    expect(screen.getByText("0 of 7 evaluated turns")).toBeInTheDocument();
   });
 
   it("clears the last verdict the moment a new turn starts", async () => {
@@ -1059,7 +1061,7 @@ describe("progress towards mastery", () => {
 });
 
 describe("the cleared-level offer", () => {
-  function renderCleared(initialTally = { turns: 5, strongTurns: 4 }) {
+  function renderCleared(initialTally = { turns: 7, strongTurns: 6 }) {
     return render(
       <Conversation
         threadId="1e2f0a4c-6b7d-4e8f-9a0b-1c2d3e4f5a6b"
@@ -1087,14 +1089,14 @@ describe("the cleared-level offer", () => {
   });
 
   it("honours the learner's own pass mark, and says which bar it was", () => {
-    // The same 3-of-5 tally that says nothing at the default clears a 50%
+    // The same 4-of-7 tally that says nothing at the default clears a 50%
     // bar — and the banner names the bar, so the praise is never mysterious.
     render(
       <Conversation
         threadId="1e2f0a4c-6b7d-4e8f-9a0b-1c2d3e4f5a6b"
         miniLevel={1}
         theme="Hallo und Tschüss"
-        initialTally={{ turns: 5, strongTurns: 3 }}
+        initialTally={{ turns: 7, strongTurns: 4 }}
         masteryThreshold={50}
       />,
     );
@@ -1110,14 +1112,14 @@ describe("the cleared-level offer", () => {
         () =>
           new HttpResponse(
             `Sehr gut!${encodeChatTrailer({
-              tally: { miniLevel: 1, turns: 5, strongTurns: 4 },
+              tally: { miniLevel: 1, turns: 7, strongTurns: 6 },
             })}`,
             { status: 200 },
           ),
       ),
     );
     const user = userEvent.setup();
-    renderCleared({ turns: 4, strongTurns: 3 });
+    renderCleared({ turns: 6, strongTurns: 5 });
 
     expect(screen.queryByText(/cleared/i)).not.toBeInTheDocument();
     await user.type(
