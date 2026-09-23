@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 
 import { signOutAction } from "@/app/auth/actions";
 import { AccountMenu } from "@/components/site/account-menu";
-import { AppNav } from "@/components/site/app-nav";
+import { AppNav, tabBarSpace } from "@/components/site/app-nav";
 import { Wordmark } from "@dp/ui/wordmark";
 import { accountLabel } from "@dp/auth/account";
 import { getAuthenticatedAccount } from "@/lib/auth/current-user";
@@ -28,6 +28,10 @@ import { requireOnboarded } from "@/lib/onboarding/gate";
  * clip against. Left to grow (min-h-dvh), the document scrolled instead and
  * took the tutor's face up and off the screen with it. Ordinary pages scroll
  * in the region below the nav, which is why it carries the overflow.
+ *
+ * On a phone the rooms move to a tab bar at the foot of the screen. The bar is
+ * fixed, and the spacer under the scrolling region keeps the same height clear,
+ * so a page's sticky composer comes to rest above the bar instead of under it.
  */
 export default async function AuthenticatedLayout({
   children,
@@ -47,18 +51,27 @@ export default async function AuthenticatedLayout({
 
   return (
     <div className="flex h-dvh flex-col bg-ground font-body text-copy">
-      <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-edge/60 px-6 py-4 md:px-10">
+      {/* Phone: wordmark and account, with the rooms in a tab bar at the
+          foot (AppNav pins itself there). Desktop: three columns, the outer
+          two equal, so the rooms sit on the true centre of the page however
+          long the account name is. No backdrop-filter or transform on the
+          header — either would become the containing block for the fixed
+          tab bar and drag it up here. */}
+      <header className="flex items-center justify-between gap-4 border-b border-edge/60 px-4 py-2.5 sm:px-6 md:grid md:grid-cols-[1fr_auto_1fr] md:justify-items-start md:py-3 lg:px-10">
         <Wordmark href="/dashboard" />
         <AppNav dueCount={dueCount} />
         {/* Everything about the account rather than about German: which one
             you are in, its settings, and the way out. */}
-        <AccountMenu
-          label={accountLabel(account.email)}
-          email={account.email}
-          signOut={signOutAction}
-        />
+        <div className="md:justify-self-end">
+          <AccountMenu
+            label={accountLabel(account.email)}
+            email={account.email}
+            signOut={signOutAction}
+          />
+        </div>
       </header>
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">{children}</div>
+      <div aria-hidden className={tabBarSpace} />
     </div>
   );
 }

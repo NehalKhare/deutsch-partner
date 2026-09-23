@@ -41,6 +41,16 @@ describe("closed", () => {
     expect(screen.getByRole("button", { name: /nehal\.khare/i })).toBeInTheDocument();
   });
 
+  it("is still named for the account when a phone shows only the avatar", () => {
+    // The name is visually hidden below `sm`, not removed: the initial alone
+    // is not an accessible name.
+    renderMenu();
+
+    expect(screen.getByRole("button", { name: /nehal\.khare/i })).toHaveAccessibleName(
+      "nehal.khare",
+    );
+  });
+
   it("says it opens something, and that it is shut", () => {
     renderMenu();
 

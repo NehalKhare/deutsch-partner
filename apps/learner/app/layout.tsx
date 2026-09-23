@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, Geist, Geist_Mono, Newsreader } from "next/font/google";
 import "./globals.css";
 import { ThemeScript } from "@dp/ui/theme-script";
@@ -36,6 +36,15 @@ export const metadata: Metadata = {
   title: "Deutsch Partner — talk German from day one",
   description:
     "An AI conversation partner that speaks German you can follow, remembers what you keep getting wrong, and grows with you from your first word to B1.",
+};
+
+/**
+ * Edge to edge on a notched phone, so env(safe-area-inset-*) reports real
+ * insets. The learner's tab bar pads itself clear of the home indicator with
+ * them; without cover they are always zero.
+ */
+export const viewport: Viewport = {
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useId } from "react";
+import { ChevronDown } from "lucide-react";
 
 import { focusRing } from "@dp/ui/styles";
 import { ThemeToggle } from "@dp/ui/theme-toggle";
@@ -60,7 +61,9 @@ export function AccountMenu({ label, email, signOut }: AccountMenuProps) {
         aria-haspopup="true"
         onClick={() => setOpen((was) => !was)}
         className={cn(
-          "flex max-w-[12rem] items-center gap-1.5 rounded-full border px-3 py-1.5",
+          // A tap-sized avatar on a phone, where the header has room for the
+          // wordmark and little else; the name joins it from `sm` up.
+          "flex max-w-[13rem] items-center gap-2 rounded-full border p-1 sm:pr-3",
           "font-display text-sm transition-colors",
           open
             ? "border-brand/50 bg-brand/10 text-copy"
@@ -68,10 +71,26 @@ export function AccountMenu({ label, email, signOut }: AccountMenuProps) {
           focusRing,
         )}
       >
-        <span className="truncate">{label}</span>
-        <span aria-hidden className={cn("text-xs transition-transform", open && "rotate-180")}>
-          ▾
+        <span
+          aria-hidden
+          className="flex size-8 shrink-0 items-center justify-center rounded-full bg-brand/15 font-semibold text-brand uppercase"
+        >
+          {label.charAt(0)}
         </span>
+        {/* Visually hidden rather than display:none on a phone, so the
+            button's accessible name is still whose account it is. The
+            truncation is on the inner span because not-sr-only resets the
+            overflow and wrapping that truncate relies on. */}
+        <span className="sr-only sm:not-sr-only sm:min-w-0">
+          <span className="block truncate">{label}</span>
+        </span>
+        <ChevronDown
+          aria-hidden
+          className={cn(
+            "hidden size-3.5 shrink-0 transition-transform sm:block",
+            open && "rotate-180",
+          )}
+        />
       </button>
 
       <div
@@ -79,7 +98,7 @@ export function AccountMenu({ label, email, signOut }: AccountMenuProps) {
         aria-labelledby={labelId}
         hidden={!open}
         className={cn(
-          "absolute right-0 z-20 mt-2 w-60 rounded-2xl border border-edge/70 bg-raised p-1.5",
+          "absolute right-0 z-40 mt-2 w-[min(15rem,calc(100vw-2rem))] rounded-2xl border border-edge/70 bg-raised p-1.5",
           "shadow-lg shadow-shade/40",
         )}
       >

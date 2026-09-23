@@ -171,4 +171,14 @@ describe("the overdue count", () => {
 
     expect(catchUp()).not.toHaveClass("text-ember");
   });
+
+  it("caps the badge at 99+ but still says the real number", () => {
+    // A tab-bar column has room for three characters; the accessible name
+    // has room for the truth.
+    pathname.current = "/dashboard";
+    const { container } = renderNav(240);
+
+    expect(container.querySelector("[data-role='due-count']")).toHaveTextContent("99+");
+    expect(catchUp()).toHaveAccessibleName("Catch up, 240 due");
+  });
 });
