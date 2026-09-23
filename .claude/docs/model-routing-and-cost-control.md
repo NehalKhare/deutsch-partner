@@ -55,8 +55,9 @@ Layering:
 
 Hard rule:
 
-No file outside lib/ai/gateway/ may import an SDK client, construct a fetch to a
-model endpoint, or call LangChain's model classes directly. LangGraph nodes call
+No file outside packages/gateway/src/ may import an SDK client, construct a fetch to
+a model endpoint, or call LangChain's model classes directly. The one non-model call
+the gateway makes is a GET of the provider's price list, for the pricing snapshot job. LangGraph nodes call
 ModelGateway. A CI grep test enforces this (see section 12).
 
 Reason: ceilings, budgets, accounting, redaction, and retries cannot be
@@ -493,7 +494,7 @@ Budgets:
 
 Architecture:
   - CI grep test: no import of a provider SDK or model client outside
-    lib/ai/gateway/
+    packages/gateway/src/ (the routing table itself is packages/domain/src/tasks.ts)
   - CI grep test: no hardcoded model id outside the model registry
   - CI grep test: no hardcoded price literal anywhere
 

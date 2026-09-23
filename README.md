@@ -1,7 +1,8 @@
 # Deutsch Partner
 
 An AI German-conversation tutor for English speakers, from absolute beginner to
-B1. Next.js App Router, TypeScript, Supabase and OpenRouter.
+B1. A pnpm and Turborepo workspace: two Next.js apps and a Node worker over
+shared packages, TypeScript throughout, Supabase and OpenRouter.
 
 You talk to it in German. It replies at your level, corrects you in the way your
 level can use, and keeps track of what you know — seventy mini-levels from a
@@ -39,9 +40,10 @@ your vocabulary, and a per-level score.
   answered as a quiz.
 - **Review and progress** (`/review`, `/dashboard`). What is due, what is weak,
   what keeps going wrong, and the per-level score that decides when you move.
-- **Operator pages** (`/operations`). Euro spend by task and model, and the AI
-  Product Ops board described below — which now opens every scan with what
-  learners said about the trainer.
+- **An operator app of its own** (`apps/ops`). On its own origin, behind a
+  password and an authenticator code: euro spend by task and model, and the AI
+  Product Ops board described below — which opens every scan with what learners
+  said about the trainer. It records jobs; a worker runs them.
 
 ## Documentation
 
@@ -52,6 +54,7 @@ your vocabulary, and a per-level score.
 | [How the pieces work](docs/topics.md) | Plain-language explanations of RAG, prompting, vector search, Next.js and the rest |
 | [Operations](docs/operations.md) | Environment, ingestion, cost, and what to check when something breaks |
 | [Product ops agents](docs/product-ops-agents.md) | The multi-agent workflow: graph, gates, agents, tools, what flows where |
+| [Deployment](docs/deployment.md) | The three containers, the pipelines, the manifests, the runbooks |
 
 The specifications this was built against are in
 [`.claude/docs/`](.claude/docs/); the four above describe what was actually
@@ -60,17 +63,25 @@ built, including what was not.
 ## Getting started
 
 ```bash
-cp .env.example .env.local   # then fill in the Supabase values
+cp apps/learner/.env.example apps/learner/.env.local   # then fill in the Supabase values
+cp apps/ops/.env.example apps/ops/.env.local
+cp apps/worker/.env.example apps/worker/.env.local
 pnpm install
-pnpm dev
+pnpm dev                     # learner on :3000, operator app on :3001, worker polling
+```
+
+```
+apps/learner   apps/ops   apps/worker          the three deployables
+packages/      domain, db, gateway, prompts, product-ops, learning, auth, env,
+               observability, ui, corpus, config, test-support, security-tests
 ```
 
 ## Everyday commands
 
 | Command | What it does |
 | --- | --- |
-| `pnpm dev` | Development server on port 3000 |
-| `pnpm verify` | Typecheck, lint, the full test suite, then a production build |
+| `pnpm dev` | All three deployables, with hot reload |
+| `pnpm verify` | Typecheck, lint, every test and every build, for every workspace |
 | `pnpm test:unit` | Unit and component tests (jsdom) |
 | `pnpm test:db` | Schema and RLS tests against real Postgres, in-process via PGlite |
 | `pnpm test:e2e` | Playwright, against a production build on port 3100 |
@@ -85,10 +96,10 @@ pnpm dev
 
 ## The curriculum
 
-Three files are the single source of truth. [`learning/curriculum.ts`](learning/curriculum.ts)
+Three files are the single source of truth. [`curriculum.ts`](packages/learning/src/curriculum.ts)
 holds the seventy mini-levels — theme, topic, target words, grammar, functions.
-[`learning/lexicon.ts`](learning/lexicon.ts) holds one dictionary entry for each
-of the 420 target words. [`learning/grammar-seeds.ts`](learning/grammar-seeds.ts)
+[`lexicon.ts`](packages/learning/src/lexicon.ts) holds one dictionary entry for each
+of the 420 target words. [`grammar-seeds.ts`](packages/learning/src/grammar-seeds.ts)
 holds the 86 grammar patterns, each with the mistakes the tutor quotes when it
 corrects someone. Goals, thresholds, frequency bands and difficulty are derived
 from those, so nothing can drift out of step with its own content.
@@ -157,7 +168,7 @@ the browser at no model cost. Search embeds the query through the gateway
 comprehensions. Every result carries a source citation — the dataset document
 and item it was parsed from — through the API response onto the card. The
 corpus is parsed and embedded by the Python tooling in
-[`scripts/scenarios/`](scripts/scenarios/), which also carries the ragas
+[`apps/learner/scripts/scenarios/`](apps/learner/scripts/scenarios/), which also carries the ragas
 retrieval evaluation.
 
 ## Product ops: agents that propose, people that decide
@@ -167,8 +178,9 @@ waits for approval, writes a PRD, plans the implementation, and waits again.
 The plan is the deliverable. The stages are nodes of a LangGraph state graph,
 the two human gates are graph interrupts, and the judgement inside a node is
 delegated to a tool-using LangChain agent whose tools are the only doors it has.
-Nothing here writes to the repository from the server; the implementation
-stages exist and are tested but no review leads into them.
+Nothing here runs in a web process: the operator app records a job and a
+worker drives the run, one stage per claim, checkpointed in Postgres. The
+implementation stages exist and are tested but no review leads into them.
 
 ```mermaid
 flowchart TD
@@ -203,7 +215,7 @@ votes by reason, prompt version, tool"]
     FB -->|"read_learner_feedback (fenced)"| R
     Web -->|"search_market, one finding per query"| R
 
-    subgraph Gateway["lib/ai/gateway — the only model boundary"]
+    subgraph Gateway["packages/gateway — the only model boundary"]
         Ladder["tier ladder per task
 EUR ledger row per call
 per-run budget from the timeline"]
@@ -243,9 +255,10 @@ the checkpoint shape, the validation layer and the liveness signal.
 
 ## Status
 
-Every phase of the build specification is implemented: 3976 tests across 199
-files (plus 31 Python tests), typecheck, lint and a production build clean,
-and 40 migrations for the linked project.
+Every phase of the build specification is implemented, and the monolith has
+been split into three independently deployable containers over shared
+packages, with `pnpm verify` green across the workspace and 44 migrations for
+the linked project.
 
 Every model call — chat, the trainer, the product-ops agents, embeddings and
 speech — rides OpenRouter through the one gateway. The embedding pipelines have

@@ -47,7 +47,7 @@ clause. Filtering a top-N *after* ranking is a filter that has already lost: the
 B1 paragraph was the top result, so the top-5 is five B1 paragraphs and then you
 filter them all away.
 
-> `supabase/migrations/20260821121800_retrieval.sql`
+> `packages/db/supabase/migrations/20260821121800_retrieval.sql`
 
 **Hybrid search — two arms, fused on rank.** Vector search finds text that
 *means* the same thing; a full-text search using Postgres's German
@@ -161,7 +161,7 @@ from and its position in it — end to end: the search function returns
 the card prints them. Retrieved content that cannot say where it came from
 cannot be checked against its source.
 
-> `lib/scenarios/citation.ts`, `supabase/migrations/20260824150000_scenario_citations.sql`
+> `apps/learner/lib/scenarios/citation.ts`, `packages/db/supabase/migrations/20260824150000_scenario_citations.sql`
 
 ---
 
@@ -245,7 +245,7 @@ that validates the reply, so the prompt and the validator cannot describe
 different shapes, and the reply is parsed, validated, salvaged where safe and
 discarded where not.
 
-> `lib/ai/prompts/contract.ts`, `lib/ai/evaluation/`
+> `packages/prompts/src/contract.ts`, `apps/learner/lib/ai/evaluation/`
 
 The Trainer is the case where the table flips: which review item to quiz
 next, whether a free-form German answer was right, when to reach for the
@@ -320,7 +320,7 @@ incident.
 **Cost, per learner turn:** €0.0064. The conversation turn is 71% of it, which
 is exactly why the other four calls are not on the strong tier.
 
-> `lib/ai/tasks.ts`, `lib/ai/gateway/registry.ts`
+> `packages/domain/src/tasks.ts`, `packages/gateway/src/registry.ts`
 
 ---
 
@@ -349,7 +349,7 @@ test. Edit one word and the test fails with a message spelling out the two
 legitimate responses: update the hash for a cosmetic change, or bump the version
 for a behavioural one. What it cannot be is an unnoticed edit.
 
-> `lib/ai/prompts/catalogue.ts`, `tests/unit/ai/prompt-versioning.test.ts`
+> `packages/prompts/src/catalogue.ts`, `packages/prompts/tests/prompt-versioning.test.ts`
 
 That lock caught a real bug. The machine-register identity block had a token cap
 smaller than the block itself, so it had been shipping truncated mid-sentence
@@ -372,7 +372,7 @@ message are never shed. The message is rendered whole and the call is **refused*
 if it does not fit: answering something the learner did not say is worse than
 refusing.
 
-> `lib/ai/prompts/blocks.ts`, `lib/ai/prompts/builder.ts`
+> `packages/prompts/src/blocks.ts`, `packages/prompts/src/builder.ts`
 
 ### Failure 3: the instructions can be overridden by the input
 
@@ -388,7 +388,7 @@ content is **fenced, not dropped** — dropping it hides the attempt and takes
 real content with it, and the standing instruction is written for exactly that
 case.
 
-> `lib/ai/prompts/delimiters.ts`
+> `packages/prompts/src/delimiters.ts`
 
 ### Two registers, because one size did not fit
 
@@ -414,7 +414,7 @@ asks for explicit correction still gets reformulation**: the level caps how
 technical feedback gets, and someone at A1 does not need a lecture on cases they
 have not met.
 
-> `lib/ai/prompts/behavior-policy.ts`
+> `packages/prompts/src/behavior-policy.ts`
 
 ### The output contract writes itself
 
@@ -425,7 +425,7 @@ describing last month's contract while the validator rejects this month's
 output — a failure that looks like a bad model. Generating it means there is
 only one definition.
 
-> `lib/ai/prompts/contract.ts`
+> `packages/prompts/src/contract.ts`
 
 ---
 
@@ -501,7 +501,7 @@ underneath), holding the six local tools plus any remote MCP tools from
 model's own callback.
 
 The gateway boundary survived the introduction. `ChatOpenAI` is instantiated
-in exactly one place — `lib/ai/gateway/langchain-model.ts`, inside the only
+in exactly one place — `packages/gateway/src/langchain-model.ts`, inside the only
 directory allowed to touch a model SDK — with the model id resolved from the
 registry by tier, the ceilings taken from the task table
 (`trainer.session`), and a callback handler that writes one ledger row per
@@ -609,8 +609,8 @@ be paid over and over. The cache key includes the **model**, because two models'
 vectors are not comparable — a model change is a cache miss, never a stale hit,
 and mixing them would silently poison every similarity score that followed.
 
-> `supabase/migrations/20260821120500_knowledge.sql`,
-> `lib/ai/gateway/embedding-service.ts`
+> `packages/db/supabase/migrations/20260821120500_knowledge.sql`,
+> `packages/gateway/src/embedding-service.ts`
 
 ### Where the vectors are not
 

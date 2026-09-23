@@ -58,13 +58,23 @@ filesystem is asked anything, under the validation layer that applies it again.
 2. AUTHORIZATION
 ==================================================
 
-Product Ops is operator scope. It reuses the existing mechanism and introduces no
-second notion of an administrator.
+Product Ops is operator scope. It is a separate deployable — the operator app,
+apps/ops, on its own origin with its own session cookie — and it introduces no second
+notion of an administrator.
 
-  - Access is the OPERATOR_USER_IDS allowlist via lib/auth/operator.ts. Unset means
-    nobody, which is the correct default.
-  - Pages check the allowlist and return 404, not 403. Confirming the page exists tells
-    somebody there is one worth finding.
+  - Access is the OPERATOR_USER_IDS allowlist, parsed by @dp/auth/operator and bound to
+    the operator app's environment in apps/ops/lib/auth/operator.ts. Unset means
+    nobody, which is the correct default. The learner app has no operator surface and
+    no allowlist.
+  - Every operator request requires a session at assurance level aal2: a password AND
+    a TOTP second factor, both through the project's Supabase Auth. A password-only
+    session reaches the second-factor page and no further; a first sign-in enrols an
+    authenticator. Operators need not be onboarded learners.
+  - A signed-in account that is not on the allowlist is signed out of the operator
+    origin and told exactly what a wrong password would have said. A distinguishable
+    refusal is a way to enumerate who is an operator.
+  - Pages check the session, the allowlist and the assurance level and return 404,
+    not 403. Confirming the page exists tells somebody there is one worth finding.
   - Every server action re-checks the allowlist independently and returns silently on
     failure. An action is its own entry point and is reachable without ever rendering
     the page.
@@ -73,7 +83,9 @@ second notion of an administrator.
   - Every product-ops database function is SECURITY INVOKER with search_path set to the
     empty string, and is revoked from public, anon and authenticated.
 
-Three layers, none relied on alone: route, action, database.
+Four layers, none relied on alone: origin and step-up (the proxy), route, action,
+database. The operator app holds no model key and no repository token: it reads the
+board and writes to the job queue, and the worker does the rest (section 11).
 
 Do NOT add a role column, a JWT claim, or an is_admin flag. Both would put the answer
 somewhere the subject of the question can influence.
@@ -108,6 +120,10 @@ A stage that fails records an error CODE, never a provider message. A provider e
 string can quote the prompt back, and the prompt can contain retrieved content.
 
 WHO MOVES A RUN
+
+Since the split into deployables, "server" below means the worker that drains the
+"jobs" queue and "worker" means the worker that drains the "coder" queue. The
+operator app moves nothing itself: it records decisions and enqueues.
 
 Every stage belongs to exactly one of four owners, and one function answers which.
 The orchestrator dispatches on it and the dashboard renders from it, so a run cannot
@@ -370,8 +386,12 @@ A plan that requires a database change stops. See section 11.
 11. THE CODING WORKER
 ==================================================
 
-Execution runs outside the Next.js server process, as a CLI worker, in a throwaway git
-worktree. Isolation is the worktree, the path allowlist, and the absence of a shell.
+Execution runs outside every Next.js process, in the worker (apps/worker) — a
+container that drains the "coder" job queue, holds a checkout of the repository at
+REPO_CHECKOUT_PATH and the only copy of the repository token, and cuts a throwaway git
+worktree per run. Isolation is the container, the worktree, the path allowlist, and the
+absence of a shell. `pnpm product:implement <proposal-id>` runs the same handler in the
+current process for a machine with a checkout and a token.
 
 THE TRUSTED VALIDATION LAYER
 
@@ -380,9 +400,15 @@ in this order and every one fails closed:
 
   1. The resolved real path is inside the worktree root. Reject traversal and symlinks.
   2. The path appears in the human-approved plan's file lists.
-  3. A deny-list overrides the plan regardless of what it says:
-       .env*, supabase/migrations/**, .github/**, lib/ai/gateway/**,
-       lib/ai/prompts/**, tests/security/**, package.json, pnpm-lock.yaml, proxy.ts
+  3. A deny-list overrides the plan regardless of what it says (paths are relative to
+     the workspace root):
+       .env* anywhere, packages/env/**, apps/*/lib/env/**,
+       packages/db/supabase/migrations/**,
+       .github/**, docker/**, deploy/**, *Dockerfile*, .dockerignore, every package.json,
+       pnpm-lock.yaml,
+       pnpm-workspace.yaml, turbo.json,
+       packages/gateway/**, packages/prompts/**, packages/auth/**,
+       packages/security-tests/**, apps/worker/**, apps/*/proxy.ts
   4. Each edit's anchor matches the target file EXACTLY ONCE. Zero matches, or two or
      more, is a rejection. The layer never guesses which one was meant.
   5. Resulting file size and total change size are under caps.
@@ -443,7 +469,16 @@ find the pull request for a head, open one, add labels.
     An in-process accumulator would cap one stage invocation and call it a run, which
     for a workflow whose whole design is one stage per invocation would cap nothing.
     A run with no budget left is failed before any model call is made.
-  - The trigger is rate-limited like any other expensive AI operation.
+  - The trigger is rate-limited like any other expensive AI operation, and the limit
+    is counted in Postgres so every instance of the operator app shares one quota.
+  - Nothing in the operator app runs a stage. An operator's action records a job in
+    the ops_jobs table — one per run in flight, so a second press is a no-op — and a
+    'queued' event on the run's timeline; the worker claims the job, drives the run
+    until it parks or ends, and reports. The run's own request id is the job's
+    correlation id, so the app's log line, the queue row and every timeline event the
+    worker writes read as one story (guardrails section 19). A reconciler in the
+    worker re-enqueues any server-owned run that has been quiet for three minutes,
+    because the run row is the truth and the queue merely points at it.
   - The dashboard's own polling is bounded by that same liveness signal, not by a
     counter or a deadline in the browser. The page asks again only while a run is
     reported as working, and a run that stops moving becomes stalled by the database's
@@ -461,8 +496,11 @@ find the pull request for a head, open one, add labels.
     section 6. Making this feature's cost visible in the place all other cost is visible
     is the point.
   - Every operator action is an audit event, per guardrails section 24: run started,
-    proposal approved, proposal rejected, priority changed, plan approved, worker run.
-    Admin activity is explicitly on that list.
+    run enqueued, proposal approved, proposal rejected, priority changed, plan
+    approved, run removed, run retried. So is every admission to the operator app
+    (ops.access), every refused one (ops.access_denied, ops.login_denied), and every
+    second-factor enrolment and verification. Admin activity is explicitly on that
+    list.
 
 ==================================================
 13a. AGENT BOUNDS

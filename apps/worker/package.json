@@ -1,0 +1,39 @@
+{
+  "name": "@dp/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file-if-exists=.env.local src/main.ts",
+    "start": "tsx src/main.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint",
+    "test": "vitest run",
+    "test:db": "vitest run --project worker:db",
+    "ingest": "tsx --env-file-if-exists=.env.local src/cli/ingest.ts",
+    "fx:refresh": "tsx --env-file-if-exists=.env.local src/cli/fx-refresh.ts",
+    "product:implement": "tsx --env-file-if-exists=.env.local src/cli/product-implement.ts"
+  },
+  "dependencies": {
+    "@dp/corpus": "workspace:*",
+    "@dp/db": "workspace:*",
+    "@dp/domain": "workspace:*",
+    "@dp/env": "workspace:*",
+    "@dp/gateway": "workspace:*",
+    "@dp/learning": "workspace:*",
+    "@dp/observability": "workspace:*",
+    "@dp/product-ops": "workspace:*",
+    "@dp/prompts": "workspace:*",
+    "@supabase/supabase-js": "catalog:",
+    "tsx": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@dp/config": "workspace:*",
+    "@dp/test-support": "workspace:*",
+    "@types/node": "catalog:",
+    "eslint": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

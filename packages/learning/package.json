@@ -1,0 +1,32 @@
+{
+  "name": "@dp/learning",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint",
+    "test": "vitest run --passWithNoTests",
+    "generate:migrations": "tsx scripts/generate-migrations.ts",
+    "seed": "tsx scripts/apply-seeds.ts",
+    "test:db": "vitest run --project learning:db"
+  },
+  "dependencies": {
+    "@dp/db": "workspace:*",
+    "@dp/domain": "workspace:*",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@dp/config": "workspace:*",
+    "@types/node": "catalog:",
+    "eslint": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:",
+    "@dp/test-support": "workspace:*",
+    "tsx": "catalog:"
+  }
+}

@@ -1,0 +1,97 @@
+# Every push and pull request: the definition of done, affected packages only.
+#
+# `pnpm verify` is `turbo run typecheck lint test build`; here the filter
+# narrows it to what the commit touched, except the two suites that guard
+# the whole tree — the security tests and the database tests — which run every
+# time. Images are built to prove the Dockerfiles, and never pushed from here.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TURBO_TELEMETRY_DISABLED: "1"
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup
+
+      - name: Typecheck, lint, test and build what changed
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            FILTER='--filter=...[origin/${{ github.base_ref }}]'
+          else
+            FILTER='--filter=...[HEAD^1]'
+          fi
+          pnpm turbo run typecheck lint test build $FILTER --continue
+
+      - name: The gates that guard the whole tree
+        run: pnpm turbo run test --filter=@dp/security-tests --filter=@dp/db --continue
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [learner]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: pnpm --filter @dp/${{ matrix.app }} exec playwright install --with-deps chromium
+      - name: Playwright against a production build
+        run: pnpm turbo run test:e2e --filter=@dp/${{ matrix.app }}
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-${{ matrix.app }}
+          path: apps/${{ matrix.app }}/playwright-report
+          retention-days: 7
+
+  images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: learner
+            dockerfile: docker/next-app.Dockerfile
+            args: APP=learner
+          - name: ops
+            dockerfile: docker/next-app.Dockerfile
+            args: APP=ops
+          - name: worker
+            dockerfile: docker/worker.Dockerfile
+            args: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build ${{ matrix.name }} (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: false
+          build-args: |
+            ${{ matrix.args }}
+            GIT_SHA=${{ github.sha }}
+            NEXT_PUBLIC_SUPABASE_URL=https://ci.invalid
+            NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_ci_placeholder
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,scope=${{ matrix.name }},mode=max

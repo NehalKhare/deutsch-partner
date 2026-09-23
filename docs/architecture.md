@@ -1,52 +1,54 @@
 # Architecture
 
-## The layers
+## The deployables
 
 ```
-app/            Next.js routes, pages and the one API endpoint
-components/     React components
-  │
-lib/graph/      one learner turn, as small nodes
-lib/api/        request handling: validation, rate limiting, streaming
-lib/dashboard/  server-side aggregation for both dashboards
-  │
-lib/ai/         everything that talks to a model
-  ├─ prompts/     the versioned prompt catalogue and its builder
-  ├─ gateway/     the only code allowed to call a provider
-  ├─ evaluation/  scoring a learner message
-  └─ voice/       speech in and out
-lib/retrieval/  vector + lexical search, fused and ranked
-lib/ingestion/  the corpus pipeline
-lib/scenarios/  scenario practice: quiz grading, roleplay seeding
-lib/product-ops/  the operator workflow: a LangGraph state graph over the
-                stages, four tool-using agents inside them, the trusted
-                validation layer the coder writes through
-lib/github/    five REST calls, for the pull request the worker opens
-  │
-learning/       the curriculum, and the engines that move a learner through it
-domain/         Zod schemas and pure rules. No I/O.
-repositories/   the only code that touches the database
-  │
-supabase/       36 migrations: 34 tables, Row Level Security, and the
-                functions that have to be atomic
-scripts/        the offline workers: corpus ingestion, the FX snapshot, and
-                the product-ops coding worker
-scripts/scenarios/  offline Python: parse the scenario dataset, embed it,
-                    evaluate retrieval with ragas
+apps/learner     the learner product: Next.js, its own route handlers, its own
+                 composition root. Calls the gateway for chat, trainer, embeddings.
+apps/ops         the operator product on its own origin: sign-in with a second
+                 factor, the product-ops board and runs, the AI spend dashboard.
+                 Holds no model key; it records jobs for the worker.
+apps/worker      Node, no Next: drains the ops_jobs queue — product-ops stages,
+                 FX and pricing snapshots, checkpoint pruning, ingestion — and,
+                 with a checkout and the repository token, the coding stages.
+packages/db      the one migration set, the repository kernel and the learner
+                 repositories, the queue and rate-limit repositories, the PGlite
+                 test harness
 ```
 
-Dependencies point downwards. `domain/` imports nothing from above it;
-`repositories/` returns domain types and never lets a Postgres error escape;
-`lib/ai/gateway/` is the only directory that may open a connection to a model.
+Independently built, independently deployed, one database. What they share is
+packages:
+
+```
+packages/domain          Zod schemas and pure rules; the task routing table. No I/O.
+packages/prompts         the versioned prompt catalogue and its builder
+packages/gateway         the only code allowed to call a provider; the usage ledger
+packages/product-ops     the operator workflow: repository, board view, the graph,
+                         the agents, the trusted validation layer, review helpers
+packages/learning        the curriculum and the engines that move a learner through it
+packages/auth            Supabase clients, the session refresher, claims, credentials,
+                         the operator allowlist parser
+packages/env             environment validation
+packages/observability   logging, pseudonyms, tracing config
+packages/ui              the theme and the class strings both apps compose
+packages/corpus          the hand-authored knowledge documents and the scenario dataset
+packages/security-tests  the gates that scan every workspace root
+```
+
+Dependencies point downwards and apps never import each other. `domain` imports
+nothing from above it; `db` returns domain types and never lets a Postgres
+error escape; `gateway` is the only package that may open a connection to a
+model. `pnpm verify` at the root runs every package's typecheck, lint, tests
+and build through Turborepo.
 
 ## Four rules with tests behind them
 
 These are not conventions. Each one is a CI test that fails the build.
 
-**1. Only the gateway may reach a model.** No file outside `lib/ai/gateway/`
+**1. Only the gateway may reach a model.** No file outside `packages/gateway/src`
 may import a provider SDK or construct a request to a model endpoint. Inside the
-gateway, exactly three named files may — one per provider the application
-actually talks to. Ceilings, budgets, accounting and redaction cannot be
+gateway, exactly the named transport files may — plus the one non-model call,
+a GET of the provider's price list for the pricing snapshot job. Ceilings, budgets, accounting and redaction cannot be
 guaranteed if any module can open its own connection.
 
 **2. No hardcoded model id outside the registry.** Application code names a
@@ -58,10 +60,10 @@ Swapping a model is an operations change.
 wrong.
 
 **4. Prompts live in the catalogue.** No prompt-shaped string literal outside
-`lib/ai/prompts/`. A prompt at its call site cannot be versioned, budgeted, or
+`packages/prompts/src`. A prompt at its call site cannot be versioned, budgeted, or
 found when quality moves.
 
-> `tests/security/ai-boundaries.test.ts`
+> `packages/security-tests/tests/ai-boundaries.test.ts`, over every workspace root named in `packages/security-tests/src/roots.ts`
 
 ## The model gateway
 
@@ -274,10 +276,10 @@ Stated here so nobody has to discover it by reading the code.
   The plan is two documents from two calls: the file lists, which are the
   coding agent's allowlist, and an engineering breakdown — phased, sized
   requirements with technical guidance against the current stack.
-  The implementation, verification and pull-request stages, the coding agent,
-  the apply layer and the CLI worker all exist and are tested, but no review
-  leads into them. Planning runs on the server, reading the checkout it runs
-  beside; a deployment without one fails the planning stage with
+  The implementation, verification and pull-request stages, the coding agent
+  and the apply layer all exist and are tested, but no review leads into them.
+  Every stage runs in the worker; planning reads the checkout the worker was
+  given, and a worker without one fails the planning stage with
   `no_repository`.
 
 - **No chat model has ever been called.** Every test drives a fake transport;
@@ -299,20 +301,13 @@ Stated here so nobody has to discover it by reading the code.
   layer is on the coding agent's deny-list on purpose.
 - **No golden eval sets.** Every prompt entry declares one; none is written.
   Which tier each task belongs on is the routing document's judgement, unmeasured.
-- **Rate limiting is in-memory.** Per instance, and forgiving on restart. The
-  interface is what a Redis backing swaps into.
-- **No pricing snapshot job.** `model_pricing_snapshots` is read correctly and
-  degrades correctly when empty, and it is still empty: it is the fallback for a
-  provider that reports no cost of its own, and OpenRouter reports one on every
-  call the gateway makes. So the estimator behind the budget gate has nothing to
-  read, and a provider that went quiet about cost would be recorded as free.
-  The FX snapshot job it was listed beside now exists — `pnpm fx:refresh`,
-  snapshotting the ECB daily reference rate, which is what the euro column on
-  the cost dashboard is derived from. Its absence was not a degraded figure but
-  a wrong one: with the rate table empty, every ledger row ever written declared
-  itself unpriced and the dashboard reported months of real dollars as €0.0000.
-  The cost dashboard also reads the source itself, at most once a day, and
-  carries a control to ask again — the rate publishes in the afternoon.
+- **The pricing snapshot job has never run against the provider.** `pricing.snapshot`
+  runs daily from the worker and reads the model list through the gateway's one
+  non-model call; the row shape is parsed defensively and the job has been tested
+  against a fake fetch only. Until it has run for real, `model_pricing_snapshots`
+  is empty and the estimator behind the budget gate has nothing to read. The FX
+  job runs hourly from the same scheduler; the cost dashboard's refresh button
+  enqueues one more.
 - **Rows written before the first rate are converted for display, not fixed.**
   They carry no rate and the ledger is append-only, so their stored `cost_eur`
   stays zero for good. The dashboard converts their dollars at the newest rate
@@ -353,11 +348,11 @@ Stated here so nobody has to discover it by reading the code.
   proposal has been reviewed and approved. The
   stages from planning onward are tested against fakes only. No branch has
   been pushed and no pull request opened.
-- **The coding worker is a git worktree, not a container.** Isolation is the
-  worktree, the path allowlist and the absence of a shell. A container is the
-  documented next step rather than a gap being hidden — and the controls that
-  actually hold in the meantime are the allowlist and the two human gates, not
-  the isolation.
+- **The coding worker's container has never run a real implementation.** The
+  worker image, the checkout entrypoint and the `coder` queue exist; isolation
+  is the container, a throwaway worktree, the path allowlist and the absence of
+  a shell. No branch has been pushed from it and no pull request opened, and
+  the controls that actually hold are the allowlist and the two human gates.
 - **Prompt injection through web results and repository source is mitigated,
   not prevented.** Both are fenced as untrusted content and neither carries
   authority over the plan, the allowlist or the deny-list. That is a mitigation
@@ -374,13 +369,19 @@ Stated here so nobody has to discover it by reading the code.
   tool-calling model and the specialists with a fake gateway. Without models
   supplied, every stage falls back to its single-shot specialist, which is the
   path the workflow tests exercise.
-- **Checkpoints are never pruned.** A run's checkpoints go with the run, and
-  nothing retires finished runs. A cron over terminal runs older than a month
-  is the missing job.
+
 - **A feature needing a migration stops at the PRD.** The deny-list refuses
   `supabase/migrations/**` whatever the plan says, so a schema change is
   described in the document and written by a person. Per-run operator opt-in is
   the extension point.
+- **The scheduler is in-process and may double-run a job across replicas.** The
+  worker enqueues its scheduled kinds once a minute; two workers ticking at once
+  collide on the queue's per-kind deduplication, but a job that finished between
+  their ticks runs twice. Every scheduled job is idempotent, so the cost is a
+  query. A durable scheduler (pg_cron) is the next step if the replicas grow.
+- **The operator app's second factor has run only against a fake auth client.**
+  Enrolment, the challenge and the step-up table are tested; nobody has enrolled
+  a real authenticator against the linked project yet.
 - **The runs page polls; nothing is pushed.** While a run is moving, the
   page asks the server again every few seconds. Postgres can push this — a
   realtime subscription on `ai_run_events` is the obvious version — and the

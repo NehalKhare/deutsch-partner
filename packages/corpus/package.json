@@ -1,0 +1,9 @@
+{
+  "name": "@dp/corpus",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The hand-authored knowledge documents and the scenario dataset. Data only; the worker's ingestion job reads it and the offline scenario pipeline embeds it.",
+  "exports": {
+    "./package.json": "./package.json"
+  }
+}

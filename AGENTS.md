@@ -1,21 +1,7 @@
-<!-- BEGIN:nextjs-agent-rules -->
-
-# This is NOT the Next.js you know
-
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
-
-This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
-
-<!-- END:nextjs-agent-rules -->
-
 <!--
-Everything below sits OUTSIDE the managed block on purpose.
-
-`writeAgentFiles` in the generator named above replaces the entire span between
-the two markers with its own canonical text. Project instructions written inside
-that span are deleted the next time `next dev` starts, and the block above is now
-byte-identical to the canonical one so `hasCurrentAgentRules` returns true and the
-rewrite does not fire at all.
+The Next.js-managed "This is NOT the Next.js you know" block lives beside each
+Next app — apps/learner/AGENTS.md and apps/ops/AGENTS.md — because `next dev`
+regenerates it in the directory it runs in. Those files point back here.
 -->
 
 # Role
@@ -26,23 +12,30 @@ an AI-powered German-learning web application for English-speaking learners.
 
 # Stack, as it actually is
 
-- **Framework:** Next.js 16 (App Router, React 19, React Compiler enabled). Session
-  refresh lives in `proxy.ts` at the repo root — Next 16's rename of `middleware.ts`,
-  and a CI test asserts the old name is absent.
+- **Layout:** a pnpm + Turborepo workspace. Three deployables — `apps/learner` (the
+  learner product), `apps/ops` (the operator product on its own origin, own sign-in
+  with a TOTP second factor) and `apps/worker` (Node; drains the `ops_jobs` queue) —
+  over `packages/*`. Apps import packages and never each other. `pnpm verify` at the
+  root runs every workspace.
+- **Framework:** Next.js 16 (App Router, React 19, React Compiler enabled) in the two
+  apps. Session refresh lives in each app's `proxy.ts` — Next 16's rename of
+  `middleware.ts`, and a CI test asserts the old name is absent.
 - **Language:** TypeScript, `strict`.
 - **Styling:** Tailwind v4, CSS-first — there is no `tailwind.config.*`; the theme is
-  an `@theme` block in `app/globals.css`. The shadcn *tooling* is wired up and its
-  tokens point at the palette, but `components/ui/` holds no shadcn primitives: the
-  house style is composing the class strings exported from `components/ui/styles.ts`.
-  There is one theme and deliberately no light mode.
+  the `@theme` block in `packages/ui/src/theme.css`, imported by each app's
+  `globals.css`. The house style is composing the class strings exported from
+  `@dp/ui/styles`. There is one theme and deliberately no light mode.
 - **Model access:** OpenRouter, reached only through the in-house `ModelGateway`
-  (`lib/ai/gateway/`) over a hand-written transport. There is no Vercel AI SDK in this
+  (`packages/gateway`) over a hand-written transport. Only the learner app and the
+  worker hold a model key; the operator app enqueues work and calls no model. There is no Vercel AI SDK in this
   project — importing `@ai-sdk/*`, `openai`, or `@anthropic-ai/*` from outside the
   gateway fails CI. LangChain is a dependency, used inside the gateway for the
   Trainer's tool-calling loop and nowhere else.
-- **Testing:** Vitest (two projects: `unit` on jsdom, `db` on real Postgres via
-  PGlite), React Testing Library, MSW for HTTP, Playwright for end-to-end. `globals`
-  is off, so import `describe`/`it`/`expect` from `vitest`.
+- **Testing:** Vitest per package (jsdom for components, node for the rest, `db`
+  projects on real Postgres via PGlite where a package touches the schema), React
+  Testing Library, MSW for HTTP, Playwright for end-to-end. `globals` is off, so
+  import `describe`/`it`/`expect` from `vitest`. Shared config lives in
+  `packages/config`.
 - **Validation:** Zod v4 — for external input, for structured model output, and for
   every database row on the way out of a repository.
 - **Package manager:** pnpm. `pnpm verify` is the definition-of-done gate.
@@ -74,17 +67,20 @@ on purpose.
 
 # Four rules with CI tests behind them
 
-These are not conventions. Each is a test in `tests/security/` that fails the build.
+These are not conventions. Each is a test in `packages/security-tests/` that fails the
+build, scanning every workspace root named in its `src/roots.ts`.
 
-1. **Only `lib/ai/gateway/` may reach a model.** No provider SDK import, no request to
-   a model endpoint, anywhere else. Ceilings, budgets, accounting and redaction cannot
-   be guaranteed if any module can open its own connection.
-2. **No hardcoded model id outside `lib/ai/gateway/registry.ts`.** Application code
-   names a *tier*.
+1. **Only `packages/gateway/src` may reach a model.** No provider SDK import, no
+   request to a model endpoint, anywhere else. Ceilings, budgets, accounting and
+   redaction cannot be guaranteed if any module can open its own connection.
+2. **No hardcoded model id outside `packages/gateway/src/registry.ts`.** Application
+   code names a *tier*.
 3. **No hardcoded price literal anywhere.** Prices carry a `fetched_at` stamp.
-4. **No prompt-shaped string outside `lib/ai/prompts/`.** A prompt at its call site
-   cannot be versioned, budgeted, or found when quality moves.
+4. **No prompt-shaped string outside `packages/prompts/src`.** A prompt at its call
+   site cannot be versioned, budgeted, or found when quality moves.
 
 Alongside them: every user-owned table has RLS with both `USING` and `WITH CHECK` on
-updates, no function is `SECURITY DEFINER`, and a task absent from the routing table in
-`lib/ai/tasks.ts` does not get to call a model.
+updates, no function is `SECURITY DEFINER`, a task absent from the routing table in
+`packages/domain/src/tasks.ts` does not get to call a model, and each deployable's
+`.env.example` declares only the secrets that deployable may hold — the operator app
+never a model key or a repository token, the learner app never the allowlist.

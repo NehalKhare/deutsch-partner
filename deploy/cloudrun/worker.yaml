@@ -1,0 +1,57 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: dp-worker
+  labels:
+    cloud.googleapis.com/location: ${GCP_REGION}
+    git-sha: ${GIT_SHA}
+  annotations:
+    run.googleapis.com/ingress: internal
+spec:
+  template:
+    metadata:
+      labels:
+        git-sha: ${GIT_SHA}
+      annotations:
+        autoscaling.knative.dev/minScale: "1"
+        autoscaling.knative.dev/maxScale: "1"
+        run.googleapis.com/cpu-throttling: "false"
+        run.googleapis.com/execution-environment: gen2
+    spec:
+      containerConcurrency: 1
+      timeoutSeconds: 3600
+      serviceAccountName: dp-worker@${GCP_PROJECT}.iam.gserviceaccount.com
+      containers:
+        - image: ${IMAGE}
+          ports:
+            - name: http1
+              containerPort: 8080
+          resources:
+            limits: { cpu: "1", memory: 1Gi }
+          startupProbe:
+            httpGet: { path: /healthz, port: 8080 }
+            periodSeconds: 3
+            failureThreshold: 20
+          livenessProbe:
+            httpGet: { path: /healthz, port: 8080 }
+            periodSeconds: 30
+          env:
+            - { name: WORKER_QUEUES, value: "jobs" }
+            - { name: WORKER_CONCURRENCY, value: "4" }
+            - { name: WORKER_POLL_MS, value: "2000" }
+            - { name: WORKER_LOCK_SECONDS, value: "600" }
+            - { name: WORKER_SCHEDULER, value: "true" }
+            - { name: NEXT_PUBLIC_SUPABASE_URL, value: "${SUPABASE_URL}" }
+            - { name: LANGSMITH_TRACING, value: "${LANGSMITH_TRACING}" }
+            - { name: LANGSMITH_PROJECT, value: "dp-worker-${ENVIRONMENT}" }
+            - name: SUPABASE_SECRET_KEY
+              valueFrom: { secretKeyRef: { name: dp-${ENVIRONMENT}-supabase-secret-key, key: latest } }
+            - name: OPENROUTER_API_KEY
+              valueFrom: { secretKeyRef: { name: dp-${ENVIRONMENT}-openrouter-api-key, key: latest } }
+            - name: LOG_PSEUDONYM_SALT
+              valueFrom: { secretKeyRef: { name: dp-${ENVIRONMENT}-log-pseudonym-salt, key: latest } }
+            - name: LANGSMITH_API_KEY
+              valueFrom: { secretKeyRef: { name: dp-${ENVIRONMENT}-langsmith-api-key, key: latest } }
+  traffic:
+    - percent: 100
+      latestRevision: true

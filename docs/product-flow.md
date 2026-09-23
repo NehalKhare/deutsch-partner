@@ -98,7 +98,7 @@ only if it actually blocked meaning.
 
 That difference is one configuration table, not three tutors.
 
-> `lib/ai/prompts/behavior-policy.ts`
+> `packages/prompts/src/behavior-policy.ts`
 
 ### 4. Asking a direct question
 
@@ -392,7 +392,7 @@ them, whereas this is a choice made in so many words and survives that reset.
 It changes manner only. The fixed prompt says so — a block headed *Your
 manner* sets tone, praise and how a correction is put, and changes neither
 what the session covers nor how an answer is judged — and each personality is
-one templated paragraph in `lib/ai/prompts/trainer.ts`, rendered per learner
+one templated paragraph in `packages/prompts/src/trainer.ts`, rendered per learner
 behind the fixed prompt's cache mark ahead of the coaching block. The strict
 trainer is still a coach: it is told never to mock or belittle, and a wrong
 first answer still gets its hint and another chance.
@@ -406,9 +406,9 @@ learners in general (`docs/product-ops-agents.md`, section 3).
 
 > `lib/trainer/coaching.ts`, `domain/trainer-coaching.ts`,
 > `lib/api/trainer-feedback.ts`, `components/trainer/feedback.tsx`,
-> `components/settings/trainer-coaching.tsx`, `lib/product-ops/feedback.ts`
+> `apps/learner/components/settings/trainer-coaching.tsx`, `packages/product-ops/src/feedback.ts`
 
-> `lib/trainer/`, `lib/api/trainer.ts`, `lib/ai/gateway/langchain-model.ts`,
+> `apps/learner/lib/trainer/`, `apps/learner/lib/api/trainer.ts`, `packages/gateway/src/langchain-model.ts`,
 > `app/(app)/trainer/`
 
 ### 7. Seeing progress
@@ -564,7 +564,7 @@ learner's state and the current message are never dropped. If it still does not
 fit, the call is refused rather than sent for the provider to truncate
 somewhere of its own choosing.
 
-> `lib/ai/prompts/`
+> `packages/prompts/src/`
 
 ### What the evaluation does with the answer
 
@@ -586,7 +586,7 @@ one message is weak evidence. The estimated level only moves when the evaluation
 is confident about it. The **mini-level never moves here at all** — that is
 earned against the level's own mastery criteria by the progression engine.
 
-> `lib/ai/evaluation/`, `lib/graph/nodes.ts`
+> `apps/learner/lib/ai/evaluation/`, `lib/graph/nodes.ts`
 
 ---
 

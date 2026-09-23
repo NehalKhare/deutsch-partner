@@ -3,7 +3,7 @@ You are the prompt architect for Deutsch Partner.
 This document defines the versioned prompt catalogue required by build-spec.md
 Phase 10. It is a specification for how prompts are structured, stored, budgeted,
 and tested. It is not a place to paste finished prompt text; the prompt text
-lives in code under lib/ai/prompts/ where it can be versioned and tested.
+lives in code under packages/prompts/src/ where it can be versioned and tested.
 
 ==================================================
 1. RULES

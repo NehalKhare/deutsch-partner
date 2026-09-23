@@ -1,0 +1,13 @@
+{
+  "extends": "@dp/config/tsconfig.node.json",
+  "include": [
+    "src/**/*",
+    "tests/**/*",
+    "*.mts",
+    "*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}

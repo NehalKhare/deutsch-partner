@@ -89,6 +89,24 @@ Use server-only environment variables.
 
 Create a test that fails CI if a secret key is accidentally imported into a client component.
 
+WHO HOLDS WHICH SECRET
+
+Three deployables, three environments. A secret a process does not need is a
+secret it does not receive:
+
+  SUPABASE_SECRET_KEY    learner app, operator app, worker
+  LOG_PSEUDONYM_SALT     all three, and the SAME value in all three — a different
+                         salt per process would hash one learner three ways and the
+                         ledger, the audit trail and the dashboard would never join
+  OPENROUTER_API_KEY     learner app and worker only; the operator app makes no
+                         model call
+  GITHUB_TOKEN           worker only (the "coder" queue); never a Next.js process
+  OPERATOR_USER_IDS      operator app only
+  NEXT_PUBLIC_*          the two Next.js apps only
+
+The per-app .env.example files declare exactly these, and the security tests
+assert the absences.
+
 ==================================================
 4. LEAST PRIVILEGE
 ==================================================
@@ -189,6 +207,12 @@ Never allow an unlimited model-generation endpoint.
 Rate limiting bounds request frequency. It does NOT bound spend: one request
 with a large context and no output ceiling can cost more than a thousand small
 ones. Both controls are required.
+
+Limits are counted in Postgres (consume_rate_limit, one atomic upsert per
+check), so every instance of an app shares one quota and a restart forgives
+nobody. A store that cannot count a hit denies the request (section 26). The
+operator app also limits sign-in attempts per address and second-factor
+attempts per account.
 
 Every model call must carry a hard token ceiling, and every learner must have a
 EUR budget. See model-routing-and-cost-control.md S6 and S9.
@@ -515,6 +539,11 @@ fx_rate_eur_per_usd
 cost_eur
 budget_scope_hit
 
+Work that crosses a process boundary carries the same id on both sides: a job
+in ops_jobs holds a correlation_id (the run's request id, for a run), the worker
+stamps it on every line it logs about the job, and the run's timeline events
+carry it as request_id.
+
 ==================================================
 20. LOG LEVELS
 ==================================================
@@ -656,6 +685,12 @@ Audit:
 
 Do not put secrets or complete user messages into audit logs.
 
+Background work is audited too: a job the worker cannot parse
+(worker.job_invalid) and a job that has spent its attempts
+(worker.job_dead_lettered), and, in the operator app, every admission
+(ops.access), every refusal (ops.access_denied, ops.login_denied) and every
+second-factor enrolment, verification and failure.
+
 ==================================================
 25. ERROR HANDLING
 ==================================================
@@ -788,6 +823,11 @@ CI must fail on:
 - missing migrations
 - missing RLS on user-owned tables
 - forbidden server-only imports in client code
+
+The gates run over the whole workspace from packages/security-tests, whose
+roots.ts is the one place that knows where each layer lives; `pnpm verify` at
+the repository root runs typecheck, lint, every test and every build through
+Turborepo.
 
 ==================================================
 31. SECURITY PRINCIPLE

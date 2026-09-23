@@ -21,13 +21,13 @@ flowchart LR
         Graph["LangGraph StateGraph\nthread_id = run_id"]
     end
 
-    subgraph Worker["CLI worker (git worktree)"]
+    subgraph Worker["coder worker (container, git worktree)"]
         WGraph["Same graph, with a Workspace"]
         Apply["Trusted validation layer\n(path allowlist, deny-list, anchors)"]
         Gate["pnpm verify\n(command allowlist)"]
     end
 
-    subgraph Gateway["lib/ai/gateway (the only model boundary)"]
+    subgraph Gateway["packages/gateway/src (the only model boundary)"]
         Ladder["createTaskModelLadder\ntier from lib/ai/tasks"]
         Ledger["Usage ledger\n(EUR per call)"]
         Web["OpenRouter web plugin\n(market_research only)"]
@@ -59,7 +59,7 @@ flowchart LR
 ```
 
 Three processes touch a run. The browser only ever calls server actions. The
-server drives the stages that need no working tree. The CLI worker drives the four
+queue worker drives the stages that need no working tree. The coder worker drives the four
 that do, using the same graph with a `Workspace` supplied. All three read and write
 the same Postgres rows, and only the gateway ever reaches a model.
 
@@ -139,7 +139,7 @@ receipt and the trainer prompt version it was written under. The function
 `learner_feedback_summary` aggregates the last thirty days — by verdict, reason,
 prompt version and tool, with the newest notes — and only the secret-key client
 may execute it. The research stage turns that document into one finding of
-`sourceType: "internal"` by arithmetic (`lib/product-ops/feedback.ts`) and
+`sourceType: "internal"` by arithmetic (`packages/product-ops/src/feedback.ts`) and
 records it before the first web search, so the CPO reads what this product's
 learners flagged beside what the web says about learners in general. Fewer than
 five votes in the window is no finding rather than a trend. The research agent
@@ -160,7 +160,7 @@ sequenceDiagram
     participant DB as Postgres
 
     Node->>DB: idempotency check (own output present?)
-    Node->>Agent: invoke(system prompt from lib/ai/prompts, trusted framing)
+    Node->>Agent: invoke(system prompt from packages/prompts/src, trusted framing)
     loop until structured answer or a bound is hit
         Agent->>MW: beforeModel
         MW-->>Agent: runBudget: throw if run's EUR budget is spent
@@ -200,7 +200,7 @@ model, so the budget middleware is the first line and not the only one.
 ```mermaid
 flowchart TD
     Model["Model output\n(tool arguments, structured reply)"] --> Schema["Zod schema\n(repoPathSchema, codeEditSchema, ...)"]
-    Schema --> Deny["Deny-list\n.env*, supabase/migrations, .github,\nlib/ai/gateway, lib/ai/prompts,\ntests/security, package.json, pnpm-lock.yaml, proxy.ts"]
+    Schema --> Deny["Deny-list\n.env*, packages/db/supabase/migrations, .github, docker,\npackages/gateway, packages/prompts, packages/auth,\npackages/security-tests, apps/worker, every package.json,\npnpm-lock.yaml, turbo.json, apps/*/proxy.ts"]
     Deny --> Plan["Approved plan's file lists\n(human-approved allowlist)"]
     Plan --> Root["Real path inside the worktree\n(no traversal, no symlinks)"]
     Root --> Anchor["Each anchor matches exactly once"]
@@ -245,7 +245,7 @@ Both paths converge on the same rows.
   puts each row into words. The feed refreshes the page when the run changes stage and
   closes when the run leaves the server's hands.
 - The planning stage makes two calls. The planner agent names files, and those lists are
-  the coding agent's path allowlist. Then `breakDownPlan` (`lib/product-ops/breakdown.ts`,
+  the coding agent's path allowlist. Then `breakDownPlan` (`packages/product-ops/src/breakdown.ts`,
   task `productops.plan_breakdown`, reasoning tier) writes the engineering manager's half:
   requirements in build order and in phases, a t-shirt size (xs to xxxl) on each and on
   the whole, and technical guidance that names where the current stack is the wrong tool
@@ -255,7 +255,7 @@ Both paths converge on the same rows.
   page and first in the copied Markdown. If only the breakdown fails, the plan is kept and
   a retry writes only the missing half.
 - The agent graph's recursion limit is sized from the run's caps
-  (`recursionLimitFor` in `lib/product-ops/agents/runtime.ts`): ten graph steps per
+  (`recursionLimitFor` in `packages/product-ops/src/agents/runtime.ts`): ten graph steps per
   allowed call, because every beforeModel and afterModel hook in the stack is a node
   and one tool round is eight or so steps, not two. The caps are the loop's real bounds;
   the recursion limit is the backstop behind them, and hitting it is reported as
@@ -270,7 +270,7 @@ Both paths converge on the same rows.
   (`MAX_PLANNER_READ_CHARS`; the coder keeps 24 000 because it needs anchors), and its
   prompt asks for at most four files per turn.
 - A failed run can be tried again from the stage that failed: `retryRun` in
-  `lib/product-ops/workflow.ts` reads the stage off the timeline, moves the run out of
+  `packages/product-ops/src/workflow.ts` reads the stage off the timeline, moves the run out of
   `failed` with the same compare-and-set, and the action drives the graph again from
   its entry node. The migration `20260910180000_product_ops_retry.sql` makes the
   transition function clear `error_code` and `completed_at` on leaving a terminal
@@ -295,14 +295,14 @@ Both paths converge on the same rows.
 | Concern | Path |
 | --- | --- |
 | Stage machine, schemas, deny-list | `domain/product-ops.ts` |
-| Graph, checkpoint saver, drive/resume | `lib/product-ops/graph/` |
-| Agent runtime, middleware, tools | `lib/product-ops/agents/` |
-| Agent prompts and tool descriptions | `lib/ai/prompts/product-ops-agents.ts` |
-| Task tiers and ceilings | `lib/ai/tasks.ts` |
-| LangChain model over the gateway | `lib/ai/gateway/langchain-model.ts` |
-| Trusted validation layer | `lib/product-ops/apply.ts` |
-| Command allowlist | `lib/product-ops/commands.ts` |
-| Worktree, browser, GitHub | `lib/product-ops/workspace.ts`, `lib/github/client.ts` |
+| Graph, checkpoint saver, drive/resume | `packages/product-ops/src/graph/` |
+| Agent runtime, middleware, tools | `packages/product-ops/src/agents/` |
+| Agent prompts and tool descriptions | `packages/prompts/src/product-ops-agents.ts` |
+| Task tiers and ceilings | `packages/domain/src/tasks.ts` |
+| LangChain model over the gateway | `packages/gateway/src/langchain-model.ts` |
+| Trusted validation layer | `packages/product-ops/src/apply.ts` |
+| Command allowlist | `packages/product-ops/src/commands.ts` |
+| Worktree, browser, GitHub | `packages/product-ops/src/workspace.ts`, `packages/product-ops/src/github.ts` |
 | Repository over the eleven tables | `repositories/product-ops-repository.ts` |
 | Operator pages and actions | `app/(app)/operations/product/` |
-| CLI worker | `scripts/product-implement.ts` |
+| Coder worker | `apps/worker/src/handlers/implement.ts` |

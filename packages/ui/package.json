@@ -1,0 +1,41 @@
+{
+  "name": "@dp/ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./styles": "./src/styles.ts",
+    "./utils": "./src/utils.ts",
+    "./pending-button": "./src/pending-button.tsx",
+    "./rich-text": "./src/rich-text.tsx",
+    "./wordmark": "./src/wordmark.tsx",
+    "./quiet-shell": "./src/quiet-shell.tsx",
+    "./markdown/parse": "./src/markdown/parse.ts",
+    "./theme.css": "./src/theme.css"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "clsx": "catalog:",
+    "tailwind-merge": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "next": "catalog:"
+  },
+  "devDependencies": {
+    "@dp/config": "workspace:*",
+    "@types/node": "catalog:",
+    "eslint": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@testing-library/jest-dom": "catalog:",
+    "@testing-library/react": "catalog:",
+    "@dp/test-support": "workspace:*",
+    "jsdom": "catalog:"
+  }
+}

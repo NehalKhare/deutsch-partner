@@ -1,7 +1,7 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-/node_modules
+node_modules/
 /.pnp
 .pnp.*
 .yarn/*
@@ -11,18 +11,18 @@
 !.yarn/versions
 
 # testing
-/coverage
-/test-results
-/playwright-report
-/blob-report
-/.playwright
+coverage/
+test-results/
+playwright-report/
+blob-report/
+.playwright/
 
 # next.js
-/.next/
-/out/
+.next/
+out/
 
 # production
-/build
+build/
 
 # misc
 .DS_Store
@@ -49,4 +49,10 @@ next-env.d.ts
 # python (scripts/scenarios)
 __pycache__/
 .venv/
-scripts/scenarios/eval_report.json
+apps/learner/scripts/scenarios/eval_report.json
+
+# turbo
+.turbo/
+
+# package build output
+dist/

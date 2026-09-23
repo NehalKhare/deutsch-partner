@@ -1,0 +1,97 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "ui": "stream",
+  "globalDependencies": [
+    "pnpm-workspace.yaml",
+    ".nvmrc",
+    "packages/config/**"
+  ],
+  "tasks": {
+    "typecheck": {
+      "dependsOn": [
+        "^typecheck"
+      ],
+      "outputs": []
+    },
+    "lint": {
+      "outputs": []
+    },
+    "test": {
+      "dependsOn": [
+        "^test"
+      ],
+      "outputs": [],
+      "env": [
+        "DEV_SEED_EMAIL",
+        "DEV_SEED_PASSWORD"
+      ]
+    },
+    "test:db": {
+      "cache": false,
+      "outputs": []
+    },
+    "test:e2e": {
+      "dependsOn": [
+        "build"
+      ],
+      "cache": false,
+      "outputs": [],
+      "env": [
+        "PLAYWRIGHT_PORT",
+        "PLAYWRIGHT_BASE_URL",
+        "DEV_SEED_EMAIL",
+        "DEV_SEED_PASSWORD"
+      ]
+    },
+    "build": {
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        ".next/**",
+        "!.next/cache/**",
+        "dist/**"
+      ],
+      "env": [
+        "NEXT_PUBLIC_SUPABASE_URL",
+        "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
+      ]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true,
+      "passThroughEnv": [
+        "NEXT_PUBLIC_*",
+        "SUPABASE_*",
+        "OPENROUTER_*",
+        "EMBEDDING_MODEL",
+        "SPEECH_TO_TEXT_MODEL",
+        "TEXT_TO_SPEECH_MODEL",
+        "LOG_PSEUDONYM_SALT",
+        "OPERATOR_USER_IDS",
+        "OPS_COOKIE_NAME",
+        "LANGSMITH_*",
+        "MCP_SERVER_*",
+        "GITHUB_*",
+        "APP_*",
+        "FX_*",
+        "REPO_CHECKOUT_PATH",
+        "WORKER_*",
+        "PORT",
+        "HOSTNAME",
+        "DEV_SEED_*"
+      ]
+    },
+    "start": {
+      "cache": false,
+      "persistent": true,
+      "dependsOn": [
+        "build"
+      ]
+    }
+  },
+  "globalEnv": [
+    "CI",
+    "NODE_ENV"
+  ]
+}

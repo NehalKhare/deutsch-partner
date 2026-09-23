@@ -1,0 +1,35 @@
+{
+  "name": "@dp/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint",
+    "test": "vitest run --passWithNoTests",
+    "db:start": "supabase start",
+    "db:reset": "supabase db reset",
+    "db:diff": "supabase db diff",
+    "db:push": "supabase db push",
+    "db:advisors": "supabase db advisors",
+    "test:db": "vitest run --project db:db"
+  },
+  "dependencies": {
+    "@dp/domain": "workspace:*",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@dp/config": "workspace:*",
+    "@types/node": "catalog:",
+    "eslint": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:",
+    "@electric-sql/pglite": "catalog:",
+    "@dp/test-support": "workspace:*",
+    "supabase": "^2.115.0"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "extends": "@dp/config/tsconfig.node.json",
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": ["src/**/*", "tests/**/*", "*.mts"],
+  "exclude": ["node_modules", "dist"]
+}

@@ -28,9 +28,12 @@ Non-goals:
 
 Operator-only. This is not a learner feature.
 
-  - Route lives under an admin segment with a server-side role check on every
-    request. Not a client-side conditional render.
-  - Role comes from a server-controlled source, never from a client claim.
+  - The dashboard lives in the operator app (apps/ops): its own deployable on its
+    own origin, whose every request requires a session with a second factor and a
+    server-side allowlist check. Not a client-side conditional render, and not a
+    route of the learner app.
+  - Role comes from a server-controlled source (the OPERATOR_USER_IDS allowlist),
+    never from a client claim, a role column or an is_admin flag.
   - Fail closed: no role determined means no access, per guardrails doc S26.
   - Aggregate views show user_id_hash only, never email or raw user id.
   - No conversation content anywhere on the dashboard. The ledger does not

@@ -1,0 +1,132 @@
+# Build, push and deploy the three containers.
+#
+# One job per deployable, so a change to the worker never rebuilds the learner.
+# Images go to GitHub Container Registry tagged by git sha and are deployed to
+# Cloud Run by the same sha. Secrets reach the containers from the platform's
+# secret manager, never from this file; the per-service variables declare
+# which secrets each service is allowed (see docs/deployment.md).
+#
+# Staging deploys on every push to main once the database workflow has run;
+# production is the same job behind the `production` environment's approval.
+name: Deploy apps
+
+on:
+  workflow_run:
+    workflows: ["Deploy database", "CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: staging or production
+        default: staging
+        type: choice
+        options: [staging, production]
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+concurrency:
+  group: deploy-apps-${{ inputs.environment || 'staging' }}
+  cancel-in-progress: false
+
+jobs:
+  changed:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    outputs:
+      apps: ${{ steps.affected.outputs.apps }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup
+      - id: affected
+        name: Which deployables changed
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo 'apps=["learner","ops","worker"]' >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          APPS=$(pnpm turbo run build --filter='...[HEAD^1]' --dry-run=json \
+            | node -e 'const r=JSON.parse(require("fs").readFileSync(0,"utf8"));const a=new Set();for(const t of r.tasks){const m=/^@dp\/(learner|ops|worker)$/.exec(t.package);if(m)a.add(m[1])}process.stdout.write(JSON.stringify([...a]))')
+          echo "apps=$APPS" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    needs: changed
+    if: ${{ needs.changed.outputs.apps != '[]' }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment || 'staging' }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        app: ${{ fromJSON(needs.changed.outputs.apps) }}
+    env:
+      IMAGE: ghcr.io/${{ github.repository_owner }}/dp-${{ matrix.app }}
+      ENVIRONMENT: ${{ inputs.environment || 'staging' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push ${{ matrix.app }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.app == 'worker' && 'docker/worker.Dockerfile' || 'docker/next-app.Dockerfile' }}
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ env.ENVIRONMENT }}-${{ github.sha }}
+            ${{ env.IMAGE }}:${{ env.ENVIRONMENT }}
+          build-args: |
+            APP=${{ matrix.app }}
+            GIT_SHA=${{ github.sha }}
+            NEXT_PUBLIC_SUPABASE_URL=${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+            NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=${{ vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,scope=${{ matrix.app }},mode=max
+
+      # Cloud Run as the worked example. Fly.io: `flyctl deploy --image`;
+      # Kubernetes: `kubectl set image`. Cloud Run pulls from Artifact Registry
+      # or Docker Hub, not ghcr.io, so the image is mirrored first.
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SA }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Mirror the image to Artifact Registry
+        run: |
+          gcloud auth configure-docker "${{ vars.GCP_REGION }}-docker.pkg.dev" --quiet
+          AR="${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT }}/dp/dp-${{ matrix.app }}:${{ env.ENVIRONMENT }}-${{ github.sha }}"
+          docker buildx imagetools create --tag "$AR" "${{ env.IMAGE }}:${{ env.ENVIRONMENT }}-${{ github.sha }}"
+          echo "AR_IMAGE=$AR" >> "$GITHUB_ENV"
+      - name: Deploy ${{ matrix.app }} to Cloud Run
+        # The manifests are templates; envsubst fills the image and environment.
+        # The worker image is deployed twice: the queue worker and the coder.
+        env:
+          IMAGE: ${{ env.AR_IMAGE }}
+          GIT_SHA: ${{ github.sha }}
+          GCP_REGION: ${{ vars.GCP_REGION }}
+          GCP_PROJECT: ${{ vars.GCP_PROJECT }}
+          MIN_INSTANCES: ${{ vars.MIN_INSTANCES || '0' }}
+          APP_URL: ${{ matrix.app == 'ops' && vars.OPS_APP_URL || vars.LEARNER_APP_URL }}
+          SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+          LANGSMITH_TRACING: ${{ vars.LANGSMITH_TRACING || 'false' }}
+          GITHUB_REPOSITORY_TARGET: ${{ github.repository }}
+        run: |
+          set -eu
+          SERVICES="${{ matrix.app }}"
+          if [ "${{ matrix.app }}" = "worker" ]; then SERVICES="worker worker-coder"; fi
+          for SERVICE in $SERVICES; do
+            envsubst < "deploy/cloudrun/${SERVICE}.yaml" > "/tmp/${SERVICE}.yaml"
+            gcloud run services replace "/tmp/${SERVICE}.yaml" \
+              --region "$GCP_REGION" --project "$GCP_PROJECT" --quiet
+            gcloud run services update-traffic "dp-${SERVICE}" --to-latest \
+              --region "$GCP_REGION" --project "$GCP_PROJECT" --quiet
+          done

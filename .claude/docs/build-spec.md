@@ -453,7 +453,7 @@ FxRateService          daily snapshot, carry-forward on failure
 
 Rules:
 
-No module outside lib/ai/gateway/ may import a provider SDK or call a model
+No module outside packages/gateway/src/ may import a provider SDK or call a model
 endpoint. Enforce with a CI test.
 
 No hardcoded model id outside the registry. Enforce with a CI test.

@@ -2,29 +2,34 @@
 
 ## Environment
 
-Copy `.env.example` to `.env.local`. Nothing in the example file is a real
-value, and none should ever be.
+Three deployables, three environment files: `apps/learner/.env.example`,
+`apps/ops/.env.example`, `apps/worker/.env.example`. Copy each to `.env.local`
+beside it. Nothing in an example file is a real value, and none should ever be.
 
-| Variable | Needed for | Notes |
-| --- | --- | --- |
-| `NEXT_PUBLIC_SUPABASE_URL` | everything | Inlined into the browser bundle |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | everything | Starts `sb_publishable_`. RLS applies |
-| `SUPABASE_SECRET_KEY` | server | Starts `sb_secret_`. Bypasses RLS. Never in the browser |
-| `OPENROUTER_API_KEY` | everything | Every model call this product makes: chat, completion, embeddings, and speech in both directions. Without it nothing generates, nothing embeds, the microphone is unavailable, and reading aloud falls back to the browser's own voice |
-| `LOG_PSEUDONYM_SALT` | the ledger | Keys the pseudonymous learner id. Changing it makes past rows unjoinable to future ones |
-| `OPERATOR_USER_IDS` | the cost dashboard | Comma-separated UUIDs. Unset means nobody |
-| `MCP_SERVER_URL` | the Trainer's remote MCP tools | Streamable-HTTP endpoint; unset means local tools only. DeepWiki (`https://mcp.deepwiki.com/mcp`) needs no key |
-| `MCP_SERVER_API_KEY` | authenticated MCP servers | Sent as a bearer header; requires `MCP_SERVER_URL` |
-| `FX_EUR_PER_USD_BOOTSTRAP` | pricing | Optional. Prices calls made before the first `pnpm fx:refresh` lands; without it those rows are recorded as unpriced |
-| `OPENROUTER_MODEL_*` | optional | Per-tier model overrides. Empty uses the registry |
+| Variable | learner | ops | worker | Notes |
+| --- | --- | --- | --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL` | yes | yes | yes | The project URL. Inlined into the two browser bundles |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | yes | yes | — | Starts `sb_publishable_`. RLS applies |
+| `SUPABASE_SECRET_KEY` | yes | yes | yes | Starts `sb_secret_`. Bypasses RLS. Never in the browser |
+| `LOG_PSEUDONYM_SALT` | yes | yes | yes | **The same value everywhere.** Keys the pseudonymous id in the ledger and the audit trail |
+| `OPENROUTER_API_KEY` | yes | **never** | yes | Every model call: chat, embeddings, speech, the product-ops agents. The ops app refuses to boot with one |
+| `OPERATOR_USER_IDS` | **never** | yes | — | Comma-separated account ids. Unset means nobody. The learner app refuses to boot with one |
+| `GITHUB_TOKEN`, `GITHUB_REPOSITORY` | **never** | **never** | coder only | Fine-grained, one repository, contents and pull-request write |
+| `REPO_CHECKOUT_PATH` | — | — | coder | Where the entrypoint clones the repository |
+| `WORKER_QUEUES`, `WORKER_CONCURRENCY`, `WORKER_POLL_MS`, `WORKER_LOCK_SECONDS`, `WORKER_SCHEDULER` | — | — | yes | `jobs`, `coder`, or both; how many jobs at once; whether this process enqueues the scheduled ones |
+| `MCP_SERVER_URL`, `MCP_SERVER_API_KEY` | optional | — | — | The Trainer's remote tools |
+| `FX_EUR_PER_USD_BOOTSTRAP` | optional | — | optional | Prices calls made before the first FX snapshot |
+| `OPENROUTER_MODEL_*` | optional | — | optional | Per-tier model overrides. Empty uses the registry |
+| `OPS_COOKIE_NAME` | — | optional | — | The operator session cookie's name, distinct from the learner's |
 
 The legacy Supabase JWT `anon` and `service_role` keys are **rejected at boot**.
 They are retired at the end of 2026, and validating the prefix turns two
 expensive mistakes — a secret key in a browser variable, a new project on a
 dying key format — into a boot failure.
 
-Production requires the first four. Development and test boot without them, so a
-contributor can run the app and the suite without provisioning anything.
+Production requires the Supabase values, the salt and (for the learner and the
+worker) the model key. Development and test boot without them, so a contributor
+can run the apps and the suite without provisioning anything.
 
 ## Getting a project running
 
@@ -32,27 +37,31 @@ contributor can run the app and the suite without provisioning anything.
 pnpm install
 supabase login                                  # once per machine
 supabase link --project-ref <your-project-ref>  # once per checkout
-pnpm db:push          # 29 migrations: 24 tables, RLS, functions
+pnpm db:push          # every migration: tables, RLS, functions, the job queue
 pnpm db:seed          # curriculum, vocabulary and grammar seeds
 pnpm dummy:user       # a confirmed fixture learner, credentials printed
 pnpm fx:refresh       # the euro rate — until this runs, spend is recorded unpriced
 pnpm ingest           # embeds the corpus — this one costs money (~$0.001)
 pnpm scenarios:ingest # embeds the 50-scenario corpus — also costs money (~$0.001)
-pnpm dev
+pnpm dev              # learner on :3000, ops on :3001, the worker polling
 ```
+
+`supabase link` runs from `packages/db`, where `supabase/config.toml` lives;
+the root `db:*` scripts change into it. See [deployment](deployment.md) for the
+containers.
 
 `pnpm scenarios:ingest` is Python (run through [uv](https://docs.astral.sh/uv/),
 which provisions its own interpreter) and needs `OPENROUTER_API_KEY`. Like
 `pnpm ingest` it is idempotent — unchanged items are skipped before any
 provider call — and `--dry-run` reports the parse (15 dialogues, 35
-comprehensions) with no key and no database. See `scripts/scenarios/README.md`.
+comprehensions) with no key and no database. See `apps/learner/scripts/scenarios/README.md`.
 
 `pnpm ingest --dry-run` reports what would be written — 234 documents, 599
 chunks — without contacting a provider or needing a key. Useful for checking
 chunking and metadata on a laptop with nothing configured.
 
 `supabase link` is what `db:push`, `db:diff` and `db:seed` mean by "the linked
-project". It writes `supabase/.temp/project-ref`, which is gitignored, so it is
+project". It writes `packages/db/supabase/.temp/project-ref`, which is gitignored, so it is
 a per-checkout step rather than something a clone inherits — a fresh clone that
 skips it gets `Cannot find project ref` from the first command that needs a
 database. The project ref is the subdomain of `NEXT_PUBLIC_SUPABASE_URL`, and
@@ -68,7 +77,8 @@ applied an earlier version gets the update from `db:seed`.
 
 | Command | What it does |
 | --- | --- |
-| `pnpm verify` | Typecheck, lint, 2942 tests, then a production build |
+| `pnpm verify` | Typecheck, lint, every test and every build, for every workspace, through Turborepo |
+| `pnpm dev:learner`, `pnpm --filter @dp/ops dev`, `pnpm --filter @dp/worker dev` | One deployable at a time |
 | `pnpm test:unit` | Unit and component tests |
 | `pnpm test:db` | Migrations, constraints and RLS against real Postgres via PGlite |
 | `pnpm test:e2e` | Playwright against a production build on port 3100 |
@@ -78,7 +88,9 @@ applied an earlier version gets the update from `db:seed`.
 | `pnpm scenarios:eval` | Retrieval evaluation: hit@5 plus ragas metrics. `--retrieval-only` skips the judge model |
 | `pnpm scenarios:test` | The Python parser and plan tests |
 | `pnpm curriculum:generate` | Rewrites the three generated seed migrations |
-| `pnpm fx:refresh` | Snapshots the euro rate the ledger prices in. Asks the source at most once a day, so an hourly cron is fine; `--force` asks anyway |
+| `pnpm fx:refresh` | Runs the FX job in this process. The worker runs it hourly; `--force` asks the source anyway |
+| `pnpm product:implement <proposal-id>` | Runs the coding job in this process, for a machine with a checkout and a token. The `coder` worker does the same in production |
+| `pnpm docker:build`, `pnpm docker:up` | The three production images against a local Supabase |
 
 ## Cost
 
@@ -129,11 +141,12 @@ OpenRouter may substitute. Alerts fire at 70%, 90% and 100% of the daily budget.
 who can trigger unbounded spend has found a financial denial of service.
 
 **Euro figures are zero.** The rate table is empty and nothing can be
-converted. The cost dashboard fetches the rate itself when it renders — at most
-once a day, guarded on when the source was last *read* rather than which date
-it answered with, because the reference rate for a day is published in the
-afternoon. **Refresh rate** in the page header asks again immediately;
-`pnpm fx:refresh --force` does the same from a terminal. If euro figures are
+converted. The worker snapshots the rate hourly — asking the source at most
+once a day, guarded on when it was last *read* rather than which date it
+answered with, because the reference rate for a day is published in the
+afternoon. **Refresh rate** in the dashboard header enqueues a forced refresh;
+`pnpm fx:refresh --force` runs one from a terminal. If the figure stays zero,
+check that the worker is running (`/healthz`) before checking the source. If euro figures are
 still zero after that, the source is unreachable: check for `fx.source_unavailable`
 in the logs.
 
@@ -152,6 +165,16 @@ snapshot is more than four days old: the source publishes on business days, so a
 long weekend is fine and a week is a job that has stopped. Rows priced at a
 carried-forward rate are counted, not alerted on — they are priced correctly, at
 the last rate the source published.
+
+**A run sits at "queued".** Nothing is claiming jobs. Check the worker's
+`/readyz`, then `select status, count(*) from ops_jobs group by 1`; the dead
+letters are `status = 'failed'` with a code in `last_error`. The nudge button
+re-enqueues (deduplicated per run), and the reconciler re-enqueues any
+server-owned run quiet for three minutes on its own.
+
+**An operator cannot get past the second factor.** Remove their TOTP factor in
+the Supabase dashboard (Authentication → Users) after confirming who is asking
+out of band; the next sign-in enrols a new one.
 
 **A migration will not apply.** pgvector lives in the `extensions` schema on a
 real Supabase project but is created in `public` locally, so new migrations must
@@ -186,10 +209,10 @@ the project. Enabling it is a dashboard toggle.
 
 One `/api/trainer` request is a whole agent loop — up to seven model calls
 plus tool fetches — and can legitimately run 30–90 seconds. The route declares
-`maxDuration = 120`; hosting plans with a lower function ceiling (Vercel's
-hobby tier caps at 60s) cut the loop short at their own limit, which surfaces
-to the learner as the trainer being unavailable for that turn. The step cap
-and the per-request euro ceiling bound the worst case either way.
+`maxDuration = 120`, which the containers honour (the Cloud Run manifests set
+a 900 s request timeout); a serverless host with a lower function ceiling would
+cut the loop short at its own limit. The step cap and the per-request euro
+ceiling bound the worst case either way.
 
 ## OpenRouter's account data policy can hide models
 

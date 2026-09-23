@@ -1,0 +1,71 @@
+# The production images, locally, against `supabase start` on the host.
+#
+# Hot reload is `pnpm dev`; this is for seeing the three containers run
+# together. The browser and the containers must both resolve the Supabase URL,
+# and the one hostname that does is host.docker.internal — add
+# `127.0.0.1 host.docker.internal` to /etc/hosts. Get the local keys with
+# `supabase status -o env`.
+name: dp
+
+x-common: &common
+  restart: unless-stopped
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+
+services:
+  learner:
+    <<: *common
+    image: dp-learner:local
+    build:
+      context: .
+      dockerfile: docker/next-app.Dockerfile
+      args:
+        APP: learner
+        GIT_SHA: local
+        NEXT_PUBLIC_SUPABASE_URL: http://host.docker.internal:54321
+        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${SUPABASE_PUBLISHABLE_KEY:?export from `supabase status -o env`}
+    env_file: apps/learner/.env.docker      # gitignored; copy from apps/learner/.env.example
+    environment:
+      APP_URL: http://localhost:3000
+      LANGSMITH_PROJECT: dp-learner-local
+    ports: ["3000:3000"]
+
+  ops:
+    <<: *common
+    image: dp-ops:local
+    build:
+      context: .
+      dockerfile: docker/next-app.Dockerfile
+      args:
+        APP: ops
+        GIT_SHA: local
+        NEXT_PUBLIC_SUPABASE_URL: http://host.docker.internal:54321
+        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${SUPABASE_PUBLISHABLE_KEY:?export from `supabase status -o env`}
+    env_file: apps/ops/.env.docker
+    environment:
+      APP_URL: http://localhost:3001
+    ports: ["3001:3000"]
+
+  worker:
+    <<: *common
+    image: dp-worker:local
+    build:
+      context: .
+      dockerfile: docker/worker.Dockerfile
+      args:
+        GIT_SHA: local
+    env_file: apps/worker/.env.docker
+    environment:
+      NEXT_PUBLIC_SUPABASE_URL: http://host.docker.internal:54321
+      WORKER_QUEUES: ${WORKER_QUEUES:-jobs}     # "jobs,coder" once GITHUB_TOKEN is in .env.docker
+      WORKER_CONCURRENCY: "2"
+      WORKER_POLL_MS: "1000"
+      WORKER_SCHEDULER: "true"
+      REPO_CHECKOUT_PATH: /workspace/repo
+      LANGSMITH_PROJECT: dp-worker-local
+    volumes:
+      - worker-workspace:/workspace
+    ports: ["8080:8080"]
+
+volumes:
+  worker-workspace: {}

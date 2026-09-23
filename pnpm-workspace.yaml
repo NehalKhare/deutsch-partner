@@ -1,6 +1,47 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
 onlyBuiltDependencies:
   - esbuild
 
 ignoredBuiltDependencies:
   - sharp
   - unrs-resolver
+
+# One version of every dependency that more than one workspace shares. React
+# and @langchain/core in particular must resolve to a single instance.
+catalog:
+  next: 16.3.1
+  react: 19.2.8
+  react-dom: 19.2.8
+  "@types/react": ^19
+  "@types/react-dom": ^19
+  "@types/node": ^20
+  zod: ^4.4.3
+  typescript: ^5
+  vitest: ^4.1.11
+  eslint: ^9
+  eslint-config-next: 16.3.1
+  "@vitejs/plugin-react": ^6.1.0
+  jsdom: ^30.0.1
+  msw: ^2.15.0
+  "@testing-library/dom": ^10.4.1
+  "@testing-library/jest-dom": ^7.0.1
+  "@testing-library/react": ^16.3.2
+  "@testing-library/user-event": ^14.6.5
+  "@supabase/supabase-js": ^2.112.3
+  "@supabase/ssr": ^0.12.4
+  "@langchain/core": ^1.2.9
+  "@langchain/langgraph": ^1.4.12
+  "@langchain/langgraph-checkpoint": ^1.1.5
+  "@langchain/mcp-adapters": ^1.1.4
+  "@langchain/openai": ^1.5.10
+  langchain: ^1.5.10
+  langsmith: ^0.9.0
+  clsx: ^2.1.1
+  tailwind-merge: ^3.6.0
+  server-only: ^0.0.1
+  tsx: ^4.23.12
+  "@electric-sql/pglite": ^0.5.5
+  "@next/env": ^16.3.2
