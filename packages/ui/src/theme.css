@@ -1,6 +1,8 @@
 
 /*
- * Landing palette: warm light in a cool room, and the same room in daylight.
+ * The learner's palette: warm light in a cool room, and the same room in
+ * daylight. The operator app keeps these role names and swaps the values —
+ * see theme-ops.css.
  *
  * The tokens below are named for the *role* they play, not for the material
  * they are made of. That distinction is the whole reason a second theme is
@@ -9,10 +11,13 @@
  * `chalk` — as they were until light mode arrived — forced every class string
  * to promise a darkness it could no longer keep.
  *
- * `apricot` is still the single strong accent and still warm. It is a lighter
- * apricot on the dark ground and a burnt one on the light, because the accent
- * has to carry link text and a filled button in both, and the same hex cannot
- * clear 4.5:1 against a near-black and a near-white at once.
+ * `brand` is the single strong accent, and it is the one token whose value
+ * differs between the two products: warm apricot for the learner, Atlassian
+ * blue for the operator app, which overrides this file's constants in
+ * theme-ops.css. It takes a lighter value on the dark ground and a deeper one
+ * on the light, because the accent has to carry link text and a filled button
+ * in both, and the same hex cannot clear 4.5:1 against a near-black and a
+ * near-white at once.
  *
  * The companion itself is not themed. It is a character, not chrome, and a
  * mascot that changes colour with the OS is a different mascot.
@@ -25,12 +30,17 @@
   /* Dark: the original room. */
   --dark-ground: #0f1320;
   --dark-panel: #171c2e;
+  /* A layer floating *over* the page — a menu, a popover — rather than a
+     panel inset into it. It has to be lighter than the ground in both themes
+     or it reads as a hole rather than as something lifted off the surface,
+     which is what a panel-coloured dropdown looked like on the light theme. */
+  --dark-raised: #1e2438;
   --dark-edge: #2b3350;
   --dark-copy: #ede7dc;
-  --dark-apricot: #f2a277;
+  --dark-brand: #f2a277;
   --dark-sprout: #86d3a8;
   --dark-ember: #e8867f;
-  /* What sits on top of an apricot fill. Dark here, light on the light theme. */
+  /* What sits on top of a brand fill. Dark here, light on the light theme. */
   --dark-on-accent: #0f1320;
   /* Shadows stay dark in both themes; only how dark changes. */
   --dark-shade: #05070d;
@@ -44,9 +54,10 @@
   /* Light: the same room with the curtains open. Warm paper, not white. */
   --light-ground: #faf6ef;
   --light-panel: #efe7d9;
+  --light-raised: #fffdf8;
   --light-edge: #d6cbb8;
   --light-copy: #12172a;
-  --light-apricot: #9e4713;
+  --light-brand: #9e4713;
   --light-sprout: #1d7a4c;
   --light-ember: #b3362c;
   --light-on-accent: #fffaf3;
@@ -71,9 +82,10 @@
   color-scheme: dark;
   --ground: var(--dark-ground);
   --panel: var(--dark-panel);
+  --raised: var(--dark-raised);
   --edge: var(--dark-edge);
   --copy: var(--dark-copy);
-  --apricot: var(--dark-apricot);
+  --brand: var(--dark-brand);
   --sprout: var(--dark-sprout);
   --ember: var(--dark-ember);
   --on-accent: var(--dark-on-accent);
@@ -91,9 +103,10 @@
     color-scheme: light;
     --ground: var(--light-ground);
     --panel: var(--light-panel);
+    --raised: var(--light-raised);
     --edge: var(--light-edge);
     --copy: var(--light-copy);
-    --apricot: var(--light-apricot);
+    --brand: var(--light-brand);
     --sprout: var(--light-sprout);
     --ember: var(--light-ember);
     --on-accent: var(--light-on-accent);
@@ -111,9 +124,10 @@
   color-scheme: light;
   --ground: var(--light-ground);
   --panel: var(--light-panel);
+  --raised: var(--light-raised);
   --edge: var(--light-edge);
   --copy: var(--light-copy);
-  --apricot: var(--light-apricot);
+  --brand: var(--light-brand);
   --sprout: var(--light-sprout);
   --ember: var(--light-ember);
   --on-accent: var(--light-on-accent);
@@ -128,9 +142,10 @@
 @theme inline {
   --color-ground: var(--ground);
   --color-panel: var(--panel);
+  --color-raised: var(--raised);
   --color-edge: var(--edge);
   --color-copy: var(--copy);
-  --color-apricot: var(--apricot);
+  --color-brand: var(--brand);
   --color-sprout: var(--sprout);
   --color-ember: var(--ember);
   --color-on-accent: var(--on-accent);
@@ -232,9 +247,9 @@
   --foreground: var(--copy);
   --card: var(--panel);
   --card-foreground: var(--copy);
-  --popover: var(--panel);
+  --popover: var(--raised);
   --popover-foreground: var(--copy);
-  --primary: var(--apricot);
+  --primary: var(--brand);
   --primary-foreground: var(--on-accent);
   --secondary: var(--edge);
   --secondary-foreground: var(--copy);
@@ -245,8 +260,8 @@
   --destructive: var(--ember);
   --border: color-mix(in oklab, var(--edge) 60%, transparent);
   --input: var(--edge);
-  --ring: var(--apricot);
-  --chart-1: var(--apricot);
+  --ring: var(--brand);
+  --chart-1: var(--brand);
   --chart-2: var(--sprout);
   --chart-3: var(--copy);
   --chart-4: var(--edge);
@@ -254,12 +269,12 @@
   --radius: 0.75rem;
   --sidebar: var(--panel);
   --sidebar-foreground: var(--copy);
-  --sidebar-primary: var(--apricot);
+  --sidebar-primary: var(--brand);
   --sidebar-primary-foreground: var(--on-accent);
   --sidebar-accent: var(--edge);
   --sidebar-accent-foreground: var(--copy);
   --sidebar-border: color-mix(in oklab, var(--edge) 60%, transparent);
-  --sidebar-ring: var(--apricot);
+  --sidebar-ring: var(--brand);
 }
 
 @layer base {
@@ -273,6 +288,6 @@
     @apply bg-ground font-body text-copy;
   }
   ::selection {
-    background-color: color-mix(in oklab, var(--apricot) 35%, transparent);
+    background-color: color-mix(in oklab, var(--brand) 35%, transparent);
   }
 }

@@ -89,8 +89,8 @@ export function VocabularyTiles({ counts, words }: VocabularyTilesProps) {
               onClick={() => setOpen(isOpen ? null : bucket)}
               className={cn(
                 stat,
-                "text-left transition-colors hover:border-apricot/50",
-                isOpen && "border-apricot/60 bg-apricot/5",
+                "text-left transition-colors hover:border-brand/50",
+                isOpen && "border-brand/60 bg-brand/5",
                 focusRing,
               )}
             >

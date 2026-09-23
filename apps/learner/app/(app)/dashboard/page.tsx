@@ -140,7 +140,7 @@ export default async function DashboardPage() {
               className="h-2.5 w-full overflow-hidden rounded-full bg-edge/50"
             >
               <div
-                className="h-full rounded-full bg-apricot transition-[width] duration-700"
+                className="h-full rounded-full bg-brand transition-[width] duration-700"
                 style={{ width: `${Math.round(tally.score * 100)}%` }}
               />
             </div>
@@ -157,7 +157,7 @@ export default async function DashboardPage() {
         ) : (
           <p className="text-sm text-copy/60">
             No evaluated turns at this level yet —{" "}
-            <Link href="/chat" className="text-apricot underline decoration-apricot/40 underline-offset-4 hover:decoration-apricot">
+            <Link href="/chat" className="text-brand underline decoration-brand/40 underline-offset-4 hover:decoration-brand">
               have a conversation
             </Link>{" "}
             and your score appears here.
@@ -183,12 +183,12 @@ export default async function DashboardPage() {
             return (
               <div
                 key={band.level}
-                className={cn(stat, current && "border-apricot/50 bg-apricot/5")}
+                className={cn(stat, current && "border-brand/50 bg-brand/5")}
               >
                 <dt className="flex items-baseline justify-between">
                   <span className={eyebrow}>{band.level}</span>
                   {current ? (
-                    <span className="font-display text-xs text-apricot">now</span>
+                    <span className="font-display text-xs text-brand">now</span>
                   ) : null}
                 </dt>
                 <dd className="mt-1 flex flex-col gap-0.5">
@@ -252,14 +252,14 @@ export default async function DashboardPage() {
         </h2>
         <Link
           href="/curriculum"
-          className="group flex items-center justify-between gap-4 rounded-2xl border border-edge/60 px-5 py-4 transition-colors hover:border-apricot/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-apricot"
+          className="group flex items-center justify-between gap-4 rounded-2xl border border-edge/60 px-5 py-4 transition-colors hover:border-brand/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
         >
           <span className="text-copy/80">
             The whole path, every word with its article and its English
           </span>
           <span
             aria-hidden
-            className="font-display text-copy/40 transition-transform group-hover:translate-x-1 group-hover:text-apricot"
+            className="font-display text-copy/40 transition-transform group-hover:translate-x-1 group-hover:text-brand"
           >
             →
           </span>
@@ -298,14 +298,14 @@ export default async function DashboardPage() {
               is how a learner ends up choosing none of them. */}
           <Link
             href={next.candidate.activityType === "review" ? "/review" : "/chat"}
-            className="group flex items-center justify-between gap-4 rounded-2xl border border-apricot/50 bg-apricot/10 px-5 py-4 transition-colors hover:bg-apricot/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-apricot"
+            className="group flex items-center justify-between gap-4 rounded-2xl border border-brand/50 bg-brand/10 px-5 py-4 transition-colors hover:bg-brand/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
           >
             <span className="font-display font-medium text-copy">
               {next.candidate.title}
             </span>
             <span
               aria-hidden
-              className="font-display text-apricot transition-transform group-hover:translate-x-1"
+              className="font-display text-brand transition-transform group-hover:translate-x-1"
             >
               →
             </span>
@@ -342,7 +342,7 @@ export default async function DashboardPage() {
                   </span>
                   <span className="text-sm text-copy/60">{mistake.pattern}</span>
                 </span>
-                <span className="shrink-0 font-display text-sm tabular-nums text-apricot">
+                <span className="shrink-0 font-display text-sm tabular-nums text-brand">
                   ×{mistake.occurrences}
                 </span>
               </li>

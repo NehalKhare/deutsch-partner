@@ -535,7 +535,7 @@ export function Conversation({
             aria-label="Move on to the next mini-level"
             className={cn(
               "flex items-center gap-1.5 rounded-full px-2.5 py-1 font-display text-xs",
-              "uppercase tracking-wider text-copy/70 transition-colors hover:text-apricot",
+              "uppercase tracking-wider text-copy/70 transition-colors hover:text-brand",
               "disabled:pointer-events-none disabled:opacity-50",
               focusRing,
             )}
@@ -551,7 +551,7 @@ export function Conversation({
               className={cn(
                 "flex items-center gap-1.5 rounded-full px-2.5 py-1 font-display text-xs",
                 "uppercase tracking-wider transition-colors",
-                readAloud ? "text-apricot" : "text-copy/70 hover:text-copy",
+                readAloud ? "text-brand" : "text-copy/70 hover:text-copy",
                 focusRing,
               )}
             >
@@ -569,7 +569,7 @@ export function Conversation({
             className={cn(
               "flex items-center gap-1.5 rounded-full px-2.5 py-1 font-display text-xs",
               "uppercase tracking-wider transition-colors",
-              showMastery ? "text-apricot" : "text-copy/70 hover:text-copy",
+              showMastery ? "text-brand" : "text-copy/70 hover:text-copy",
               focusRing,
             )}
           >
@@ -618,9 +618,9 @@ export function Conversation({
               <li
                 key={message.id}
                 data-role="milestone"
-                className="flex items-center gap-3 py-1 font-display text-xs uppercase tracking-wider text-apricot/90"
+                className="flex items-center gap-3 py-1 font-display text-xs uppercase tracking-wider text-brand/90"
               >
-                <span aria-hidden className="h-px flex-1 bg-apricot/30" />
+                <span aria-hidden className="h-px flex-1 bg-brand/30" />
                 <span>
                   Moving up — Mini-level {message.miniLevel}
                   {message.theme ? (
@@ -632,13 +632,13 @@ export function Conversation({
                     </>
                   ) : null}
                 </span>
-                <span aria-hidden className="h-px flex-1 bg-apricot/30" />
+                <span aria-hidden className="h-px flex-1 bg-brand/30" />
               </li>
             ) : message.role === "user" ? (
               <li
                 key={message.id}
                 data-role="user"
-                className="max-w-[85%] self-end rounded-2xl rounded-br-md bg-apricot px-4 py-2.5 leading-relaxed text-on-accent"
+                className="max-w-[85%] self-end rounded-2xl rounded-br-md bg-brand px-4 py-2.5 leading-relaxed text-on-accent"
               >
                 {message.content}
               </li>
@@ -664,8 +664,8 @@ export function Conversation({
                   }
                   aria-pressed={speakingId === message.id}
                   className={cn(
-                    "shrink-0 rounded-full p-1.5 text-copy/60 transition-colors hover:text-apricot",
-                    speakingId === message.id && "text-apricot",
+                    "shrink-0 rounded-full p-1.5 text-copy/60 transition-colors hover:text-brand",
+                    speakingId === message.id && "text-brand",
                     focusRing,
                   )}
                 >
@@ -680,7 +680,7 @@ export function Conversation({
               data-streaming="true"
               aria-live="off"
               lang="de"
-              className="max-w-[85%] self-start rounded-2xl rounded-bl-md border border-apricot/40 bg-panel px-4 py-2.5 leading-relaxed text-copy"
+              className="max-w-[85%] self-start rounded-2xl rounded-bl-md border border-brand/40 bg-panel px-4 py-2.5 leading-relaxed text-copy"
             >
               {/* Formatted as it arrives, so the reply does not visibly
                   reflow the moment it finishes. A marker whose closer has not
@@ -700,10 +700,10 @@ export function Conversation({
         <section
           role="status"
           aria-label="Mini-level cleared"
-          className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-apricot/40 bg-apricot/10 px-4 py-3"
+          className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-brand/40 bg-brand/10 px-4 py-3"
         >
           <p className="min-w-40 flex-1 text-sm leading-relaxed text-copy">
-            <span className="font-display font-semibold text-apricot">
+            <span className="font-display font-semibold text-brand">
               Mini-level {tally.miniLevel} cleared!
             </span>{" "}
             At least {masteryThreshold}% of your turns were error-free — the
@@ -777,7 +777,7 @@ export function Conversation({
               "shrink-0 rounded-full border p-2.5 transition-colors",
               recording
                 ? "animate-pulse border-ember bg-ember/20 text-ember"
-                : "border-edge text-copy/60 hover:border-apricot/60 hover:text-apricot",
+                : "border-edge text-copy/60 hover:border-brand/60 hover:text-brand",
               "disabled:pointer-events-none disabled:opacity-50",
               focusRing,
             )}

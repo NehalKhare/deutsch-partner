@@ -33,6 +33,7 @@ const COST_ROW = {
     {
       task: "conversation.turn",
       tier: "strong",
+      modelId: "vendor/model",
       calls: 200,
       costEur: 10,
       costUsd: 10.87,

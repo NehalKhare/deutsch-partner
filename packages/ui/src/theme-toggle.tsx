@@ -42,9 +42,9 @@ const serverSnapshot = (): ThemePreference => "system";
 const OPTION =
   "flex-1 cursor-pointer rounded-full px-3 py-1 text-center font-display text-xs " +
   "whitespace-nowrap text-copy/60 transition-colors hover:text-copy " +
-  "has-checked:bg-apricot/15 has-checked:text-apricot " +
+  "has-checked:bg-brand/15 has-checked:text-brand " +
   "has-focus-visible:outline has-focus-visible:outline-2 " +
-  "has-focus-visible:outline-offset-2 has-focus-visible:outline-apricot";
+  "has-focus-visible:outline-offset-2 has-focus-visible:outline-brand";
 
 const LABELS: Readonly<Record<ThemePreference, string>> = {
   system: "System",

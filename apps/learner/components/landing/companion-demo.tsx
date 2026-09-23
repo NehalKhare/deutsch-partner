@@ -80,9 +80,9 @@ export function CompanionDemo() {
             key={option.activity}
             className={[
               "cursor-pointer rounded-full border px-4 py-1.5 text-sm transition-colors",
-              "focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-apricot",
+              "focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-brand",
               index === turnIndex
-                ? "border-apricot bg-apricot/15 text-apricot"
+                ? "border-brand bg-brand/15 text-brand"
                 : "border-edge text-copy/60 hover:border-copy/40 hover:text-copy",
             ].join(" ")}
           >

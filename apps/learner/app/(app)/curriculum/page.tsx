@@ -120,7 +120,7 @@ export default async function CurriculumPage({
               className={cn(
                 "flex items-baseline gap-2 rounded-full border px-5 py-2 font-display text-sm transition-colors",
                 active
-                  ? "border-apricot bg-apricot/15 text-apricot"
+                  ? "border-brand bg-brand/15 text-brand"
                   : "border-edge text-copy/60 hover:border-copy/40 hover:text-copy",
                 focusRing,
               )}
@@ -249,7 +249,7 @@ export default async function CurriculumPage({
                   className={cn(
                     card,
                     "group p-0",
-                    here && "border-apricot/50 bg-apricot/5",
+                    here && "border-brand/50 bg-brand/5",
                   )}
                 >
                   <summary
@@ -281,7 +281,7 @@ export default async function CurriculumPage({
                       </span>
                     ) : null}
                     {here ? (
-                      <span className="ml-auto font-display text-xs uppercase tracking-wider text-apricot">
+                      <span className="ml-auto font-display text-xs uppercase tracking-wider text-brand">
                         you are here
                       </span>
                     ) : skipped ? (
@@ -303,7 +303,7 @@ export default async function CurriculumPage({
                           value={level.miniLevel}
                         />
                         <PendingButton
-                          className={cn(buttonQuiet, "border-apricot/50 text-apricot hover:bg-apricot/10")}
+                          className={cn(buttonQuiet, "border-brand/50 text-brand hover:bg-brand/10")}
                         >
                           Practise this level →
                         </PendingButton>

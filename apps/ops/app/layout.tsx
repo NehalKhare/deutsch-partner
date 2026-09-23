@@ -29,7 +29,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Deutsch Partner — operations",
-  description: "Product ops and AI spend for Deutsch Partner. Operators only.",
+  description:
+    "Feature proposals, market scans, trainer feedback and AI spend for Deutsch Partner. Operators only.",
   robots: { index: false, follow: false },
 };
 

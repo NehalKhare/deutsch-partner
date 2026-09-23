@@ -77,7 +77,7 @@ function NavLink({
       aria-current={active ? "page" : undefined}
       className={cn(
         PILL,
-        active ? "bg-apricot/15 text-apricot" : "text-copy/60 hover:text-copy",
+        active ? "bg-brand/15 text-brand" : "text-copy/60 hover:text-copy",
         focusRing,
         className,
       )}

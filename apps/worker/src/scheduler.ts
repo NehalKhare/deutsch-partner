@@ -31,6 +31,10 @@ export const SCHEDULES: readonly Schedule[] = [
   { kind: "pricing.snapshot", everyMs: DAY },
   { kind: "checkpoints.prune", everyMs: DAY },
   { kind: "ratelimit.purge", everyMs: HOUR },
+  // Hourly rather than daily: the calendar is the operator's view of money
+  // being spent right now, and a rollup rebuilt once a night means today is
+  // blank on the screen that exists to notice today going wrong.
+  { kind: "cost.rollup", everyMs: HOUR },
 ];
 
 /** Which kinds are due, given when each was last enqueued. Pure. */

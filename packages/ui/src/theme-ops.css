@@ -1,0 +1,72 @@
+/*
+ * The operator app's palette: Atlassian.
+ *
+ * Same role names as theme.css, different values. Every class string in the
+ * product says `bg-ground`, `text-copy`, `border-edge`, `bg-brand` — which is
+ * exactly why a second palette is a file of constants rather than a second set
+ * of components. Nothing below is a new token; each line replaces a value the
+ * learner's theme already defined, and the resolution between dark and light
+ * stays where it is, in theme.css.
+ *
+ * Why a different palette at all: these are two products for two people. The
+ * learner's is a warm room you practise in, and its identity is a single warm
+ * light on a deep blue ground. The operator app is a tool somebody has open
+ * beside Jira and a terminal all day, reading tables and deciding on
+ * proposals. Borrowing the look of the tools it sits between costs an operator
+ * less than making them learn a second visual language for the same job.
+ *
+ * Import order matters: this file has to come after theme.css, because both
+ * write plain `:root` blocks and equal specificity is settled by source order.
+ * `apps/ops/app/globals.css` is the only place that imports it.
+ *
+ * Not overridden here, deliberately: `der`, `die`, `das` (the German gender
+ * colours) and `filament`, `filament-deep` (the Trainer invite's lit
+ * gradient). All five are the learner's, and the operator app renders none of
+ * them; leaving them inherited is what says so.
+ */
+
+:root {
+  /*
+   * Dark: Atlassian's dark surfaces. `ground` is the sunken surface the app
+   * sits on and `panel` the raised one a card is drawn on, which is the way
+   * round Atlassian builds a page — the opposite of the light theme below.
+   */
+  --dark-ground: #161a1d;
+  --dark-panel: #22272b;
+  --dark-raised: #282e33;
+  --dark-edge: #38414a;
+  --dark-copy: #c7d1db;
+  --dark-brand: #579dff;
+  --dark-sprout: #4bce97;
+  --dark-ember: #f87168;
+  /* Dark text on the light blue fill, as Atlassian sets it in dark mode. */
+  --dark-on-accent: #1c2b41;
+  --dark-shade: #010409;
+
+  /*
+   * Light: white ground with subtle grey panels, not the other way round.
+   * Atlassian draws both, but a white card on a grey page disappears at the
+   * 40% and 70% alphas this product's `card` and `disclosure` use, where a
+   * grey panel on white stays visible at both.
+   */
+  --light-ground: #ffffff;
+  --light-panel: #f1f2f4;
+  /* Atlassian floats an overlay as white on the page with a shadow, and
+     here the page is already white, so the border and the shadow are what
+     lift it. Grey would read as recessed. */
+  --light-raised: #ffffff;
+  --light-edge: #c1c7d0;
+  /*
+   * Atlassian's darkest neutral is #091e42, and this is one step deeper.
+   * Secondary text here is the accent colour at 60% alpha, and alpha over a
+   * near-white loses contrast fast: at #091e42 that tier lands on 4.47:1 and
+   * misses AA by a rounding error. This clears it at 4.63:1 and is the same
+   * navy to look at.
+   */
+  --light-copy: #08193a;
+  --light-brand: #0c66e4;
+  --light-sprout: #216e4e;
+  --light-ember: #c9372c;
+  --light-on-accent: #ffffff;
+  --light-shade: #091e42;
+}

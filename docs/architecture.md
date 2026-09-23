@@ -201,14 +201,37 @@ without any counter or deadline in the browser. A spinner that turns forever
 over dead work is worse than no spinner, because it teaches an operator to
 distrust the only signal that means something is wrong.
 
-**Deciding and operating are two pages.** `/operations/product` is the proposal
-board, and nothing on it moves on its own; `/operations/product/runs` holds the
-scan form, the run cards that follow their own timelines live, and the
-learner-feedback aggregate. The split is what lets the runs page poll itself
-every few seconds without redrawing the page an operator is reading a proposal
-on. Both are dynamic routes, and a dynamic route is prefetched only as far as
-its nearest loading boundary, so each has a `loading.tsx`: without one the
-switch between them is a wait on a blank page rather than a click.
+**Deciding, operating and listening are three pages.** `/product` is the
+proposal board — "Feature proposals" — and nothing on it moves on its own;
+`/product/runs` holds the scan form and the run cards that follow their own
+timelines live; `/feedback` holds the learner-feedback aggregate. The first
+split is what lets the runs page poll itself every few seconds without
+redrawing the page an operator is reading a proposal on. The second is because
+feedback answers a question of its own — is the trainer getting better, did the
+last prompt version help — and asking it should not mean scrolling past a run
+queue, even though a scan reads the same aggregate as its first finding. All
+are dynamic routes, and a dynamic route is prefetched only as far as its
+nearest loading boundary, so each has a `loading.tsx`: without one, moving
+between them is a wait on a blank page rather than a click.
+
+**The two products do not share a palette, only its role names.** Every class
+string in the repository says `bg-ground`, `text-copy`, `bg-brand`. The learner
+resolves those to the warm palette in `packages/ui/src/theme.css`; the operator
+app resolves them to Atlassian's, because `apps/ops/app/globals.css` imports
+`theme-ops.css` after it and that file replaces the constants the role
+variables point at. Nothing else differs — not a component, not a class string,
+not the light-and-dark resolution. The learner's room is one you practise in
+and the operator app is a tool somebody has open beside Jira all day, and
+making an operator learn a second visual language for the same job costs more
+than borrowing the one they already read.
+
+**The operator app navigates from a rail, not a bar.** `OpsShell` puts the four
+rooms down the left and pins the account menu — the address, the theme and the
+way out — to its foot, behind one button. A row of tabs has to stay short to
+stay a row, and the fourth room is what ended that. Below `md` the rail lies
+down into a strip across the top. Only the two leaves that need the browser are
+client components: the nav, because the current page should say so, and the
+menu, because it opens.
 
 **Nothing writes a file without two approvals.** The proposal is approved before
 a PRD exists, and the plan is approved before a file is written. The approved
@@ -309,6 +332,17 @@ Stated here so nobody has to discover it by reading the code.
   is empty and the estimator behind the budget gate has nothing to read. The FX
   job runs hourly from the same scheduler; the cost dashboard's refresh button
   enqueues one more.
+- **The spend calendar is only as old as the rollup job.** `cost_rollup_daily`
+  was created, secured and schema-tested in the first cost migration and
+  nothing wrote to it for months, so every historical view over it returned an
+  empty year however busy the ledger was. `cost.rollup` now rebuilds it hourly
+  from `model_invocations` — recomputing each day rather than accumulating, so
+  a scheduler tick that happens twice cannot double the money — and backfills
+  the whole ledger the first time it finds the rollup empty. Run
+  `pnpm --filter @dp/worker cost:rollup` to fill it without waiting for a tick.
+  Nothing stands in while it is empty: the page says the rollup is empty and
+  points at the live figures, because a cost screen that substitutes invented
+  numbers for missing ones is worse than one that is plainly broken.
 - **Rows written before the first rate are converted for display, not fixed.**
   They carry no rate and the ledger is append-only, so their stored `cost_eur`
   stays zero for good. The dashboard converts their dollars at the newest rate

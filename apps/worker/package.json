@@ -12,6 +12,7 @@
     "test:db": "vitest run --project worker:db",
     "ingest": "tsx --env-file-if-exists=.env.local src/cli/ingest.ts",
     "fx:refresh": "tsx --env-file-if-exists=.env.local src/cli/fx-refresh.ts",
+    "cost:rollup": "tsx --env-file-if-exists=.env.local src/cli/cost-rollup.ts",
     "product:implement": "tsx --env-file-if-exists=.env.local src/cli/product-implement.ts"
   },
   "dependencies": {

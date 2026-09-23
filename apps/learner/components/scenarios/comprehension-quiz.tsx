@@ -78,7 +78,7 @@ export function ComprehensionQuiz({
               {grade === "review" && (
                 <p className="text-sm text-copy/70">
                   Compare with the answer:{" "}
-                  <span className="text-apricot">{question.answer}</span>
+                  <span className="text-brand">{question.answer}</span>
                 </p>
               )}
             </li>

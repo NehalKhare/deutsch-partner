@@ -34,6 +34,8 @@ export const JOB_KINDS = [
   "ingest.knowledge",
   /** Drop rate-limit windows that ended long ago. */
   "ratelimit.purge",
+  /** Rebuild the daily cost rollup the spend calendar reads. */
+  "cost.rollup",
 ] as const;
 
 export const jobKindSchema = z.enum(JOB_KINDS);
@@ -80,6 +82,17 @@ export const jobPayloadSchema = z.discriminatedUnion("kind", [
     ...envelopeBase,
   }),
   z.strictObject({ kind: z.literal("ratelimit.purge"), ...envelopeBase }),
+  z.strictObject({
+    kind: z.literal("cost.rollup"),
+    /**
+     * How many days back to rebuild, ending today. Null lets the database
+     * decide, which is the scheduled case: it redoes the newest day it has
+     * plus the one before, and backfills the whole ledger when the rollup is
+     * empty. A number is for an operator who knows a window needs redoing.
+     */
+    sinceDays: z.number().int().min(1).max(3650).nullable().default(null),
+    ...envelopeBase,
+  }),
 ]);
 
 export type JobPayload = z.infer<typeof jobPayloadSchema>;
@@ -118,6 +131,7 @@ export function dedupeKeyFor(payload: JobPayload): string | null {
     case "checkpoints.prune":
     case "ingest.knowledge":
     case "ratelimit.purge":
+    case "cost.rollup":
       return payload.kind;
   }
 }

@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useId, useRef, useState } from "react";
+import { useId } from "react";
 
 import { focusRing } from "@dp/ui/styles";
 import { ThemeToggle } from "@dp/ui/theme-toggle";
+import { useDisclosure } from "@dp/ui/use-disclosure";
 import { cn } from "@dp/ui/utils";
 
 /**
@@ -23,6 +24,10 @@ import { cn } from "@dp/ui/utils";
  * already works; role="menu" would take that away and owe arrow keys, a
  * roving tabindex and typeahead in return, which is a great deal of machinery
  * to reimplement what the browser does correctly.
+ *
+ * Opening, closing, Escape and the click outside are `useDisclosure` in
+ * `@dp/ui`, shared with the operator app's own menu. What stays here is the
+ * drawing and the items, which are this product's and not that one's.
  */
 
 export interface AccountMenuProps {
@@ -38,37 +43,9 @@ const item =
 
 export function AccountMenu({ label, email, signOut }: AccountMenuProps) {
   const pathname = usePathname();
-  const [open, setOpen] = useState(false);
-  const container = useRef<HTMLDivElement>(null);
-  const trigger = useRef<HTMLButtonElement>(null);
+  const { open, setOpen, container, trigger } = useDisclosure();
   const panelId = useId();
   const labelId = useId();
-
-  useEffect(() => {
-    if (!open) return;
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      setOpen(false);
-      // Back where it came from. Escape that drops focus to the document is
-      // Escape that strands a keyboard at the top of the page.
-      trigger.current?.focus();
-    };
-
-    const onPointerDown = (event: PointerEvent) => {
-      const target = event.target;
-      if (target instanceof Node && container.current?.contains(target)) return;
-      setOpen(false);
-    };
-
-    document.addEventListener("keydown", onKeyDown);
-    document.addEventListener("pointerdown", onPointerDown);
-
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      document.removeEventListener("pointerdown", onPointerDown);
-    };
-  }, [open]);
 
   const links = [{ href: "/settings", label: "Settings" }];
 
@@ -86,7 +63,7 @@ export function AccountMenu({ label, email, signOut }: AccountMenuProps) {
           "flex max-w-[12rem] items-center gap-1.5 rounded-full border px-3 py-1.5",
           "font-display text-sm transition-colors",
           open
-            ? "border-apricot/50 bg-apricot/10 text-copy"
+            ? "border-brand/50 bg-brand/10 text-copy"
             : "border-edge/60 text-copy/70 hover:border-copy/30 hover:text-copy",
           focusRing,
         )}
@@ -102,14 +79,14 @@ export function AccountMenu({ label, email, signOut }: AccountMenuProps) {
         aria-labelledby={labelId}
         hidden={!open}
         className={cn(
-          "absolute right-0 z-20 mt-2 w-60 rounded-2xl border border-edge/70 bg-panel p-1.5",
+          "absolute right-0 z-20 mt-2 w-60 rounded-2xl border border-edge/70 bg-raised p-1.5",
           "shadow-lg shadow-shade/40",
         )}
       >
         {email ? (
           // Which account, in full. The button can only afford a fragment of
           // it, and a fragment is exactly what is ambiguous between two logins.
-          <p className="truncate px-3 pt-1.5 pb-2 text-xs text-copy/45" title={email}>
+          <p className="truncate px-3 pt-1.5 pb-2 text-xs text-copy/65" title={email}>
             {email}
           </p>
         ) : null}
@@ -129,7 +106,7 @@ export function AccountMenu({ label, email, signOut }: AccountMenuProps) {
                 onClick={() => setOpen(false)}
                 className={cn(
                   item,
-                  active ? "bg-apricot/15 text-apricot" : "text-copy/75 hover:bg-edge/40 hover:text-copy",
+                  active ? "bg-brand/15 text-brand" : "text-copy/75 hover:bg-edge/40 hover:text-copy",
                   focusRing,
                 )}
               >

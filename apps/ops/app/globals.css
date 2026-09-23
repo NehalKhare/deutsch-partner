@@ -2,6 +2,8 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@dp/ui/theme.css";
+/* After the theme it overrides: both write `:root`, so source order decides. */
+@import "@dp/ui/theme-ops.css";
 
 /* Tailwind skips node_modules when it looks for class names, and the shared
    components are reached through a workspace symlink there. Without this the

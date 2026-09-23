@@ -128,9 +128,9 @@ function settledActivity(run: BoardRun): RunActivity {
 }
 
 const TONE: Readonly<Record<RunActivity, string>> = {
-  working: "border-apricot/60 bg-apricot/10 text-apricot",
+  working: "border-brand/60 bg-brand/10 text-brand",
   stalled: "border-ember/60 bg-ember/10 text-ember",
-  waiting: "border-apricot/60 bg-apricot/10 text-apricot",
+  waiting: "border-brand/60 bg-brand/10 text-brand",
   worker: "border-edge bg-ground/40 text-copy/70",
   done: "border-edge bg-ground/40 text-copy/60",
   failed: "border-ember/60 bg-ember/10 text-ember",
@@ -177,7 +177,7 @@ function RunCard({
         card,
         "flex flex-col gap-2 p-4",
         activity === "stalled" && "border-ember/40",
-        activity === "waiting" && "border-apricot/40",
+        activity === "waiting" && "border-brand/40",
       )}
     >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">

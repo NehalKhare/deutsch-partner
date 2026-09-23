@@ -15,7 +15,12 @@ describe("what is due", () => {
 
     expect(dueKinds(last, 4 * minute)).toEqual([]);
     expect(dueKinds(last, 5 * minute)).toEqual(["productops.reconcile"]);
-    expect(dueKinds(last, 60 * minute)).toEqual(["productops.reconcile", "fx.refresh", "ratelimit.purge"]);
+    expect(dueKinds(last, 60 * minute)).toEqual([
+      "productops.reconcile",
+      "fx.refresh",
+      "ratelimit.purge",
+      "cost.rollup",
+    ]);
   });
 });
 

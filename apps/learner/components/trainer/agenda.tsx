@@ -39,7 +39,7 @@ export interface AgendaEntry {
  * already uses for skills), a recurring mistake is ember (it is the one thing
  * here that went wrong), a grammar drill is rose (grammar work, but nothing
  * has gone wrong), and the reading item is blue. The accent stays out of it —
- * apricot marks what is happening now, not what kind of thing it is.
+ * brand marks what is happening now, not what kind of thing it is.
  */
 const KINDS: Readonly<
   Record<string, { readonly label: string; readonly dot: string; readonly tint: string }>
@@ -121,7 +121,7 @@ export function TrainerAgenda({ plan, finished }: TrainerAgendaProps) {
               data-current={String(now)}
               className={cn(
                 "-mx-1.5 flex items-baseline gap-2 rounded-lg px-1.5 py-0.5 text-sm",
-                now && "bg-apricot/10",
+                now && "bg-brand/10",
               )}
             >
               <span
@@ -150,7 +150,7 @@ export function TrainerAgenda({ plan, finished }: TrainerAgendaProps) {
                   >
                     {kind.label || item.kind}
                     {now ? (
-                      <span className="text-apricot"> · now</span>
+                      <span className="text-brand"> · now</span>
                     ) : null}
                   </span>
                 ) : null}

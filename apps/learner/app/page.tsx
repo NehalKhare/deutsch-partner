@@ -33,7 +33,7 @@ export default function Home() {
           </Link>
           <Link
             href="/auth/sign-up"
-            className="rounded-full border border-apricot px-4 py-1.5 font-display text-apricot hover:bg-apricot/10"
+            className="rounded-full border border-brand px-4 py-1.5 font-display text-brand hover:bg-brand/10"
           >
             Start free
           </Link>
@@ -54,7 +54,7 @@ export default function Home() {
             >
               Sprich einfach los.
             </h1>
-            <p className="font-display text-xl text-apricot">
+            <p className="font-display text-xl text-brand">
               Just start talking.
             </p>
 
@@ -94,12 +94,12 @@ export default function Home() {
                   You
                 </p>
                 <p lang="de" className="text-xl leading-relaxed">
-                  Ich <mark className="bg-transparent text-apricot underline decoration-apricot/50 decoration-wavy underline-offset-4">habe</mark>{" "}
+                  Ich <mark className="bg-transparent text-brand underline decoration-brand/50 decoration-wavy underline-offset-4">habe</mark>{" "}
                   gestern nach Berlin gefahren.
                 </p>
               </div>
 
-              <div className="flex flex-col gap-2 border-l-2 border-apricot/40 pl-5">
+              <div className="flex flex-col gap-2 border-l-2 border-brand/40 pl-5">
                 <p className="font-display text-xs uppercase tracking-[0.16em] text-copy/40">
                   {TUTOR.name}
                 </p>
@@ -174,7 +174,7 @@ export default function Home() {
                 key={room.name}
                 className="flex flex-col gap-2 rounded-2xl border border-edge/70 bg-panel/50 p-5"
               >
-                <h3 className="font-display text-lg font-semibold text-apricot">
+                <h3 className="font-display text-lg font-semibold text-brand">
                   {room.name}
                 </h3>
                 <p className="text-sm leading-relaxed text-copy/70">{room.what}</p>
@@ -284,7 +284,7 @@ export default function Home() {
                   ] as const
                 ).map(([level, means]) => (
                   <tr key={level} className="border-t border-edge/50">
-                    <th scope="row" className="py-3 pr-4 font-semibold text-apricot">
+                    <th scope="row" className="py-3 pr-4 font-semibold text-brand">
                       {level}
                     </th>
                     <td className="py-3 pr-4 text-copy/80">

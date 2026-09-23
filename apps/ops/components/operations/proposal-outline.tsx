@@ -47,7 +47,7 @@ export function ProposalOutline({
               href={`#${item.id}`}
               className={cn(
                 outlineLink,
-                item.accent && "text-apricot hover:text-apricot",
+                item.accent && "text-brand hover:text-brand",
               )}
             >
               <span className="min-w-0 flex-1">{item.label}</span>

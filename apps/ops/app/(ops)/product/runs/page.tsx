@@ -5,8 +5,6 @@ import {
   retryRunAction,
   startScanAction,
 } from "../actions";
-import { FeedbackPanel } from "@/components/operations/feedback-panel";
-import { OpsSwitch } from "@/components/operations/ops-switch";
 import { RunsPanel } from "@/components/operations/runs-panel";
 import { PendingButton } from "@dp/ui/pending-button";
 import {
@@ -22,7 +20,6 @@ import {
 } from "@dp/ui/styles";
 import { createProductOpsReader } from "@/lib/api/composition";
 import { requireOperator } from "@/lib/auth/require-operator";
-import { FEEDBACK_WINDOW_DAYS } from "@dp/db/learner-feedback-repository";
 import { boardTotals } from "@dp/product-ops/view";
 import { cn } from "@dp/ui/utils";
 
@@ -32,8 +29,7 @@ export const metadata = { title: "Market scans & runs — Deutsch Partner" };
 const BOARD_LIMIT = 50;
 
 /**
- * The operating half of product ops: scans, the runs they start, and what
- * learners said about the trainer.
+ * The operating half of product ops: scans, and the runs they start.
  *
  * Split from the proposals board because the two are different jobs. Deciding
  * on a proposal is reading and judging; this page is machinery, and the runs
@@ -41,11 +37,10 @@ const BOARD_LIMIT = 50;
  * that redraws under a person mid-sentence is the wrong page to be deciding
  * on, and a board that redrew was the reason.
  *
- * The order is cause before effect: the button that starts a scan, the runs it
- * appears in, then the learner feedback every scan records as its first
- * finding before it searches the web. That last section is the input to the
- * next scan rather than the output of the last one, which is why it reads
- * better at the end than between the button and its result.
+ * The order is cause before effect: the button that starts a scan, then the
+ * runs it appears in. What learners say about the trainer used to close this
+ * page, because a scan reads it first; it has its own room now, since that is
+ * a fact about the pipeline rather than a reason to scroll past a run queue.
  *
  * The gates are the same two as everywhere else in this segment, and both are
  * on the server: the operator allowlist, 404 rather than 403, and RLS with no
@@ -54,24 +49,17 @@ const BOARD_LIMIT = 50;
 export default async function ProductOpsRunsPage() {
   await requireOperator({ route: "/product/runs" });
 
-  const { runs, feedback } = createProductOpsReader();
-  const [board, learnerFeedback] = await Promise.all([
-    runs.board(BOARD_LIMIT),
-    feedback.summary({ days: FEEDBACK_WINDOW_DAYS }),
-  ]);
+  const { runs } = createProductOpsReader();
+  const board = await runs.board(BOARD_LIMIT);
 
   const header = (
-    <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-      <div className="flex flex-col gap-2">
-        <p className={eyebrow}>Operations</p>
-        <h1 className={pageTitle}>Market scans & runs</h1>
-        <p className={cn(prose, "max-w-2xl")}>
-          Where the work happens: start a scan, watch what it does, and read
-          what learners have been saying about the trainer. What comes out of a
-          scan is decided on the proposals board.
-        </p>
-      </div>
-      <OpsSwitch to="proposals" className="shrink-0" />
+    <header className="flex flex-col gap-2">
+      <p className={eyebrow}>Operations</p>
+      <h1 className={pageTitle}>Market scans & runs</h1>
+      <p className={cn(prose, "max-w-2xl")}>
+        Where the work happens: start a scan and watch what it does. What comes
+        out of one is decided under Feature proposals.
+      </p>
     </header>
   );
 
@@ -153,24 +141,6 @@ export default async function ProductOpsRunsPage() {
         />
       </section>
 
-      <section aria-labelledby="feedback-heading" className="flex flex-col gap-3">
-        <div className="flex flex-col gap-1">
-          <h2 id="feedback-heading" className={sectionTitle}>
-            What learners say about the trainer
-          </h2>
-          <p className="text-sm text-copy/60">
-            The last {FEEDBACK_WINDOW_DAYS} days of votes under trainer replies. Every
-            scan records this as its first finding, before it searches the web.
-          </p>
-        </div>
-        {learnerFeedback.ok ? (
-          <FeedbackPanel summary={learnerFeedback.data} />
-        ) : (
-          <p className={cn(card, "text-sm text-copy/70")}>
-            Learner feedback could not be read.
-          </p>
-        )}
-      </section>
     </main>
   );
 }

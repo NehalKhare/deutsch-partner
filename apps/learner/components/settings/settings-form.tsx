@@ -322,7 +322,7 @@ function SettingsFields({ profile }: { readonly profile: LearnerProfile }) {
           aria-label="Pass mark for moving up"
           aria-describedby="masteryThreshold-hint"
           aria-valuetext={`${THRESHOLD_LABELS[draft.masteryThreshold]} — ${draft.masteryThreshold}% of turns error-free`}
-          className="w-full max-w-xs accent-apricot"
+          className="w-full max-w-xs accent-brand"
         />
         <p className="text-sm text-copy/70" aria-hidden>
           {MASTERY_THRESHOLDS.map((value, index) => (
@@ -331,7 +331,7 @@ function SettingsFields({ profile }: { readonly profile: LearnerProfile }) {
               <span
                 className={cn(
                   draft.masteryThreshold === value
-                    ? "font-semibold text-apricot"
+                    ? "font-semibold text-brand"
                     : "text-copy/45",
                 )}
               >

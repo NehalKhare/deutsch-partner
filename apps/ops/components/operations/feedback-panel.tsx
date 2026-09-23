@@ -72,7 +72,7 @@ export function FeedbackPanel({ summary }: { readonly summary: LearnerFeedbackSu
                   </span>
                   <span aria-hidden className="h-1 rounded-full bg-edge/60">
                     <span
-                      className="block h-1 rounded-full bg-apricot/70"
+                      className="block h-1 rounded-full bg-brand/70"
                       style={{ width: `${Math.round((entry.count / maxReason) * 100)}%` }}
                     />
                   </span>

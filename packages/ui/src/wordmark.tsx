@@ -11,7 +11,7 @@ export function Wordmark({ href = "/" }: { href?: string }) {
   return (
     <Link
       href={href}
-      className="rounded-sm font-display text-lg font-semibold tracking-tight text-copy focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-apricot"
+      className="rounded-sm font-display text-lg font-semibold tracking-tight text-copy focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-brand"
     >
       Deutsch Partner
     </Link>

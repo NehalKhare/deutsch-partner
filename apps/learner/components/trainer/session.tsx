@@ -69,7 +69,7 @@ function ReadAloudToggle({
       className={cn(
         "flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 font-display text-xs",
         "uppercase tracking-wider transition-colors",
-        on ? "text-apricot" : "text-copy/70 hover:text-copy",
+        on ? "text-brand" : "text-copy/70 hover:text-copy",
         focusRing,
       )}
     >
@@ -324,7 +324,7 @@ export function TrainerSession({
                 <li
                   key={entry.id}
                   data-role="user"
-                  className="max-w-[85%] self-end rounded-2xl rounded-br-md bg-apricot px-4 py-2.5 leading-relaxed text-on-accent"
+                  className="max-w-[85%] self-end rounded-2xl rounded-br-md bg-brand px-4 py-2.5 leading-relaxed text-on-accent"
                 >
                   {entry.content}
                 </li>
@@ -352,8 +352,8 @@ export function TrainerSession({
                         }
                         aria-pressed={speakingId === entry.id}
                         className={cn(
-                          "mt-1.5 shrink-0 rounded-full p-1.5 text-copy/60 transition-colors hover:text-apricot",
-                          speakingId === entry.id && "text-apricot",
+                          "mt-1.5 shrink-0 rounded-full p-1.5 text-copy/60 transition-colors hover:text-brand",
+                          speakingId === entry.id && "text-brand",
                           focusRing,
                         )}
                       >
@@ -373,7 +373,7 @@ export function TrainerSession({
                           key={`${entry.id}-step-${index}`}
                           className="flex items-baseline gap-2 text-xs text-copy/60"
                         >
-                          <span aria-hidden className="text-apricot/70">
+                          <span aria-hidden className="text-brand/70">
                             ⚙
                           </span>
                           <span>
@@ -412,7 +412,7 @@ export function TrainerSession({
           <p role="status" className="flex items-center gap-2 px-1 text-sm text-copy/60">
             <span
               aria-hidden
-              className="size-2 animate-pulse rounded-full bg-apricot"
+              className="size-2 animate-pulse rounded-full bg-brand"
             />
             Your trainer is working — checking tools and thinking…
           </p>

@@ -44,7 +44,7 @@ export function ScenarioCard({
         <h3 className="font-display text-lg font-semibold tracking-tight text-copy">
           <Link
             href={`/scenarios/${scenario.slug}`}
-            className={cn("rounded-sm hover:text-apricot", focusRing)}
+            className={cn("rounded-sm hover:text-brand", focusRing)}
           >
             {scenario.title}
           </Link>

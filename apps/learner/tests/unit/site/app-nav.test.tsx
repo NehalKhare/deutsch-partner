@@ -117,7 +117,7 @@ describe("where you are", () => {
     renderNav();
 
     expect(screen.getByRole("link", { name: "Scenarios" })).toHaveClass(
-      "text-apricot",
+      "text-brand",
     );
   });
 });

@@ -1,6 +1,6 @@
 import { OpsSkeleton } from "@/components/operations/ops-skeleton";
 
-/** The board's shell, so the switch between the two pages is a click. */
+/** The board's shell, so arriving from the rail is a click. */
 export default function Loading() {
-  return <OpsSkeleton title="Product ops" bands={2} />;
+  return <OpsSkeleton title="Feature proposals" bands={2} />;
 }

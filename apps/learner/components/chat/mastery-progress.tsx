@@ -61,7 +61,7 @@ export function MasteryProgress({
           data-fill
           className={cn(
             "h-full rounded-full transition-[width] duration-500",
-            lastTurn === "weak" ? "bg-ember" : "bg-apricot",
+            lastTurn === "weak" ? "bg-ember" : "bg-brand",
           )}
           style={{ width: `${percent}%` }}
         />
@@ -92,7 +92,7 @@ export function MasteryProgress({
           data-turn-quality={lastTurn}
           className={cn(
             "font-display text-xs",
-            lastTurn === "strong" ? "text-apricot" : "text-ember",
+            lastTurn === "strong" ? "text-brand" : "text-ember",
           )}
         >
           {lastTurn === "strong" ? "+ error-free" : "− had errors"}
@@ -100,7 +100,7 @@ export function MasteryProgress({
       ) : null}
 
       {ready ? (
-        <span className="font-display text-xs text-apricot">
+        <span className="font-display text-xs text-brand">
           Ready to move up — whenever you are.
         </span>
       ) : null}

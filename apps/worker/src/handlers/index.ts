@@ -1,6 +1,7 @@
 import type { JobPayload } from "@dp/domain/jobs";
 
 import type { WorkerContext } from "../composition";
+import { rebuildCostRollup } from "./cost-rollup";
 import { driveRun } from "./drive";
 import { refreshFxRate } from "./fx-refresh";
 import { implementProposal } from "./implement";
@@ -34,5 +35,7 @@ export async function handleJob(
       return ingestKnowledge(payload, context, run);
     case "ratelimit.purge":
       return purgeRateLimits(payload, context, run);
+    case "cost.rollup":
+      return rebuildCostRollup(payload, context, run);
   }
 }

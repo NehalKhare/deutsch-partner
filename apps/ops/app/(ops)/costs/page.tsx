@@ -19,6 +19,8 @@ import {
   spendPerLearnerUsd,
   worstAlert,
 } from "@/lib/costs";
+import { createSpendHistoryRepository } from "@/lib/spend-history";
+import { SpendExplorer } from "@/components/costs/spend-explorer";
 import { createSecretKeySupabaseClient } from "@/lib/supabase/server-client";
 import type { DatabaseClient } from "@dp/db/types";
 
@@ -56,7 +58,18 @@ export default async function CostDashboardPage() {
 
   // The euro rate the ledger prices in is snapshotted by the worker once a
   // day; the button in the header asks it to ask again. This page reads.
-  const summary = await createCostRepository(client).summary(from, to);
+  //
+  // Two reads, because they answer two questions off two tables. The live
+  // figures come from the ledger over a bounded recent window; the year comes
+  // from the daily rollup, which is what the spec says a historical view may
+  // scan. Neither is ever used to fill in for the other.
+  const [summary, history] = await Promise.all([
+    createCostRepository(client).summary(from, to),
+    createSpendHistoryRepository(client).series(
+      new Date(Date.UTC(to.getUTCFullYear(), 0, 1)),
+      to,
+    ),
+  ]);
 
   if (!summary.ok) {
     return (
@@ -101,7 +114,7 @@ export default async function CostDashboardPage() {
   ];
 
   return (
-    <main className="mx-auto flex w-full max-w-4xl flex-col gap-8 px-6 py-10 md:px-10 md:py-14">
+    <main className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-6 py-10 md:px-10 md:py-14">
       <header className="flex flex-col gap-2">
         <h1 className={pageTitle}>AI spend</h1>
         <p className="font-display text-sm text-copy/60">
@@ -143,7 +156,7 @@ export default async function CostDashboardPage() {
                 "rounded-xl border px-4 py-2.5 text-sm",
                 // Warn is the colour of the product; anything past it is not.
                 alert.level === "warn"
-                  ? "border-apricot/50 bg-apricot/10 text-apricot"
+                  ? "border-brand/50 bg-brand/10 text-brand"
                   : "border-ember/50 bg-ember/10 text-ember",
               ].join(" ")}
             >
@@ -156,7 +169,38 @@ export default async function CostDashboardPage() {
         </ul>
       ) : null}
 
-      <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {/* The year, and the thing this page is now for: when the money went,
+          not only how much went today.
+
+          A rollup that could not be read says so. It does not fall back to
+          anything: a figure on a cost screen either came from the ledger or
+          it is not a figure, and the one substitution nobody can afford is
+          the silent one. */}
+      {history.ok ? (
+        <SpendExplorer
+          series={history.data}
+          dailyLimitEur={GLOBAL_DAILY_LIMIT_EUR}
+          asOf={to}
+        />
+      ) : (
+        <p role="alert" className="rounded-xl border border-ember/50 bg-ember/10 px-4 py-3 text-sm text-ember">
+          <strong className="font-display font-semibold">
+            The daily rollup could not be read.
+          </strong>{" "}
+          The year is unavailable. Today&rsquo;s figures below come from the
+          ledger directly and are unaffected.
+        </p>
+      )}
+
+      <section aria-labelledby="live-heading" className="flex flex-col gap-6">
+        <h2 id="live-heading" className={sectionTitle}>
+          Last 24 hours
+        </h2>
+
+        {/* Below the year on purpose. These are the real figures and they stay
+            exactly as they were — the ledger, over a bounded window, in euro
+            with the dollars beside them. */}
+        <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {tiles.map((tile) => (
           <div key={tile.label} className={stat}>
             <dt className={eyebrow}>{tile.label}</dt>
@@ -172,7 +216,7 @@ export default async function CostDashboardPage() {
             </dd>
           </div>
         ))}
-      </dl>
+        </dl>
 
       <section aria-labelledby="task-heading" className="flex flex-col gap-2 overflow-x-auto">
         <h2 id="task-heading" className={sectionTitle}>
@@ -183,6 +227,7 @@ export default async function CostDashboardPage() {
             <tr>
               <th scope="col" className="py-1">Task</th>
               <th scope="col">Tier</th>
+              <th scope="col">Model</th>
               <th scope="col" className="text-right">Calls</th>
               <th scope="col" className="text-right">Tokens in</th>
               <th scope="col" className="text-right">Tokens out</th>
@@ -193,18 +238,23 @@ export default async function CostDashboardPage() {
           <tbody>
             {data.byTask.length === 0 ? (
               <tr className="border-t border-edge/50">
-                <td colSpan={7} className="py-3 font-body text-copy/45">
+                <td colSpan={8} className="py-3 font-body text-copy/45">
                   No calls in this window.
                 </td>
               </tr>
             ) : null}
             {data.byTask.map((row) => (
               <tr
-                key={`${row.task}:${row.tier}`}
+                // Model joins the key: a task that escalated mid-window is two
+                // rows, and they are only distinguishable by what ran.
+                key={`${row.task}:${row.tier}:${row.modelId}`}
                 className="border-t border-edge/50 text-copy/80"
               >
                 <td className="py-1">{row.task}</td>
                 <td>{row.tier}</td>
+                {/* What the provider actually ran. The requested id is the
+                    registry's business; this is the one that was billed. */}
+                <td className="whitespace-nowrap">{row.modelId}</td>
                 <td className="text-right tabular-nums">{row.calls}</td>
                 <td className="text-right tabular-nums">{row.inputTokens}</td>
                 <td className="text-right tabular-nums">{row.outputTokens}</td>
@@ -251,6 +301,7 @@ export default async function CostDashboardPage() {
             ))}
           </tbody>
         </table>
+      </section>
       </section>
     </main>
   );

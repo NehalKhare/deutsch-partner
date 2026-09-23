@@ -78,7 +78,7 @@ export function RunActivityPanel({
               className={cn(
                 eyebrow,
                 "shrink-0",
-                report.activity === "working" && "text-apricot",
+                report.activity === "working" && "text-brand",
                 report.activity === "stalled" && "text-ember",
                 report.activity === "failed" && "text-ember",
               )}

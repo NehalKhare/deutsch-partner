@@ -7,7 +7,7 @@
  * and a quiet link beside a heading is a thing the eye files as chrome.
  *
  * So it is lit like a halogen bulb: a warm-white filament core bleeding out to
- * the product's apricot, with the bloom carried on a pseudo-element rather
+ * the product's brand, with the bloom carried on a pseudo-element rather
  * than on the box-shadow itself — opacity composites, a growing shadow does
  * not, and this thing breathes for as long as the page is open.
  */
@@ -17,7 +17,7 @@
      Local aliases because `--filament` is the global name and a property
      cannot be defined in terms of itself. */
   --core: var(--filament);
-  --halogen: var(--apricot);
+  --halogen: var(--brand);
   --deep: var(--filament-deep);
 
   position: relative;

@@ -187,7 +187,7 @@ export function ReplyFeedback({
                   className={cn(
                     "rounded-full border px-2.5 py-0.5 text-xs transition-colors",
                     on
-                      ? "border-apricot bg-apricot/15 text-apricot"
+                      ? "border-brand bg-brand/15 text-brand"
                       : "border-edge/70 text-copy/70 hover:text-copy",
                     focusRing,
                   )}
@@ -217,7 +217,7 @@ export function ReplyFeedback({
               type="submit"
               disabled={stage.kind === "sending"}
               className={cn(
-                "rounded-full bg-apricot px-3 py-1.5 text-xs font-medium text-on-accent",
+                "rounded-full bg-brand px-3 py-1.5 text-xs font-medium text-on-accent",
                 "disabled:opacity-60",
                 focusRing,
               )}

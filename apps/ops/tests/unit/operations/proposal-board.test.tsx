@@ -13,9 +13,13 @@ import { workerCommandFor } from "@dp/product-ops/view";
  * The board an operator reads before deciding anything.
  *
  * What is checked here is that it can be read: that each column is a landmark
- * with a name, that a card says whose move it is, and that a stage only a CLI
- * worker can run offers the command rather than a button that would lie about
- * what this page can do.
+ * with a name, that a stage only a CLI worker can run offers the command
+ * rather than a button that would lie about what this page can do, and that a
+ * run which stopped says so.
+ *
+ * Whose move it is comes from the column an operator finds the card in. The
+ * card used to repeat it in a sentence of its own and no longer does — with
+ * one exception, below, which is the case the column gets wrong.
  */
 
 const PROPOSAL: BoardProposal = {
@@ -94,10 +98,42 @@ describe("the board", () => {
     ).toHaveAttribute("href", `/product/${PROPOSAL.id}`);
   });
 
-  it("says what to do next, on the card", () => {
+  it("keeps the card to its title and its figures", () => {
     render(<ProposalBoard board={board()} />);
 
-    expect(screen.getByText(/approve it to generate a prd/i)).toBeInTheDocument();
+    // The column heading above it already says a decision is needed. Five
+    // cards each repeating that in a sentence is what pushed the board off
+    // the screen.
+    expect(screen.queryByText(/approve it to generate a prd/i)).not.toBeInTheDocument();
+    expect(screen.getByText("78/100")).toBeInTheDocument();
+    expect(screen.getByText("medium")).toBeInTheDocument();
+  });
+
+  it("marks a run that stopped, which its column does not", () => {
+    // The proposal keeps the status it had when the run died, so it sits in
+    // "In progress" among the healthy ones. Without this it is invisible.
+    render(
+      <ProposalBoard
+        board={board({
+          proposals: [
+            {
+              ...PROPOSAL,
+              status: "coding",
+              runStage: "implementation",
+              runStatus: "failed",
+            },
+          ],
+        })}
+      />,
+    );
+
+    expect(screen.getByText("Stopped")).toBeInTheDocument();
+  });
+
+  it("says nothing about stopping when the run is fine", () => {
+    render(<ProposalBoard board={board()} />);
+
+    expect(screen.queryByText("Stopped")).not.toBeInTheDocument();
   });
 
   it("offers the worker command rather than a button it cannot honour", () => {

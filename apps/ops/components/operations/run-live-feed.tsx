@@ -126,12 +126,12 @@ export function RunLiveFeed({
       </ol>
       {state === "live" ? (
         <p
-          className="flex items-center gap-2 font-display text-xs text-apricot/80"
+          className="flex items-center gap-2 font-display text-xs text-brand/80"
           role="status"
         >
           <span
             aria-hidden="true"
-            className="inline-block size-1.5 animate-pulse rounded-full bg-apricot"
+            className="inline-block size-1.5 animate-pulse rounded-full bg-brand"
           />
           Waiting on the model…
         </p>

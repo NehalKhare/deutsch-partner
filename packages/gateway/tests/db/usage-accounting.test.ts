@@ -548,6 +548,66 @@ describe("cost_dashboard", () => {
     ]);
   });
 
+  it("names the model each task was actually routed to", async () => {
+    await record({ cost_usd: 0.004 }, []);
+
+    const row = (await summary()).byTask[0];
+
+    // model_id_resolved, not model_id: OpenRouter resolves what the registry
+    // asked for, and the bill follows what ran.
+    expect(row.modelId).toBe("vendor/model-2026-01");
+    expect(row.task).toBe("conversation.turn");
+  });
+
+  it("splits a task that reached two models into two rows", async () => {
+    // An escalation, a fallback, or OpenRouter routing the same request
+    // somewhere else. Folded into one row it is invisible; split, it is the
+    // signal the By-task table exists to show.
+    await record({ model_id_resolved: "vendor/cheap", cost_usd: 0.001 }, []);
+    await record({ model_id_resolved: "vendor/expensive", cost_usd: 0.05 }, []);
+
+    const rows = (await summary()).byTask;
+
+    expect(rows).toHaveLength(2);
+    expect(rows.map((row) => row.modelId)).toEqual([
+      "vendor/expensive",
+      "vendor/cheap",
+    ]);
+    // Split, not double-counted: the two rows still add up to the window.
+    expect(rows.reduce((total, row) => total + Number(row.costUsd), 0)).toBeCloseTo(
+      0.051,
+      8,
+    );
+  });
+
+  it("keeps a task's rows together, ordered by what the task cost", async () => {
+    // A cheap task's single row must not sort between the two rows of an
+    // expensive one, or the split reads as two unrelated tasks.
+    await record({ task: "conversation.turn", model_id_resolved: "vendor/a", cost_usd: 0.04 }, []);
+    await record({ task: "conversation.turn", model_id_resolved: "vendor/b", cost_usd: 0.03 }, []);
+    await record({ task: "classification.intent", tier: "nano", model_id_resolved: "vendor/c", cost_usd: 0.05 }, []);
+
+    const rows = (await summary()).byTask;
+
+    expect(rows.map((row) => [row.task, row.modelId])).toEqual([
+      // conversation.turn totals 0.07 and outranks the 0.05 single row, even
+      // though neither of its own rows does.
+      ["conversation.turn", "vendor/a"],
+      ["conversation.turn", "vendor/b"],
+      ["classification.intent", "vendor/c"],
+    ]);
+  });
+
+  it("still reports one row for a task that stayed on one model", async () => {
+    await record({ cost_usd: 0.004 }, []);
+    await record({ cost_usd: 0.006 }, []);
+
+    const rows = (await summary()).byTask;
+
+    expect(rows).toHaveLength(1);
+    expect(Number(rows[0].calls)).toBe(2);
+  });
+
   it("states the rate behind the euro column when there is one", async () => {
     await database.db.exec(`
       insert into public.fx_rates (base_currency, quote_currency, rate, rate_date, source)

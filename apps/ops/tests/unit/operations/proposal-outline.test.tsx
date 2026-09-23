@@ -72,10 +72,10 @@ describe("the outline", () => {
     render(<ProposalOutline items={ITEMS} />);
 
     expect(screen.getByRole("link", { name: /your decision/i }).className).toContain(
-      "text-apricot",
+      "text-brand",
     );
     expect(screen.getByRole("link", { name: /timeline/i }).className).not.toContain(
-      "text-apricot",
+      "text-brand",
     );
   });
 
@@ -87,7 +87,7 @@ describe("the outline", () => {
     );
 
     expect(screen.getByRole("link", { name: /your decision/i }).className).not.toContain(
-      "text-apricot",
+      "text-brand",
     );
   });
 });

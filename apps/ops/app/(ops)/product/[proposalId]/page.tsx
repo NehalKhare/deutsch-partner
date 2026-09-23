@@ -133,7 +133,7 @@ export default async function ProposalPage({
       <header className="flex flex-col gap-2">
         <p className={eyebrow}>
           <Link href="/product" className={linkInline}>
-            Product ops
+            Feature proposals
           </Link>
         </p>
         <h1 className={pageTitle}>{proposal.data.title}</h1>
@@ -508,7 +508,7 @@ function Breakdown({ breakdown }: { readonly breakdown: EngineeringBreakdown }) 
 
 function SizeBadge({ size }: { readonly size: TShirtSize }) {
   return (
-    <span className="rounded-full border border-edge px-2 py-0.5 font-display text-[0.65rem] font-semibold uppercase tracking-wider text-apricot">
+    <span className="rounded-full border border-edge px-2 py-0.5 font-display text-[0.65rem] font-semibold uppercase tracking-wider text-brand">
       {sizeLabel(size)}
     </span>
   );

@@ -24,7 +24,7 @@ function Spans({ spans }: { readonly spans: readonly Span[] }) {
           // corrected form, the sentence to fix, the question — and on this
           // dark ground weight alone barely registers at reading size.
           return (
-            <strong key={key} className="font-semibold text-apricot">
+            <strong key={key} className="font-semibold text-brand">
               {span.text}
             </strong>
           );
@@ -37,7 +37,7 @@ function Spans({ spans }: { readonly spans: readonly Span[] }) {
           );
         }
         if (span.kind === "code") {
-          // The counterpart of the apricot bold above: the tutor and trainer
+          // The counterpart of the brand bold above: the tutor and trainer
           // are told to quote the learner's wrong form in backticks, so this
           // is the mistake's colour — ember, same as everywhere else the
           // product points at something that went wrong.

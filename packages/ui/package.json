@@ -16,7 +16,9 @@
     "./theme-script": "./src/theme-script.tsx",
     "./theme-toggle": "./src/theme-toggle.tsx",
     "./device-preference": "./src/device-preference.ts",
-    "./theme-store": "./src/theme-store.ts"
+    "./theme-store": "./src/theme-store.ts",
+    "./use-disclosure": "./src/use-disclosure.ts",
+    "./theme-ops.css": "./src/theme-ops.css"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

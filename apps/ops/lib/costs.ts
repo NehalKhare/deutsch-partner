@@ -50,6 +50,12 @@ export const costSummarySchema = z.object({
       z.object({
         task: z.string(),
         tier: tierSchema,
+        /**
+         * What the provider actually ran, which is not always what the
+         * registry asked for: OpenRouter resolves, tiers escalate, providers
+         * fall back. A task that reached two models is two rows here.
+         */
+        modelId: z.string(),
         calls: numeric.int().min(0),
         costEur: numeric.min(0),
         costUsd: numeric.min(0),
@@ -58,7 +64,7 @@ export const costSummarySchema = z.object({
         outputTokens: numeric.int().min(0),
       }),
     )
-    .max(50),
+    .max(200),
   byModel: z
     .array(
       z.object({
@@ -69,7 +75,7 @@ export const costSummarySchema = z.object({
         costUsdUnpriced: numeric.min(0),
       }),
     )
-    .max(50),
+    .max(200),
   /** The rate and date behind every euro figure on the page. */
   fxRate: z
     .array(

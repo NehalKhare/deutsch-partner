@@ -131,7 +131,7 @@ export function ScenarioExplorer({
             className={cn(
               "rounded-full px-3 py-1.5 font-display text-sm whitespace-nowrap transition-colors",
               filter === tab.value
-                ? "bg-apricot/15 text-apricot"
+                ? "bg-brand/15 text-brand"
                 : "text-copy/60 hover:text-copy",
               focusRing,
             )}

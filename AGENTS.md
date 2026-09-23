@@ -26,12 +26,19 @@ an AI-powered German-learning web application for English-speaking learners.
   `globals.css`. The house style is composing the class strings exported from
   `@dp/ui/styles`. There are two themes, dark and light, and the colour tokens
   are named for the **role** they play (`ground`, `panel`, `edge`, `copy`,
-  `on-accent`) rather than the material they are made of — a class cannot say
-  `bg-ink` and mean a near-white page. Both palettes are defined in that one
-  file and a test holds them level. Dark is the base; light arrives either from
-  `prefers-color-scheme` or from an explicit `data-theme` on `<html>`, which is
-  what `@dp/ui/theme-toggle` writes and `@dp/ui/theme-script` restores before
-  the first paint.
+  `brand`, `on-accent`) rather than the material they are made of — a class
+  cannot say `bg-ink` and mean a near-white page, or `bg-apricot` and mean
+  blue. Dark is the base; light arrives either from `prefers-color-scheme` or
+  from an explicit `data-theme` on `<html>`, which is what `@dp/ui/theme-toggle`
+  writes and `@dp/ui/theme-script` restores before the first paint.
+- **Two palettes, one set of role names.** The learner wears the warm palette in
+  `theme.css`. The operator app overrides the values — and only the values — in
+  `packages/ui/src/theme-ops.css`, which is Atlassian's, imported by
+  `apps/ops/app/globals.css` *after* `theme.css` because equal specificity is
+  settled by source order. No component knows which product it is in. Tests
+  hold the two palettes level and hold the ops override complete, so a token
+  replaced in one theme but not the other, or missed entirely, fails the build
+  rather than showing one warm colour on an otherwise blue page.
 - **Model access:** OpenRouter, reached only through the in-house `ModelGateway`
   (`packages/gateway`) over a hand-written transport. Only the learner app and the
   worker hold a model key; the operator app enqueues work and calls no model. There is no Vercel AI SDK in this

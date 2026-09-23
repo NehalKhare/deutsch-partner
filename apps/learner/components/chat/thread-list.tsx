@@ -29,7 +29,7 @@ export interface RecentThread {
 
 const rowClass =
   "flex items-center justify-between gap-3 rounded-xl border border-edge/60 " +
-  "px-4 py-2.5 transition-colors hover:border-apricot/50";
+  "px-4 py-2.5 transition-colors hover:border-brand/50";
 
 const quietControl =
   `shrink-0 rounded-full px-3 py-1 font-display text-xs uppercase ` +
