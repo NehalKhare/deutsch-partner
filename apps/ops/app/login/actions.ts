@@ -113,9 +113,23 @@ export async function verifyMfaAction(
   redirect(HOME_PATH);
 }
 
-export async function beginEnrolmentAction(
+/**
+ * Enrolment is one action with two intents, so that the form can keep one
+ * action state across both submits and the confirm step is handed the factor
+ * the begin step minted. A confirm with nothing minted yet is treated as a
+ * begin: there is nothing to check a code against.
+ */
+export async function enrolmentAction(
   previous: EnrolmentFormState,
+  formData: FormData,
 ): Promise<EnrolmentFormState> {
+  if (formData.get("intent") === "confirm" && previous.factorId) {
+    return confirmEnrolment(previous, formData);
+  }
+  return beginEnrolment(previous);
+}
+
+async function beginEnrolment(previous: EnrolmentFormState): Promise<EnrolmentFormState> {
   const session = await getOperatorSession();
   if (!session || !isOperator(session.sub)) redirect(LOGIN_PATH);
 
@@ -131,7 +145,7 @@ export async function beginEnrolmentAction(
   return { status: "enrolling", message: null, ...begun };
 }
 
-export async function confirmEnrolmentAction(
+async function confirmEnrolment(
   previous: EnrolmentFormState,
   formData: FormData,
 ): Promise<EnrolmentFormState> {

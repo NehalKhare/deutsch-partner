@@ -1,7 +1,7 @@
 import { QuietShell } from "@dp/ui/quiet-shell";
 import { pageTitle } from "@dp/ui/styles";
 
-import { beginEnrolmentAction, confirmEnrolmentAction } from "@/app/login/actions";
+import { enrolmentAction } from "@/app/login/actions";
 import { EnrolForm } from "@/components/enrol-form";
 import { INITIAL_ENROLMENT_STATE } from "@/lib/auth/login-state";
 import { requireOperator } from "@/lib/auth/require-operator";
@@ -16,11 +16,7 @@ export default async function EnrolPage() {
       <div className="flex flex-col gap-2">
         <h1 className={pageTitle}>Set up your authenticator</h1>
       </div>
-      <EnrolForm
-        begin={beginEnrolmentAction}
-        confirm={confirmEnrolmentAction}
-        initialState={INITIAL_ENROLMENT_STATE}
-      />
+      <EnrolForm action={enrolmentAction} initialState={INITIAL_ENROLMENT_STATE} />
     </QuietShell>
   );
 }
