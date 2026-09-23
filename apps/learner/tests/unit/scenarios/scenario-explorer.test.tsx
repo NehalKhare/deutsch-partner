@@ -213,3 +213,77 @@ describe("searching", () => {
     expect(screen.getByText("Im Restaurant")).toBeInTheDocument();
   });
 });
+
+describe("the layout toggle", () => {
+  it("starts on the grid, where a card carries its description", () => {
+    renderExplorer();
+
+    expect(screen.getByRole("button", { name: "Grid view" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByText("A customer orders lunch.")).toBeInTheDocument();
+  });
+
+  it("drops the descriptions in the list, which is what makes it dense", async () => {
+    const user = userEvent.setup();
+    renderExplorer();
+
+    await user.click(screen.getByRole("button", { name: "List view" }));
+
+    expect(screen.getByRole("button", { name: "List view" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await waitFor(() => {
+      expect(
+        screen.queryByText("A customer orders lunch."),
+      ).not.toBeInTheDocument();
+    });
+    // The scenarios themselves are all still there; only the prose went.
+    expect(screen.getByText("Im Restaurant")).toBeInTheDocument();
+    expect(screen.getByText("Ein neuer Morgen")).toBeInTheDocument();
+  });
+
+  it("keeps both actions named when they collapse to icons", async () => {
+    // An icon-only button has no accessible name of its own. If these labels
+    // ever drift from the grid's button text, the list view becomes the one
+    // place on the page a screen reader cannot follow.
+    const user = userEvent.setup();
+    renderExplorer();
+
+    await user.click(screen.getByRole("button", { name: "List view" }));
+
+    expect(
+      screen.getByRole("button", { name: "Practice Dialogue (AI Chat)" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Practice Reading (AI Chat)" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Read the script" })).toHaveAttribute(
+      "href",
+      "/scenarios/dialogue-a1-im-restaurant",
+    );
+    expect(
+      screen.getByRole("link", { name: "Read & self-check" }),
+    ).toHaveAttribute(
+      "href",
+      "/scenarios/comprehension-a1-reading-ein-neuer-morgen",
+    );
+  });
+
+  it("survives a filter change and keeps the chosen layout", async () => {
+    const user = userEvent.setup();
+    renderExplorer();
+
+    await user.click(screen.getByRole("button", { name: "List view" }));
+    await user.click(screen.getByRole("button", { name: "Dialogues" }));
+
+    expect(screen.getByRole("button", { name: "List view" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByText("Im Restaurant")).toBeInTheDocument();
+    expect(screen.queryByText("Ein neuer Morgen")).not.toBeInTheDocument();
+  });
+});

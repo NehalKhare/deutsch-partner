@@ -1,23 +1,29 @@
 "use client";
 
+import { MotionConfig, motion } from "framer-motion";
 import { useState } from "react";
 
+import { LAYOUT_SPRING, type ScenarioView } from "@/components/scenarios/view";
 import { ScenarioCard } from "@/components/scenarios/scenario-card";
+import { ScenarioViewToggle } from "@/components/scenarios/scenario-view-toggle";
 import { buttonQuiet, field, focusRing } from "@dp/ui/styles";
 import type { ScenarioSummary, ScenarioType } from "@dp/domain/scenario";
 import { cn } from "@dp/ui/utils";
 
 /**
  * The scenario search surface: a natural-language search box, a type filter,
- * and the card grid.
+ * a layout switch, and the results in whichever shape was asked for.
  *
- * Browsing and searching are the same grid in two states. With no search the
- * grid shows the whole corpus, filtered by the tab on the client — fifty
- * cards need no round trip. A search posts the query (and the active tab as
- * the type filter) to the search endpoint and shows what comes back; a tab
- * change filters whichever list is showing. Nothing here decides anything
- * else: authentication, rate limits and the embedding call all live on the
- * server.
+ * Browsing and searching are the same collection in two states. With no search
+ * it shows the whole corpus, filtered by the tab on the client — fifty cards
+ * need no round trip. A search posts the query (and the active tab as the type
+ * filter) to the search endpoint and shows what comes back; a tab change
+ * filters whichever list is showing. Nothing here decides anything else:
+ * authentication, rate limits and the embedding call all live on the server.
+ *
+ * The layout choice is state, not a route or a stored preference — it is a
+ * gesture made while looking at these results, and the next visit is allowed
+ * to start from the cards again.
  */
 
 type Filter = "all" | ScenarioType;
@@ -39,6 +45,7 @@ export function ScenarioExplorer({
 }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
+  const [view, setView] = useState<ScenarioView>("grid");
   const [results, setResults] = useState<readonly ScenarioSummary[] | null>(null);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -101,84 +108,109 @@ export function ScenarioExplorer({
   );
 
   return (
-    <div className="flex flex-col gap-6">
-      <form onSubmit={search} className="flex flex-col gap-3 sm:flex-row">
-        <input
-          type="search"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          className={cn(field, "sm:flex-1")}
-          placeholder="I want to practice ordering food at a restaurant…"
-          aria-label="Search scenarios"
-          maxLength={200}
-        />
-        <button
-          type="submit"
-          disabled={searching}
-          className={cn(buttonQuiet, "shrink-0")}
-        >
-          {searching ? "Searching…" : "Search"}
-        </button>
-      </form>
-
-      <div className="flex items-center gap-2" role="group" aria-label="Filter by type">
-        {TABS.map((tab) => (
+    // The reader who has asked their OS for less motion gets the same two
+    // layouts and none of the sliding. A layout animation is the one kind of
+    // movement nobody chose to start.
+    <MotionConfig reducedMotion="user">
+      <div className="flex flex-col gap-6">
+        <form onSubmit={search} className="flex flex-col gap-3 sm:flex-row">
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            className={cn(field, "sm:flex-1")}
+            placeholder="I want to practice ordering food at a restaurant…"
+            aria-label="Search scenarios"
+            maxLength={200}
+          />
           <button
-            key={tab.value}
-            type="button"
-            onClick={() => setFilter(tab.value)}
-            aria-pressed={filter === tab.value}
+            type="submit"
+            disabled={searching}
+            className={cn(buttonQuiet, "shrink-0")}
+          >
+            {searching ? "Searching…" : "Search"}
+          </button>
+        </form>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2" role="group" aria-label="Filter by type">
+            {TABS.map((tab) => (
+              <button
+                key={tab.value}
+                type="button"
+                onClick={() => setFilter(tab.value)}
+                aria-pressed={filter === tab.value}
+                className={cn(
+                  "rounded-full px-3 py-1.5 font-display text-sm whitespace-nowrap transition-colors",
+                  filter === tab.value
+                    ? "bg-brand/15 text-brand"
+                    : "text-copy/60 hover:text-copy",
+                  focusRing,
+                )}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="ml-auto flex items-center gap-3">
+            {results !== null && (
+              <button
+                type="button"
+                onClick={clearSearch}
+                className={cn(
+                  "font-display text-sm text-copy/60 underline underline-offset-4 hover:text-copy",
+                  focusRing,
+                  "rounded-sm",
+                )}
+              >
+                Show all scenarios
+              </button>
+            )}
+
+            <ScenarioViewToggle view={view} onChange={setView} />
+          </div>
+        </div>
+
+        {error && (
+          <p role="alert" className="text-sm text-ember">
+            {error}
+          </p>
+        )}
+
+        {shown.length === 0 ? (
+          <p className="leading-relaxed text-copy/70">
+            {results !== null
+              ? "Nothing matched that search. Try different words, or show all scenarios."
+              : "No scenarios here yet."}
+          </p>
+        ) : (
+          <motion.ul
+            layout
+            transition={LAYOUT_SPRING}
             className={cn(
-              "rounded-full px-3 py-1.5 font-display text-sm whitespace-nowrap transition-colors",
-              filter === tab.value
-                ? "bg-brand/15 text-brand"
-                : "text-copy/60 hover:text-copy",
-              focusRing,
+              view === "grid"
+                ? "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+                : "flex flex-col gap-2",
             )}
           >
-            {tab.label}
-          </button>
-        ))}
-
-        {results !== null && (
-          <button
-            type="button"
-            onClick={clearSearch}
-            className={cn(
-              "ml-auto font-display text-sm text-copy/60 underline underline-offset-4 hover:text-copy",
-              focusRing,
-              "rounded-sm",
-            )}
-          >
-            Show all scenarios
-          </button>
+            {shown.map((scenario) => (
+              <motion.li
+                key={scenario.slug}
+                layout
+                transition={LAYOUT_SPRING}
+                className="flex"
+              >
+                <ScenarioCard
+                  scenario={scenario}
+                  view={view}
+                  practiceAction={practiceAction}
+                />
+              </motion.li>
+            ))}
+          </motion.ul>
         )}
       </div>
-
-      {error && (
-        <p role="alert" className="text-sm text-ember">
-          {error}
-        </p>
-      )}
-
-      {shown.length === 0 ? (
-        <p className="leading-relaxed text-copy/70">
-          {results !== null
-            ? "Nothing matched that search. Try different words, or show all scenarios."
-            : "No scenarios here yet."}
-        </p>
-      ) : (
-        <ul className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {shown.map((scenario) => (
-            <li key={scenario.slug} className="flex">
-              <ScenarioCard
-                scenario={scenario}
-                practiceAction={practiceAction}
-              />
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+    </MotionConfig>
   );
 }
