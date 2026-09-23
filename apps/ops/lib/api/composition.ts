@@ -1,10 +1,13 @@
 import "server-only";
 
+import { createBudgetRepository, type BudgetRepository } from "@dp/db/budget-repository";
 import { createJobsRepository, type JobsRepository } from "@dp/db/jobs-repository";
+import { createLedgerRepository, type LedgerRepository } from "@dp/db/ledger-repository";
 import {
   createLearnerFeedbackRepository,
   type LearnerFeedbackRepository,
 } from "@dp/db/learner-feedback-repository";
+import { createPricingRepository, type PricingRepository } from "@dp/db/pricing-repository";
 import type { DatabaseClient } from "@dp/db/types";
 import { requireEnvValue } from "@dp/env/schema";
 import { createLogger, type Logger } from "@dp/observability/logger";
@@ -71,5 +74,31 @@ export function createProductOpsReader(): ProductOpsReader {
     feedback: createLearnerFeedbackRepository(client),
     jobs: createJobsRepository(client),
     logger: createLogger({ base: { service: "product-ops", environment: env.NODE_ENV } }),
+  };
+}
+
+export interface CostAdmin {
+  /** The euro limits the gateway enforces, and the counters against them. */
+  readonly budgets: BudgetRepository;
+  /** The price list and euro rate the snapshot jobs wrote. Read-only. */
+  readonly pricing: PricingRepository;
+  /** The usage ledger, one call at a time. Read-only: the table is append-only. */
+  readonly ledger: LedgerRepository;
+  /** For asking the worker to refresh a snapshot or rebuild the rollup. */
+  readonly jobs: JobsRepository;
+  readonly logger: Logger;
+}
+
+/** The cost pages' dependencies: the same secret-key client, and no model. */
+export function createCostAdmin(): CostAdmin {
+  const env = serverEnv();
+  const client = createSecretKeySupabaseClient() as unknown as DatabaseClient;
+
+  return {
+    budgets: createBudgetRepository(client),
+    pricing: createPricingRepository(client),
+    ledger: createLedgerRepository(client),
+    jobs: createJobsRepository(client),
+    logger: createLogger({ base: { service: "ops", environment: env.NODE_ENV } }),
   };
 }

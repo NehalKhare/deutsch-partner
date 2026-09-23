@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { budgetState } from "@dp/domain/budgets";
 import { tierSchema } from "@dp/domain/tasks";
 import { fail, ok, repositoryError, type RepositoryResult } from "@dp/db/errors";
 import type { DatabaseClient } from "@dp/db/types";
@@ -181,6 +182,10 @@ export function pricedInEur(summary: CostSummary): EuroTotal {
 // --- alerting ---------------------------------------------------------------
 
 export const ALERT_LEVELS = ["ok", "warn", "degrade", "deny"] as const;
+
+/** The routing document's thresholds, for a limit that does not carry its own. */
+const DEFAULT_WARN_PCT = 0.7;
+const DEFAULT_DEGRADE_PCT = 0.9;
 export type AlertLevel = (typeof ALERT_LEVELS)[number];
 
 export interface SpendAlert {
@@ -199,32 +204,43 @@ export interface SpendAlert {
  */
 export function spendAlerts(
   summary: CostSummary,
-  limits: { readonly globalDailyEur: number },
+  limits: {
+    /** The active global daily limit, or null when none is configured. */
+    readonly globalDailyEur: number | null;
+    readonly warnPct?: number;
+    readonly degradePct?: number;
+  },
 ): readonly SpendAlert[] {
   const alerts: SpendAlert[] = [];
   // The completed figure, not the stored one: a limit checked against a column
   // that reads zero for every unpriced row is a limit nothing can reach.
   const spent = pricedInEur(summary).total;
-  const ratio = limits.globalDailyEur > 0 ? spent / limits.globalDailyEur : Infinity;
 
-  if (ratio >= 1) {
-    alerts.push({
-      level: "deny",
-      scope: "global_daily",
-      detail: `spend is at ${(ratio * 100).toFixed(0)}% of the daily limit`,
-    });
-  } else if (ratio >= 0.9) {
-    alerts.push({
-      level: "degrade",
-      scope: "global_daily",
-      detail: `spend is at ${(ratio * 100).toFixed(0)}% of the daily limit`,
-    });
-  } else if (ratio >= 0.7) {
+  if (limits.globalDailyEur === null) {
     alerts.push({
       level: "warn",
       scope: "global_daily",
-      detail: `spend is at ${(ratio * 100).toFixed(0)}% of the daily limit`,
+      detail: "no global daily limit is configured, so spend is uncapped; set one under Budgets",
     });
+  } else {
+    // The gateway's own arithmetic, so the screen and the gate agree.
+    const state = budgetState({
+      limitEur: limits.globalDailyEur,
+      spentEur: spent,
+      warnPct: limits.warnPct ?? DEFAULT_WARN_PCT,
+      degradePct: limits.degradePct ?? DEFAULT_DEGRADE_PCT,
+    });
+    const ratio = limits.globalDailyEur > 0 ? spent / limits.globalDailyEur : Infinity;
+
+    if (state !== "allow") {
+      alerts.push({
+        level: state,
+        scope: "global_daily",
+        detail: Number.isFinite(ratio)
+          ? `spend is at ${(ratio * 100).toFixed(0)}% of the daily limit`
+          : "the daily limit is zero, so every call is refused",
+      });
+    }
   }
 
   if (summary.totals.budget_denials > 0) {

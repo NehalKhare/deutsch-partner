@@ -37,6 +37,10 @@ export const RATE_LIMITS = {
   // Following a run: one open stream per run per operator, and the browser
   // reconnects on its own when one closes.
   product_ops_events: { limit: 30, windowMs: 60_000 },
+  // An operator changing what the product may spend, or asking the worker for
+  // a fresh snapshot. Cheap for the database, but each one moves real money or
+  // real jobs; a scripted loop should hit this long before it hits anything.
+  ops_cost_admin: { limit: 20, windowMs: 60_000 },
   // Sign-in attempts per address, on top of the auth service's own per-IP
   // limits: an operator's password is worth guessing at.
   ops_login: { limit: 5, windowMs: 15 * 60_000 },

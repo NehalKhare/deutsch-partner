@@ -19,15 +19,14 @@ import {
   spendPerLearnerUsd,
   worstAlert,
 } from "@/lib/costs";
+import { createBudgetRepository } from "@dp/db/budget-repository";
+import { globalDailyLimit } from "@/lib/budgets";
 import { createSpendHistoryRepository } from "@/lib/spend-history";
 import { SpendExplorer } from "@/components/costs/spend-explorer";
 import { createSecretKeySupabaseClient } from "@/lib/supabase/server-client";
 import type { DatabaseClient } from "@dp/db/types";
 
 export const metadata = { title: "AI spend — Deutsch Partner" };
-
-/** Configured per deployment; the gateway gates on the same number. */
-const GLOBAL_DAILY_LIMIT_EUR = 50;
 
 /**
  * The operator's AI spend.
@@ -63,12 +62,17 @@ export default async function CostDashboardPage() {
   // figures come from the ledger over a bounded recent window; the year comes
   // from the daily rollup, which is what the spec says a historical view may
   // scan. Neither is ever used to fill in for the other.
-  const [summary, history] = await Promise.all([
+  //
+  // The limit is the one the gateway reads, from the budgets it enforces —
+  // not a constant here that agreed with it only for as long as nobody
+  // changed either.
+  const [summary, history, budgets] = await Promise.all([
     createCostRepository(client).summary(from, to),
     createSpendHistoryRepository(client).series(
       new Date(Date.UTC(to.getUTCFullYear(), 0, 1)),
       to,
     ),
+    createBudgetRepository(client).overview(to),
   ]);
 
   if (!summary.ok) {
@@ -81,7 +85,18 @@ export default async function CostDashboardPage() {
   }
 
   const data = summary.data;
-  const alerts = spendAlerts(data, { globalDailyEur: GLOBAL_DAILY_LIMIT_EUR });
+  const globalLimit = budgets.ok ? globalDailyLimit(budgets.data) : null;
+  const alerts = budgets.ok
+    ? spendAlerts(data, {
+        globalDailyEur: globalLimit?.limitEur ?? null,
+        warnPct: globalLimit?.warnPct,
+        degradePct: globalLimit?.degradePct,
+      })
+    : [
+        // Unread is not unlimited; say which one this is.
+        { level: "warn" as const, scope: "global_daily", detail: "the budget limits could not be read" },
+        ...spendAlerts(data, { globalDailyEur: null }).filter((alert) => alert.scope !== "global_daily"),
+      ];
 
   const rate = data.fxRate[0];
   const euro = pricedInEur(data);
@@ -114,7 +129,7 @@ export default async function CostDashboardPage() {
   ];
 
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-6 py-10 md:px-10 md:py-14">
+    <main className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-6 py-8 md:px-10 md:py-10">
       <header className="flex flex-col gap-2">
         <h1 className={pageTitle}>AI spend</h1>
         <p className="font-display text-sm text-copy/60">
@@ -179,7 +194,7 @@ export default async function CostDashboardPage() {
       {history.ok ? (
         <SpendExplorer
           series={history.data}
-          dailyLimitEur={GLOBAL_DAILY_LIMIT_EUR}
+          dailyLimitEur={globalLimit?.limitEur ?? 0}
           asOf={to}
         />
       ) : (

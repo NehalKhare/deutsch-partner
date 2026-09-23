@@ -59,3 +59,24 @@ export function heatFill(level: number, overLimit: boolean): string {
 
   return `color-mix(in oklab, var(--brand) ${mix}%, var(--panel))`;
 }
+
+/**
+ * A per-token dollar figure, per million tokens.
+ *
+ * Providers publish per token, and 0.000003 is a number nobody can compare at
+ * a glance with 0.0000005. Per million is how the price lists are read.
+ */
+export function formatPerMillion(usdPerToken: number): string {
+  const perMillion = usdPerToken * 1_000_000;
+  if (perMillion === 0) return "$0";
+
+  return `$${perMillion.toLocaleString("en-IE", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: perMillion < 0.1 ? 4 : 2,
+  })}`;
+}
+
+/** When something happened, in UTC, because that is when the counters reset. */
+export function formatUtc(value: Date): string {
+  return `${value.toISOString().slice(0, 16).replace("T", " ")} UTC`;
+}

@@ -1,4 +1,10 @@
-import { z } from "zod";
+import {
+  BUDGET_SCOPES,
+  budgetScopeSchema,
+  budgetState,
+  type BudgetScope,
+  type BudgetState,
+} from "@dp/domain/budgets";
 
 /**
  * Layer 4: the euro budget gate.
@@ -10,17 +16,13 @@ import { z } from "zod";
  * The gate fails closed. An unreadable counter is not an empty one, and
  * treating it as zero spend is precisely how a broken budget becomes an
  * unlimited one.
+ *
+ * The scopes and the threshold arithmetic live in the domain, where the
+ * operator's budget page reads them too: the gate and the screen explaining
+ * it cannot disagree about what 90% means.
  */
 
-export const BUDGET_SCOPES = [
-  "per_request",
-  "per_user_daily",
-  "per_user_monthly",
-  "global_daily",
-] as const;
-
-export const budgetScopeSchema = z.enum(BUDGET_SCOPES);
-export type BudgetScope = z.infer<typeof budgetScopeSchema>;
+export { BUDGET_SCOPES, budgetScopeSchema, type BudgetScope, type BudgetState };
 
 export interface BudgetSnapshot {
   readonly scope: BudgetScope;
@@ -38,8 +40,6 @@ export interface BudgetSource {
   }): Promise<readonly BudgetSnapshot[] | null>;
 }
 
-export type BudgetState = "allow" | "warn" | "degrade" | "deny";
-
 export interface BudgetDecision {
   readonly state: BudgetState;
   readonly scope: BudgetScope | null;
@@ -53,18 +53,6 @@ const RANK: Readonly<Record<BudgetState, number>> = {
   degrade: 2,
   deny: 3,
 };
-
-function stateFor(snapshot: BudgetSnapshot, projected: number): BudgetState {
-  // A zero limit is a closed door, not an unlimited one.
-  if (snapshot.limitEur <= 0) return "deny";
-
-  const ratio = (snapshot.spentEur + projected) / snapshot.limitEur;
-
-  if (ratio >= 1) return "deny";
-  if (ratio >= snapshot.degradePct) return "degrade";
-  if (ratio >= snapshot.warnPct) return "warn";
-  return "allow";
-}
 
 /**
  * Evaluates every scope and returns the worst.
@@ -94,7 +82,7 @@ export function evaluateBudgets(
   };
 
   for (const snapshot of snapshots) {
-    const state = stateFor(snapshot, projectedEur);
+    const state = budgetState(snapshot, projectedEur);
     const ratio =
       snapshot.limitEur <= 0
         ? Number.POSITIVE_INFINITY

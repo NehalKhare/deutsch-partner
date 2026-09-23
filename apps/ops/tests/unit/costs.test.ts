@@ -222,6 +222,26 @@ describe("spend alerts", () => {
     expect(spendAlerts(at(70), { globalDailyEur: 100 })).toHaveLength(1);
   });
 
+  it("uses the configured thresholds when the limit carries its own", () => {
+    const alerts = spendAlerts(at(55), { globalDailyEur: 100, warnPct: 0.5, degradePct: 0.6 });
+    expect(alerts[0]?.level).toBe("warn");
+    expect(spendAlerts(at(60), { globalDailyEur: 100, warnPct: 0.5, degradePct: 0.6 })[0]?.level).toBe(
+      "degrade",
+    );
+  });
+
+  it("says spend is uncapped when no global limit is configured", () => {
+    // Not an empty alert list: no limit is not the same claim as within limit.
+    const alerts = spendAlerts(at(10), { globalDailyEur: null });
+    expect(alerts).toEqual([
+      expect.objectContaining({ level: "warn", scope: "global_daily", detail: expect.stringMatching(/no global daily limit/) }),
+    ]);
+  });
+
+  it("reads a zero limit as a closed door", () => {
+    expect(spendAlerts(at(0), { globalDailyEur: 0 })[0]?.level).toBe("deny");
+  });
+
   it("raises a denial as its own alert, because it is an audit event", () => {
     const alerts = spendAlerts(
       { ...costs, totals: { ...costs.totals, budget_denials: 4 } },
