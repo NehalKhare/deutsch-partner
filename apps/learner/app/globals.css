@@ -1,6 +1,4 @@
 @import "tailwindcss";
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
 @import "@dp/ui/theme.css";
 
 /* Tailwind skips node_modules when it looks for class names, and the shared

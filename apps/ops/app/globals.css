@@ -1,6 +1,4 @@
 @import "tailwindcss";
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
 @import "@dp/ui/theme.css";
 /* After the theme it overrides: both write `:root`, so source order decides. */
 @import "@dp/ui/theme-ops.css";

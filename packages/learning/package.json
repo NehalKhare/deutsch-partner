@@ -26,7 +26,6 @@
     "eslint": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:",
-    "@dp/test-support": "workspace:*",
     "tsx": "catalog:"
   }
 }

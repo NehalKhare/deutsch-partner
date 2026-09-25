@@ -23,7 +23,6 @@
     "eslint": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:",
-    "next": "catalog:",
-    "@dp/test-support": "workspace:*"
+    "next": "catalog:"
   }
 }
