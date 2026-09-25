@@ -126,6 +126,9 @@ export const ROOTS = {
   /** Committed environment templates, one per deployable. */
   envExamples: [`${LEARNER}/.env.example`, `${OPS}/.env.example`, `${WORKER}/.env.example`],
 
+  /** Kubernetes manifests, their settings files and the secret templates. */
+  kubernetes: "deploy/k8s",
+
   migrations: "packages/db/supabase/migrations",
 } as const;
 

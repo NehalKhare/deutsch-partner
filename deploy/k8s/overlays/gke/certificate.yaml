@@ -1,0 +1,11 @@
+# A Google-managed certificate for both hostnames. Google issues it once DNS
+# for both names points at the static IP, usually within an hour.
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: dp-cert
+spec:
+  domains:
+    # Replaced with LEARNER_HOST and OPS_HOST from site.env.
+    - learner.placeholder.invalid
+    - ops.placeholder.invalid

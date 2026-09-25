@@ -1,0 +1,39 @@
+# One Google HTTPS load balancer for both web apps, on a reserved static IP.
+# Each hostname reaches its own app. The worker has no route here.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dp
+  annotations:
+    kubernetes.io/ingress.class: gce
+    # The name of the IP reserved with `gcloud compute addresses create`.
+    # Replaced with STATIC_IP_NAME from site.env.
+    kubernetes.io/ingress.global-static-ip-name: dp-ip
+    networking.gke.io/managed-certificates: dp-cert
+    networking.gke.io/v1beta1.FrontendConfig: dp-frontend
+spec:
+  defaultBackend:
+    service:
+      name: learner
+      port: { name: http }
+  rules:
+    # Hosts are replaced with LEARNER_HOST and OPS_HOST from site.env, in this
+    # order.
+    - host: learner.placeholder.invalid
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: learner
+                port: { name: http }
+    - host: ops.placeholder.invalid
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ops
+                port: { name: http }

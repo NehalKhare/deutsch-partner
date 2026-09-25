@@ -38,6 +38,10 @@ yarn-error.log*
 .env*
 # ...but the template must be committed so a new contributor knows what to set.
 !.env.example
+# Kubernetes: per-installation settings and the real secrets. The .example
+# templates next to them are committed.
+deploy/k8s/overlays/*/site.env
+deploy/k8s/overlays/*/secrets/*.env
 
 # vercel
 .vercel

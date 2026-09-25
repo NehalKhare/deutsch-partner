@@ -1,0 +1,31 @@
+# The three deployables, with nothing cloud-specific in them.
+#
+# Not applied on its own: an overlay supplies the images, the hostnames and
+# the way traffic reaches the two web apps. See ../README.md.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: deutsch-partner
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: deutsch-partner
+    includeSelectors: false
+
+resources:
+  - namespace.yaml
+  - learner.yaml
+  - ops.yaml
+  - worker.yaml
+  - hpa.yaml
+
+# Non-secret settings only. Secrets are created in the cluster by hand (see
+# the README) and referenced by name, so no key ever lives in this directory.
+# A changed file gets a new name suffix, which rolls the Deployment using it.
+configMapGenerator:
+  - name: learner-config
+    envs: [config/learner.env]
+  - name: ops-config
+    envs: [config/ops.env]
+  - name: worker-config
+    envs: [config/worker.env]

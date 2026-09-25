@@ -98,8 +98,25 @@ app runs with a request timeout of 900 s (the trainer's loop can take 120 s,
 the runs feed streams for 270 s); the worker runs at exactly one instance with
 CPU always allocated, because it polls rather than serves; the coder runs at
 one instance with 4 vCPU and 8 GiB, because a `next build` inside a worktree
-wants a machine. Fly.io and Kubernetes equivalents are noted in
-`deploy/cloudrun/README.md`.
+wants a machine. A Fly.io equivalent is noted in `deploy/cloudrun/README.md`.
+
+## Kubernetes on GKE
+
+`deploy/k8s/` runs the same three images on a GKE Autopilot cluster, as an
+alternative to Cloud Run. It is Kustomize: `base/` holds a Deployment per
+deployable with the Cloud Run sizing and probe paths, `components/coder/` the
+optional coding worker, and `overlays/gke/` a Google load balancer with a
+managed certificate, a 900 s backend timeout and an HTTP-to-HTTPS redirect.
+Per-installation values (hostnames, image tags, the public Supabase values)
+come from a gitignored `site.env`. Secrets are created in the cluster by hand,
+one Secret per deployable, and `packages/security-tests/tests/kubernetes.test.ts`
+holds the manifests and secret templates to the same split as the `.env.example`
+files. As on Cloud Run, the schedules are pg_cron and the migrations run from
+`deploy-db.yml`, so the cluster runs no CronJob and no migration Job.
+
+`deploy/k8s/README.md` is the step-by-step guide, written for someone new to
+Kubernetes. `.github/workflows/deploy-gke.yml` builds and deploys on manual
+dispatch only, so it never races the Cloud Run pipeline.
 
 ## Going live with the split
 

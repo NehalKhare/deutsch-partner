@@ -1,0 +1,17 @@
+# How the load balancer talks to the two web apps.
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: dp-backend
+spec:
+  # The trainer's loop runs for up to 120 s and the runs feed streams for up
+  # to 270 s. The default of 30 s would cut both off. Matches Cloud Run.
+  timeoutSec: 900
+  connectionDraining:
+    drainingTimeoutSec: 60
+  healthCheck:
+    type: HTTP
+    requestPath: /api/health
+    port: 3000
+    checkIntervalSec: 10
+    timeoutSec: 5
