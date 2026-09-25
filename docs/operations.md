@@ -22,6 +22,8 @@ beside it. Nothing in an example file is a real value, and none should ever be.
 | `FX_EUR_PER_USD_BOOTSTRAP` | optional | — | optional | Prices calls made before the first FX snapshot |
 | `OPENROUTER_MODEL_*` | optional | — | optional | Per-tier model overrides. Empty uses the registry |
 | `OPS_COOKIE_NAME` | — | optional | — | The operator session cookie's name, distinct from the learner's |
+| `SEO_INDEXING` | yes, production only | — | — | `true` lets search and answer engines index the public pages. Unset or `false` — every other environment — serves a robots.txt that disallows everything. The ops app is never indexable and has no switch |
+| `GOOGLE_SITE_VERIFICATION`, `BING_SITE_VERIFICATION` | optional | — | — | Search-console ownership tokens, printed into the page head. Not secrets |
 
 The legacy Supabase JWT `anon` and `service_role` keys are **rejected at boot**.
 They are retired at the end of 2026, and validating the prefix turns two

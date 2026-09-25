@@ -44,7 +44,8 @@ first run.
 | `app/(app)/` | The signed-in pages: `chat`, `curriculum`, `trainer`, `scenarios`, `review`, `dashboard`, `settings` |
 | `app/auth/`, `app/onboarding/` | Sign-in, sign-up, and the onboarding form |
 | `app/api/` | Route handlers: `chat`, `trainer` (and its `feedback`), `scenarios`, `transcribe`, `speak`, `health` |
-| `lib/` | Server logic by feature — `trainer`, `retrieval`, `scenarios`, `curriculum`, `dashboard`, `settings` and the rest — plus `env` and `supabase` |
+| `app/robots.ts`, `app/sitemap.ts`, `app/manifest.ts`, `app/llms.txt/`, `app/opengraph-image.tsx`, `app/icon.tsx` | What a crawler, a phone or a chat preview asks for. The policy behind them is in `lib/seo/`; see [search and answer engines](../../docs/seo-and-geo.md) |
+| `lib/` | Server logic by feature — `trainer`, `retrieval`, `scenarios`, `curriculum`, `dashboard`, `settings` and the rest — plus `env` and `supabase`. `lib/seo/` is the site identity, the crawl policy, the head metadata, the structured data and `llms.txt`; `lib/landing/` the landing page's rooms, questions and timeline, which the SEO layer reads |
 | `components/` | The app's React components, composed from the class strings in `@dp/ui/styles` |
 | `proxy.ts` | Refreshes the Supabase session and redirects signed-out visitors. A convenience, not a security boundary: RLS decides what a learner can read |
 | `scripts/` | `create-dummy-user.ts`, and the Python scenario pipeline in `scripts/scenarios` (see its own README) |
@@ -62,6 +63,8 @@ matter first:
 | `OPENROUTER_MODEL_*`, `EMBEDDING_MODEL` | Optional per-tier overrides. Empty means the registry defaults |
 | `LOG_PSEUDONYM_SALT` | Must match the other two deployables, or ledger rows stop joining |
 | `MCP_SERVER_URL` | Optional. A remote MCP server the Trainer may use; empty means local tools only |
+| `SEO_INDEXING` | `true` only on production. Anything else serves a robots.txt that disallows everything and marks every page noindex |
+| `GOOGLE_SITE_VERIFICATION`, `BING_SITE_VERIFICATION` | Optional search-console ownership tokens, printed into the page head |
 | `DEV_SEED_EMAIL`, `DEV_SEED_PASSWORD` | Read only by `dummy:user` and the fixture sign-in E2E spec |
 
 This app never holds the operator allowlist or a repository token; a CI test

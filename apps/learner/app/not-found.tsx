@@ -6,7 +6,10 @@ import { buttonPrimary, pageTitle, prose } from "@dp/ui/styles";
 import { companionStateFor } from "@dp/domain/companion";
 import { cn } from "@dp/ui/utils";
 
-export const metadata = { title: "Not found — Deutsch Partner" };
+import { PRIVATE_PAGE_METADATA } from "@/lib/seo/metadata";
+
+/** Not indexed: a listing for "nothing here" helps nobody, and the 404 says it already. */
+export const metadata = { title: "Not found", ...PRIVATE_PAGE_METADATA };
 
 /**
  * Nothing here.

@@ -18,7 +18,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server-client";
 import type { DatabaseClient } from "@dp/db/types";
 import { cn } from "@dp/ui/utils";
 
-export const metadata = { title: "Scenario — Deutsch Partner" };
+export const metadata = { title: "Scenario" };
 
 const KIND_LABELS: Readonly<Record<Scenario["kind"], string>> = {
   dialogue: "Dialogue",

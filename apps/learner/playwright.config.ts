@@ -26,5 +26,8 @@ export default defineConfig({
     url: baseURL,
     reuseExistingServer: false,
     timeout: 180_000,
+    // The production shape for crawlers: indexable, and with the origin the
+    // canonical URLs and the sitemap must name. Nothing else changes.
+    env: { ...process.env, APP_URL: baseURL, SEO_INDEXING: "true" },
   },
 });

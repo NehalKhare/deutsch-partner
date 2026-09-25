@@ -84,7 +84,10 @@ Repository variables the deploy expects: `NEXT_PUBLIC_SUPABASE_URL`,
 `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_DEPLOYER_SA`, `MIN_INSTANCES`,
 `LANGSMITH_TRACING`. Secrets: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`.
 Everything a container reads at runtime comes from Secret Manager through the
-manifests, never from the workflow.
+manifests, never from the workflow. The one non-secret the workflow decides
+itself is `SEO_INDEXING`: `true` for the `production` environment and
+`false` for every other, so only production is ever indexed
+(`docs/seo-and-geo.md`).
 
 ## Cloud Run
 

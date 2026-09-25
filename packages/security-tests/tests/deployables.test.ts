@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { REPO_ROOT, absolute, sourceFiles, under } from "../src/roots";
@@ -52,6 +52,24 @@ describe("the operator app", () => {
     expect(deps).not.toContain("@dp/gateway");
     expect(deps).not.toContain("@dp/prompts");
     expect(deps.some((name) => name.startsWith("@langchain/") || name === "langchain")).toBe(false);
+  });
+
+  it("is never indexable, whatever the environment says", () => {
+    // The learner app decides indexing from SEO_INDEXING. The operator app
+    // has no such switch: a sign-in form in front of a product's internals
+    // has no business in a search result or an answer engine, so the noindex
+    // is written into the root layout and robots.txt turns everyone away.
+    const layout = readFileSync(absolute("apps/ops/app/layout.tsx"), "utf8");
+    expect(layout).toMatch(/robots:\s*\{[^}]*index:\s*false/);
+
+    const robots = readFileSync(absolute("apps/ops/app/robots.ts"), "utf8");
+    expect(robots).toMatch(/disallow:\s*["']\/["']/);
+    expect(robots).not.toMatch(/SEO_INDEXING|siteEnv|sitemap/);
+
+    // Nothing that would describe the app to a crawler exists at all.
+    for (const file of ["apps/ops/app/sitemap.ts", "apps/ops/app/llms.txt", "apps/ops/app/opengraph-image.tsx"]) {
+      expect(existsSync(absolute(file)), file).toBe(false);
+    }
   });
 
   it("names the model key nowhere in its source", () => {

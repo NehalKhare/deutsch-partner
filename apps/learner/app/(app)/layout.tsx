@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { signOutAction } from "@/app/auth/actions";
@@ -9,6 +10,10 @@ import { getAuthenticatedAccount } from "@/lib/auth/current-user";
 import { currentSummary } from "@/lib/dashboard/current-summary";
 import { LOGIN_PATH } from "@/lib/auth/routes";
 import { requireOnboarded } from "@/lib/onboarding/gate";
+import { PRIVATE_PAGE_METADATA } from "@/lib/seo/metadata";
+
+/** Every room is a learner's own. None is ever indexed. */
+export const metadata: Metadata = PRIVATE_PAGE_METADATA;
 
 /**
  * The authenticated shell.

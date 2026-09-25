@@ -4,7 +4,7 @@ import { startThreadAction } from "@/app/(app)/chat/actions";
 import { companionStateFor } from "@dp/domain/companion";
 import { cn } from "@dp/ui/utils";
 
-export const metadata = { title: "Chat — Deutsch Partner" };
+export const metadata = { title: "Chat" };
 
 /**
  * The entry point to a conversation.

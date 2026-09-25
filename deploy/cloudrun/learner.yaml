@@ -37,6 +37,7 @@ spec:
             periodSeconds: 30
           env:
             - { name: APP_URL, value: "${APP_URL}" }
+            - { name: SEO_INDEXING, value: "${SEO_INDEXING}" }
             - { name: LANGSMITH_TRACING, value: "${LANGSMITH_TRACING}" }
             - { name: LANGSMITH_PROJECT, value: "dp-learner-${ENVIRONMENT}" }
             - name: SUPABASE_SECRET_KEY

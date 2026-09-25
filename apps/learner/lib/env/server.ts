@@ -28,3 +28,35 @@ export function serverEnv(): AppEnv {
   cached = env;
   return cached;
 }
+
+/** What a public page needs to know about where, and whether, it is published. */
+export interface SiteEnv {
+  /** The canonical origin, for absolute URLs in the head, the sitemap and robots.txt. */
+  readonly appUrl: string;
+  /** Whether search and answer engines may index this deployment. */
+  readonly indexing: boolean;
+  /** Site-ownership tokens for the search consoles. Public by design. */
+  readonly verification: { readonly google?: string; readonly bing?: string };
+}
+
+/**
+ * The slice of the environment the public pages read while rendering.
+ *
+ * Parsed without the production-required list on purpose. The landing page,
+ * robots.txt and the sitemap are rendered in places a model key is rightly
+ * absent — `next build` inside a container that holds no secrets — and a
+ * canonical URL must not need one. Malformed values still fail here, as they
+ * do everywhere: wrong is not the same as absent. The boot-time guard in
+ * serverEnv() is what refuses a production deployment missing its secrets.
+ */
+export function siteEnv(): SiteEnv {
+  const env = parseEnv(process.env, { productionRequired: [] });
+  return {
+    appUrl: env.APP_URL,
+    indexing: env.SEO_INDEXING,
+    verification: {
+      google: env.GOOGLE_SITE_VERIFICATION,
+      bing: env.BING_SITE_VERIFICATION,
+    },
+  };
+}

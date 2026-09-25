@@ -7,7 +7,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server-client";
 import type { DatabaseClient } from "@dp/db/types";
 import { cn } from "@dp/ui/utils";
 
-export const metadata = { title: "Scenarios — Deutsch Partner" };
+export const metadata = { title: "Scenarios" };
 
 /**
  * The scenarios room.

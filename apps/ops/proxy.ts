@@ -18,8 +18,9 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Everything except static assets, image files and the health check.
+  // Everything except static assets, image files, the health check and
+  // robots.txt — which tells every crawler to leave, and needs no session.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|api/health|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|woff2?)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/health|robots\\.txt$|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|woff2?)$).*)",
   ],
 };

@@ -6,7 +6,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server-client";
 import { cn } from "@dp/ui/utils";
 import type { DatabaseClient } from "@dp/db/types";
 
-export const metadata = { title: "Trainer — Deutsch Partner" };
+export const metadata = { title: "Trainer" };
 
 /**
  * The Trainer: an agent with tools, run per message.

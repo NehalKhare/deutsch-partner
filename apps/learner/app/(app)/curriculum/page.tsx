@@ -28,7 +28,7 @@ import { createPerformanceRepository } from "@dp/db/performance-repository";
 import { createServerSupabaseClient } from "@/lib/supabase/server-client";
 import type { DatabaseClient } from "@dp/db/types";
 
-export const metadata = { title: "Curriculum — Deutsch Partner" };
+export const metadata = { title: "Curriculum" };
 
 const ARTICLE_BORDER: Readonly<Record<string, string>> = {
   der: "border-t-der/60",

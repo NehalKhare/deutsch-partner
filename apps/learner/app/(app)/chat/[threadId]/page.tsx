@@ -11,7 +11,7 @@ import { createScenarioRepository } from "@dp/db/scenario-repository";
 import { createServerSupabaseClient } from "@/lib/supabase/server-client";
 import type { DatabaseClient } from "@dp/db/types";
 
-export const metadata = { title: "Conversation — Deutsch Partner" };
+export const metadata = { title: "Conversation" };
 
 /**
  * One thread, always fresh.

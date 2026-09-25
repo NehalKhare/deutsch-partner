@@ -5,8 +5,9 @@ import { pageTitle, prose } from "@dp/ui/styles";
 import { requireAuthenticatedUserId } from "@/lib/auth/current-user";
 import { INITIAL_ONBOARDING_STATE } from "@/lib/onboarding/form-state";
 import { redirectIfOnboarded } from "@/lib/onboarding/gate";
+import { PRIVATE_PAGE_METADATA } from "@/lib/seo/metadata";
 
-export const metadata = { title: "Set up — Deutsch Partner" };
+export const metadata = { title: "Set up", ...PRIVATE_PAGE_METADATA };
 
 /**
  * Deliberately outside the (app) segment: that layout requires a completed

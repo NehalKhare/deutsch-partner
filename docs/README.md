@@ -1,6 +1,6 @@
 # Deutsch Partner — documentation
 
-Four documents, written to be read in this order.
+Five documents, written to be read in this order.
 
 | Document | What it answers |
 | --- | --- |
@@ -8,6 +8,7 @@ Four documents, written to be read in this order.
 | [Architecture](architecture.md) | How the code is laid out and why the boundaries are where they are |
 | [How the pieces work](topics.md) | Plain-language explanations of RAG, prompting, vector search, Next.js, and the rest |
 | [Operations](operations.md) | Running it: environment, ingestion, cost, and what to check when something breaks |
+| [Search and answer engines](seo-and-geo.md) | How the learner product is found — and how the rooms and the operator app are kept out of every index |
 
 The specification documents this was built against live in
 [`.claude/docs/`](../.claude/docs/). They are the source of the rules; these

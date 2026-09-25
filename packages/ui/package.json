@@ -18,7 +18,8 @@
     "./device-preference": "./src/device-preference.ts",
     "./theme-store": "./src/theme-store.ts",
     "./use-disclosure": "./src/use-disclosure.ts",
-    "./theme-ops.css": "./src/theme-ops.css"
+    "./theme-ops.css": "./src/theme-ops.css",
+    "./palette": "./src/palette.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

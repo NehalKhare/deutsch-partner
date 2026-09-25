@@ -312,6 +312,28 @@ describe("parseEnv", () => {
     });
   });
 
+  describe("search and answer engines", () => {
+    it("is not indexable unless stated, so a staging copy never is", () => {
+      expect(parseEnv({}).SEO_INDEXING).toBe(false);
+    });
+
+    it.each(["true", "1"])("accepts %s as indexable", (value) => {
+      expect(parseEnv({ SEO_INDEXING: value }).SEO_INDEXING).toBe(true);
+    });
+
+    it("rejects anything that is not a boolean word", () => {
+      expect(() => parseEnv({ SEO_INDEXING: "yes" })).toThrow(/SEO_INDEXING/);
+    });
+
+    it("carries the search-console tokens through, and leaves them absent when unset", () => {
+      const env = parseEnv({ GOOGLE_SITE_VERIFICATION: "abc", BING_SITE_VERIFICATION: "def" });
+
+      expect(env.GOOGLE_SITE_VERIFICATION).toBe("abc");
+      expect(env.BING_SITE_VERIFICATION).toBe("def");
+      expect(parseEnv({}).GOOGLE_SITE_VERIFICATION).toBeUndefined();
+    });
+  });
+
   describe("defaults", () => {
     it("defaults APP_URL and APP_NAME for local development", () => {
       const env = parseEnv({});

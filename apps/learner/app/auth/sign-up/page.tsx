@@ -3,8 +3,10 @@ import { QuietShell } from "@dp/ui/quiet-shell";
 import { pageTitle, prose } from "@dp/ui/styles";
 import { signUpAction } from "@/app/auth/actions";
 import { INITIAL_AUTH_STATE } from "@dp/auth/form-state";
+import { SIGN_UP_PATH } from "@/lib/auth/routes";
+import { publicPageMetadata } from "@/lib/seo/metadata";
 
-export const metadata = { title: "Create an account — Deutsch Partner" };
+export const metadata = publicPageMetadata(SIGN_UP_PATH);
 
 export default function SignUpPage() {
   return (

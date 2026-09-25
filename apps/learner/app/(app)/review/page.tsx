@@ -10,7 +10,7 @@ import { createVocabularyRepository } from "@dp/db/vocabulary-repository";
 import { createServerSupabaseClient } from "@/lib/supabase/server-client";
 import type { DatabaseClient } from "@dp/db/types";
 
-export const metadata = { title: "Catch up — Deutsch Partner" };
+export const metadata = { title: "Catch up" };
 
 /**
  * What each kind of word practice asks for, in the trainer panel's words.

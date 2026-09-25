@@ -3,9 +3,10 @@ import { QuietShell } from "@dp/ui/quiet-shell";
 import { pageTitle, prose } from "@dp/ui/styles";
 import { signInAction } from "@/app/auth/actions";
 import { INITIAL_AUTH_STATE } from "@dp/auth/form-state";
-import { safeNextPath } from "@/lib/auth/routes";
+import { LOGIN_PATH, safeNextPath } from "@/lib/auth/routes";
+import { publicPageMetadata } from "@/lib/seo/metadata";
 
-export const metadata = { title: "Sign in — Deutsch Partner" };
+export const metadata = publicPageMetadata(LOGIN_PATH);
 
 export default async function LoginPage({
   searchParams,

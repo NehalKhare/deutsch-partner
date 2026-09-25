@@ -3,6 +3,7 @@ import { render, screen, within } from "@testing-library/react";
 
 import Home from "@/app/page";
 import { MAX_GROWTH_STAGE } from "@dp/domain/companion";
+import { FAQ } from "@/lib/landing/faq";
 
 describe("landing page", () => {
   it("leads with the invitation, in German", () => {
@@ -108,6 +109,33 @@ describe("landing page", () => {
 
     expect(screen.getByText(/mostly language you\s+already handle/i)).toBeInTheDocument();
     expect(screen.getByText(/the next mini-level\s+comes to you/i)).toBeInTheDocument();
+  });
+
+  it("answers the questions a visitor asks, in the open and not behind a click", () => {
+    render(<Home />);
+
+    const section = screen.getByRole("region", { name: /questions, answered plainly/i });
+    for (const entry of FAQ) {
+      expect(within(section).getByRole("heading", { level: 3, name: entry.question })).toBeInTheDocument();
+      expect(within(section).getByText(entry.answer)).toBeInTheDocument();
+    }
+  });
+
+  it("carries structured data that says what the page says", () => {
+    // What a search engine shows and what an answer engine quotes. The FAQ
+    // in it must be the FAQ on the page: markup that claims more than the
+    // page shows is markup that gets a site penalised.
+    const { container } = render(<Home />);
+
+    const script = container.querySelector('script[type="application/ld+json"]');
+    expect(script).not.toBeNull();
+    const graph = JSON.parse(script!.textContent ?? "")["@graph"] as Array<Record<string, unknown>>;
+    const faq = graph.find((node) => node["@type"] === "FAQPage")!;
+    const questions = (faq.mainEntity as Array<{ name: string }>).map((entry) => entry.name);
+    expect(questions).toEqual(FAQ.map((entry) => entry.question));
+    for (const question of questions) {
+      expect(screen.getByRole("heading", { level: 3, name: question })).toBeInTheDocument();
+    }
   });
 
   it("has one first-level heading and a section heading for each claim", () => {

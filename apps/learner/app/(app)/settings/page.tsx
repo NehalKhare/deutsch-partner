@@ -18,7 +18,7 @@ import { createTrainerCoachingRepository } from "@dp/db/trainer-coaching-reposit
 import { createServerSupabaseClient } from "@/lib/supabase/server-client";
 import type { DatabaseClient } from "@dp/db/types";
 
-export const metadata = { title: "Settings — Deutsch Partner" };
+export const metadata = { title: "Settings" };
 
 /** Section headings as small labels: they name a region, the controls speak. */
 const sectionLabel =

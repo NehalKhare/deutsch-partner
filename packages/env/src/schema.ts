@@ -127,6 +127,25 @@ const baseSchema = z.object({
   APP_URL: z.url().default("http://localhost:3000"),
   APP_NAME: z.string().min(1).default("Deutsch Partner"),
 
+  /**
+   * Whether search engines and answer engines may index this deployment.
+   *
+   * Off unless stated: staging deploys on every green `main` to an origin
+   * anybody can reach, and a staging copy that gets indexed competes with
+   * production for its own name. Production sets it to true explicitly.
+   * The learner app reads it for robots.txt and the robots meta tag; the
+   * operator app is never indexable whatever this says.
+   */
+  SEO_INDEXING: booleanish,
+
+  /**
+   * Site-ownership tokens for the search consoles. Public by design — they
+   * are printed into the page head — so they are not secrets, and absent
+   * means the tag is simply not rendered.
+   */
+  GOOGLE_SITE_VERIFICATION: z.string().min(1).max(200).optional(),
+  BING_SITE_VERIFICATION: z.string().min(1).max(200).optional(),
+
   LANGSMITH_TRACING: booleanish,
   LANGSMITH_API_KEY: secret(),
   LANGSMITH_PROJECT: z.string().min(1).default("deutsch-partner"),

@@ -1,14 +1,23 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 
 import { Companion } from "@/components/companion/companion";
 import { CompanionDemo } from "@/components/landing/companion-demo";
+import { JsonLd } from "@/components/seo/json-ld";
 import { Wordmark } from "@dp/ui/wordmark";
 import { TUTOR } from "@dp/domain/tutor";
 import { buttonPrimary } from "@dp/ui/styles";
 import { cn } from "@dp/ui/utils";
 import { companionStateFor, MAX_GROWTH_STAGE } from "@dp/domain/companion";
 import { MAX_MINI_LEVEL } from "@dp/domain/cefr";
+import { siteEnv } from "@/lib/env/server";
+import { FAQ } from "@/lib/landing/faq";
+import { ROOMS } from "@/lib/landing/rooms";
 import { GUIDED_HOURS, timelinePhrase } from "@/lib/landing/timeline";
+import { publicPageMetadata } from "@/lib/seo/metadata";
+import { landingStructuredData } from "@/lib/seo/structured-data";
+
+export const metadata: Metadata = publicPageMetadata("/");
 
 /** One representative mini-level per growth band, for the progress strip. */
 const GROWTH_MARKERS = Array.from({ length: MAX_GROWTH_STAGE }, (_, index) => {
@@ -20,8 +29,11 @@ const GROWTH_MARKERS = Array.from({ length: MAX_GROWTH_STAGE }, (_, index) => {
 });
 
 export default function Home() {
+  const structuredData = landingStructuredData(siteEnv().appUrl);
+
   return (
     <div className="flex min-h-dvh flex-col bg-ground font-body text-copy">
+      <JsonLd data={structuredData} />
       <header className="flex items-center justify-between border-b border-edge/60 px-6 py-4 md:px-10">
         <Wordmark />
         <nav className="flex items-center gap-5 text-sm">
@@ -144,32 +156,7 @@ export default function Home() {
           </div>
 
           <ul aria-label="What you can do here" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {[
-              {
-                name: "Talk",
-                what: "Conversations that talk back. Mistakes are corrected in the flow of the chat, gently, and remembered.",
-              },
-              {
-                name: "Train",
-                what: "A personal trainer runs your review: the words that are due, the mistakes you keep making, and a real news item retold at your level.",
-              },
-              {
-                name: "Play a scene",
-                what: "Roleplays with dealt roles — order the food, catch the train — and reading passages your tutor asks you about.",
-              },
-              {
-                name: "Speak and listen",
-                what: "Replies read aloud at your pace. Answer with your voice, and it understands you.",
-              },
-              {
-                name: "See the whole path",
-                what: "Seventy mini-levels, every word with its article and its English, open from day one. No locked chapters.",
-              },
-              {
-                name: "Review that finds you",
-                what: "Words come back exactly when you are about to forget them, inside conversation rather than on flashcards.",
-              },
-            ].map((room) => (
+            {ROOMS.map((room) => (
               <li
                 key={room.name}
                 className="flex flex-col gap-2 rounded-2xl border border-edge/70 bg-panel/50 p-5"
@@ -306,6 +293,36 @@ export default function Home() {
             Your pace will differ — everyone&apos;s does. The product tells you
             where you actually are, not where the calendar says you should be.
           </p>
+        </section>
+
+        {/* The questions a visitor asks before signing up, answered in the
+            open. Plain headings and paragraphs rather than a disclosure
+            widget: a reader can scan them, and so can a crawler — the same
+            list is in the page's structured data, and Google only honours
+            FAQ markup it can see on the page. */}
+        <section
+          id="faq"
+          aria-labelledby="faq-heading"
+          className="border-t border-edge/60 bg-panel"
+        >
+          <div className="mx-auto flex w-full max-w-4xl flex-col gap-10 px-6 py-16 md:px-10 md:py-24">
+            <h2
+              id="faq-heading"
+              className="max-w-xl font-display text-3xl font-semibold tracking-tight md:text-4xl"
+            >
+              Questions, answered plainly
+            </h2>
+            <div className="grid gap-8 md:grid-cols-2">
+              {FAQ.map((entry) => (
+                <article key={entry.question} className="flex flex-col gap-2">
+                  <h3 className="font-display text-lg font-semibold text-brand">
+                    {entry.question}
+                  </h3>
+                  <p className="leading-relaxed text-copy/70">{entry.answer}</p>
+                </article>
+              ))}
+            </div>
+          </div>
         </section>
 
         {/* Honesty, stated plainly. Everyone else overclaims here. */}

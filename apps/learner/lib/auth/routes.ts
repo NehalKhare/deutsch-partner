@@ -12,7 +12,7 @@ export const SIGN_UP_PATH = "/auth/sign-up";
 export const DEFAULT_SIGNED_IN_PATH = "/dashboard";
 
 /** Prefixes that require a session. API routes authenticate themselves. */
-const PROTECTED_PREFIXES = [
+export const PROTECTED_PREFIXES = [
   "/dashboard",
   "/onboarding",
   "/chat",

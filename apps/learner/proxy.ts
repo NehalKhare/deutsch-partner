@@ -19,9 +19,11 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Everything except static assets and image files. Without this the guard
-  // would also intercept CSS, JS and images.
+  // Everything except static assets, image files, and the files a crawler
+  // asks for. Without this the guard would also intercept CSS, JS and images;
+  // and a session refresh — a round trip to Supabase — on every robots.txt
+  // fetch is a round trip spent on a visitor who has no session to refresh.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|api/health|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|woff2?)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/health|(?:robots\\.txt|sitemap\\.xml|manifest\\.webmanifest|llms\\.txt|opengraph-image|twitter-image|apple-icon|icon)$|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|woff2?)$).*)",
   ],
 };

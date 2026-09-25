@@ -414,6 +414,13 @@ Stated here so nobody has to discover it by reading the code.
   exists and the agent is told about it, but the composition wires no corpus
   behind it: the retriever wants a learner-shaped context the CPO does not
   have. Adapting it is the obvious next thing to do.
+- **Search reaches three pages.** The landing page, sign-up and sign-in are
+  the whole indexable surface: they carry canonical URLs, a share card,
+  structured data and a plain-text `/llms.txt` for answer engines, and every
+  room behind sign-in is kept out three ways (`docs/seo-and-geo.md`). There
+  are no content pages, no second language and no `hreflang`; a deployment
+  is unindexable until `SEO_INDEXING` says otherwise, and only production's
+  does.
 - **A plan is approved whole or rejected whole.** The gate does not yet let an
   operator drop files from the plan's lists before approving, which is the
   safer version of a quick approval. The graph's gate node is where that

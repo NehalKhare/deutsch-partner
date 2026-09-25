@@ -116,6 +116,9 @@ jobs:
           GCP_PROJECT: ${{ vars.GCP_PROJECT }}
           MIN_INSTANCES: ${{ vars.MIN_INSTANCES || '0' }}
           APP_URL: ${{ matrix.app == 'ops' && vars.OPS_APP_URL || vars.LEARNER_APP_URL }}
+          # Only production is indexable. Staging shares the product's name
+          # with it and must never compete for it in a search result.
+          SEO_INDEXING: ${{ env.ENVIRONMENT == 'production' && 'true' || 'false' }}
           SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
           LANGSMITH_TRACING: ${{ vars.LANGSMITH_TRACING || 'false' }}
           GITHUB_REPOSITORY_TARGET: ${{ github.repository }}
