@@ -13,6 +13,7 @@
  */
 export const PRIVATE_PATHS = [
   "/api",
+  "/billing",
   "/chat",
   "/curriculum",
   "/dashboard",

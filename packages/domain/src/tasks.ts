@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import type { CEFRLevel } from "./cefr";
+import type { PlanCode } from "./plans";
 
 /**
  * The normative task table.
@@ -28,6 +29,24 @@ export const TIERS = [
 
 export const tierSchema = z.enum(TIERS);
 export type Tier = z.infer<typeof tierSchema>;
+
+/**
+ * The tiers that carry chat, strongest first.
+ *
+ * The one ladder both directions of travel are measured on: budget
+ * degradation steps one rung down it, and a plan entry may only sit at or
+ * below its task's own rung. The gateway's registry walks this same constant,
+ * so "down" cannot mean one thing to the router and another to the degrader.
+ */
+export const CHAT_TIER_LADDER = [
+  "reasoning",
+  "strong",
+  "mid",
+  "cheap",
+  "nano",
+] as const satisfies readonly Tier[];
+
+export type ChatTier = (typeof CHAT_TIER_LADDER)[number];
 
 export const TASK_IDS = [
   "conversation.turn",
@@ -82,6 +101,19 @@ export interface WebSearch {
   readonly maxResults: number;
 }
 
+/**
+ * What a plan changes about a task (billing-and-plans-spec.md S3).
+ *
+ * A tier at or below the row's on the chat ladder, and ceilings at or below
+ * the row's; both are asserted by tests over the whole table. The plan itself
+ * is resolved on the server from entitlement rows, so this is still a lookup
+ * and still nothing a caller chooses.
+ */
+export interface PlanRoute {
+  readonly tier?: Tier;
+  readonly byLevel?: Readonly<Record<CEFRLevel, TokenCeilings>>;
+}
+
 export interface TaskRoute extends TokenCeilings {
   readonly tier: Tier;
   /**
@@ -89,21 +121,55 @@ export interface TaskRoute extends TokenCeilings {
    * are too. Everything else uses one pair.
    */
   readonly byLevel?: Readonly<Record<CEFRLevel, TokenCeilings>>;
+  /**
+   * Only the tutor, its repair and the Trainer's loop carry one. Adding an
+   * entry anywhere else is an edit to the billing spec first: see
+   * PLAN_INVARIANT_TASKS for the tasks that must never have one.
+   */
+  readonly byPlan?: Readonly<Partial<Record<PlanCode, PlanRoute>>>;
   readonly webSearch?: WebSearch;
 }
 
 const ROUTES: Readonly<Record<TaskId, TaskRoute>> = {
+  /**
+   * The tutor. The row is the most any plan may reach, which is premium's B1
+   * and exactly the strong tier's hard maxima; it is what a spec is validated
+   * against, not what a call is given. The level table beneath it is what
+   * every plan without its own gets — the ceilings the tutor had before plans
+   * existed, so a call that names no plan resolves exactly as it did.
+   *
+   * Free moves down to mid and keeps the level table, which fits mid's
+   * maxima. Premium keeps strong and widens every level: room for more of the
+   * conversation and the knowledge it retrieves, and a longer reply at B1,
+   * where the answers a learner can follow are longer too.
+   */
   "conversation.turn": {
     tier: "strong",
-    maxInputTokens: 6000,
-    maxOutputTokens: 700,
+    maxInputTokens: 8000,
+    maxOutputTokens: 1000,
     byLevel: {
       A1: { maxInputTokens: 4000, maxOutputTokens: 300 },
       A2: { maxInputTokens: 5000, maxOutputTokens: 450 },
       B1: { maxInputTokens: 6000, maxOutputTokens: 700 },
     },
+    byPlan: {
+      free: { tier: "mid" },
+      premium: {
+        byLevel: {
+          A1: { maxInputTokens: 5000, maxOutputTokens: 400 },
+          A2: { maxInputTokens: 6500, maxOutputTokens: 600 },
+          B1: { maxInputTokens: 8000, maxOutputTokens: 1000 },
+        },
+      },
+    },
   },
-  "conversation.repair": { tier: "strong", maxInputTokens: 6000, maxOutputTokens: 700 },
+  /** The same voice as the turn it repairs, so the same plan entry. */
+  "conversation.repair": {
+    tier: "strong",
+    maxInputTokens: 6000,
+    maxOutputTokens: 700,
+    byPlan: { free: { tier: "mid" } },
+  },
   "evaluation.learner_message": { tier: "mid", maxInputTokens: 3000, maxOutputTokens: 800 },
   "assessment.milestone": { tier: "reasoning", maxInputTokens: 8000, maxOutputTokens: 1500 },
   "assessment.mini_level_check": { tier: "mid", maxInputTokens: 3000, maxOutputTokens: 600 },
@@ -150,8 +216,17 @@ const ROUTES: Readonly<Record<TaskId, TaskRoute>> = {
    * corrected sentence, two model sentences and a word to use instead — came
    * back cut off mid-word at 700, two thirds of it spent thinking. Nothing is
    * billed for room it does not use; a ceiling is a limit, not a purchase.
+   *
+   * Free runs it on mid, the tier it moved up from, under free's smaller
+   * per-request bound (plans.ts). The ceilings stay the row's: mid's maxima
+   * hold them, and mid is the model that did its thinking out of this budget.
    */
-  "trainer.session": { tier: "strong", maxInputTokens: 6000, maxOutputTokens: 1000 },
+  "trainer.session": {
+    tier: "strong",
+    maxInputTokens: 6000,
+    maxOutputTokens: 1000,
+    byPlan: { free: { tier: "mid" } },
+  },
   /**
    * The Trainer's answer analyzer: one structured pass over one learner
    * sentence, in the reply path before the loop's first call. Cheap because
@@ -289,16 +364,79 @@ export function webSearchFor(task: TaskId): WebSearch | null {
   return ROUTES[task].webSearch ?? null;
 }
 
-/** The ceilings a task runs under, narrowed by level where the task varies. */
-export function ceilingsFor(task: TaskId, level?: CEFRLevel): TokenCeilings {
-  const route = ROUTES[task];
-  const scoped = level && route.byLevel ? route.byLevel[level] : undefined;
+/**
+ * A plan's entry for a task, if it has one. An own property only: the plan
+ * reaching here has been validated, but a lookup that could return
+ * Object.prototype for "__proto__" is not one to leave to that.
+ */
+function planRouteFor(route: TaskRoute, plan: PlanCode | undefined): PlanRoute | undefined {
+  if (plan === undefined || route.byPlan === undefined) return undefined;
+  return Object.hasOwn(route.byPlan, plan) ? route.byPlan[plan] : undefined;
+}
 
-  return scoped ?? {
-    maxInputTokens: route.maxInputTokens,
-    maxOutputTokens: route.maxOutputTokens,
+/** The tier a task runs on, for a plan where the plan changes it. */
+export function tierFor(task: TaskId, plan?: PlanCode): Tier {
+  const route = ROUTES[task];
+  return planRouteFor(route, plan)?.tier ?? route.tier;
+}
+
+function largestOf(table: Readonly<Record<CEFRLevel, TokenCeilings>>): TokenCeilings {
+  const levels = Object.values(table);
+  return {
+    maxInputTokens: Math.max(...levels.map((ceilings) => ceilings.maxInputTokens)),
+    maxOutputTokens: Math.max(...levels.map((ceilings) => ceilings.maxOutputTokens)),
   };
 }
+
+/**
+ * The ceilings a task runs under, narrowed by plan and level where it varies.
+ *
+ * The plan's own level table if it has one, else the task's, else the row.
+ * With no level, the largest the applicable table reaches at any level — not
+ * the row, which is the maximum across plans: a free call that forgot its
+ * level must not be handed premium's context, and a call with neither plan
+ * nor level must resolve as it did before plans existed.
+ */
+export function ceilingsFor(task: TaskId, level?: CEFRLevel, plan?: PlanCode): TokenCeilings {
+  const route = ROUTES[task];
+  const table = planRouteFor(route, plan)?.byLevel ?? route.byLevel;
+
+  if (!table) return maxCeilingsFor(task);
+  return (level ? table[level] : undefined) ?? largestOf(table);
+}
+
+/**
+ * The row: the most any call of this task may carry, on any plan at any
+ * level. What a call spec is validated against and what a tier's hard maxima
+ * must hold.
+ */
+export function maxCeilingsFor(task: TaskId): TokenCeilings {
+  const route = ROUTES[task];
+  return { maxInputTokens: route.maxInputTokens, maxOutputTokens: route.maxOutputTokens };
+}
+
+/** The tasks a plan changes, derived from the table rather than listed twice. */
+export const PLAN_ROUTED_TASKS: readonly TaskId[] = TASK_IDS.filter(
+  (task) => ROUTES[task].byPlan !== undefined,
+);
+
+/**
+ * The tasks that are identical on every plan (billing-and-plans-spec.md S4).
+ *
+ * They write learner state or grade German, and a level has to mean the same
+ * thing whoever is paying: a cheaper evaluator for free learners would make
+ * an A2 on Free a smaller A2. Safety is here because safety is not a feature.
+ * A test holds every one of them without a byPlan entry.
+ */
+export const PLAN_INVARIANT_TASKS: readonly TaskId[] = [
+  "evaluation.learner_message",
+  "extraction.errors",
+  "extraction.vocabulary_usage",
+  "trainer.answer_analysis",
+  "trainer.session_mining",
+  "classification.safety_screen",
+  ...TASK_IDS.filter((task) => task.startsWith("assessment.")),
+];
 
 /**
  * Work the routing table names as explicitly not a model call. Listed so a

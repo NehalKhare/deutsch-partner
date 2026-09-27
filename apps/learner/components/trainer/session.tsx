@@ -2,11 +2,18 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { UpgradePrompt } from "@/components/billing/upgrade-prompt";
 import { TrainerAgenda, type AgendaItem } from "@/components/trainer/agenda";
 import { ReplyFeedback } from "@/components/trainer/feedback";
 import { useReadAloud } from "@/components/voice/read-aloud";
 import { SpeakerIcon } from "@/components/voice/speaker-icon";
 import type { SpeechPlayback, SpeechVoice } from "@/components/voice/speech";
+import { VoicePlanNote } from "@/components/voice/voice-plan-note";
+import {
+  PlanRefusalError,
+  planRefusalFrom,
+  type PlanRefusal,
+} from "@/lib/billing/refusal";
 import { RichText } from "@dp/ui/rich-text";
 import { buttonPrimary, field, focusRing } from "@dp/ui/styles";
 import type { CEFRLevel } from "@dp/domain/cefr";
@@ -117,6 +124,13 @@ function CoachingNote({ dials }: { readonly dials: CoachingDials | null }) {
  * and what keeps the plan on screen after the message announcing it has
  * scrolled away. Nothing is stored; what survives is what the tools wrote,
  * review outcomes into vocabulary progress.
+ *
+ * Which is also why a request the plan refuses — a spent daily quota, a spent
+ * allowance — interrupts nothing but itself (billing-and-plans-spec.md S4):
+ * the agenda, what it has covered and the transcript stay exactly where they
+ * are, the sentence goes back in the box, and an upgrade prompt says when the
+ * window reopens. The next request carries the same agenda up and the session
+ * carries on from where it stopped.
  */
 export function TrainerSession({
   cefr = "A1",
@@ -141,11 +155,20 @@ export function TrainerSession({
   // The same read-aloud the chat uses, and the same fallback chain: a drill is
   // no less worth hearing than a conversation, and hearing "der Bahnhof" said
   // is most of what learning to say it is.
-  const { canSpeak, speakingId, notice: voiceNotice, speak } = useReadAloud({
+  const {
+    canSpeak,
+    speakingId,
+    notice: voiceNotice,
+    planRefusal: voicePlanRefusal,
+    dismissPlanRefusal,
+    speak,
+  } = useReadAloud({
     cefr,
     voiceGender,
     playback,
     voice,
+    // The Trainer's AI voice is a feature of its own (Premium's).
+    surface: "trainer",
   });
   const [readAloud, setReadAloud] = useState(outputPreference === "voice");
 
@@ -162,6 +185,8 @@ export function TrainerSession({
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The plan's answer to the last request, shown instead of the error.
+  const [refusal, setRefusal] = useState<PlanRefusal | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const nextId = useRef(0);
 
@@ -174,6 +199,7 @@ export function TrainerSession({
       .map(({ role, content }) => ({ role, content }));
 
     setError(null);
+    setRefusal(null);
     setPending(true);
     setEntries((previous) => [...previous, { id, role: "user", content: message }]);
 
@@ -207,6 +233,8 @@ export function TrainerSession({
         | null;
 
       if (!response.ok || typeof body?.reply !== "string") {
+        const refused = planRefusalFrom(body);
+        if (refused) throw new PlanRefusalError(refused);
         throw new Error(body?.message ?? FALLBACK_ERROR);
       }
 
@@ -232,9 +260,14 @@ export function TrainerSession({
       if (body.complete) setComplete(true);
     } catch (failure) {
       // The turn did not happen; the words go back where they can be resent.
+      // The agenda and what it has covered are left alone either way.
       setEntries((previous) => previous.filter((entry) => entry.id !== id));
       setDraft((current) => (current.length === 0 ? message : current));
-      setError(failure instanceof Error ? failure.message : FALLBACK_ERROR);
+      if (failure instanceof PlanRefusalError) {
+        setRefusal(failure.refusal);
+      } else {
+        setError(failure instanceof Error ? failure.message : FALLBACK_ERROR);
+      }
     } finally {
       setPending(false);
       inputRef.current?.focus();
@@ -267,6 +300,7 @@ export function TrainerSession({
     setCovered([]);
     setComplete(false);
     setError(null);
+    setRefusal(null);
     setDraft("");
   }
 
@@ -428,6 +462,20 @@ export function TrainerSession({
             {voiceNotice}
           </p>
         ) : null}
+
+        {/* What the plan said, in a polite region that is always on the
+            page: one inserted already holding its text is often never
+            announced, so this one is here first and fills. */}
+        <div data-live="plan" aria-live="polite" className="flex flex-col gap-5 empty:absolute">
+          {voicePlanRefusal ? (
+            <VoicePlanNote
+              refusal={voicePlanRefusal}
+              onDismiss={dismissPlanRefusal}
+              surface="trainer"
+            />
+          ) : null}
+          {refusal ? <UpgradePrompt refusal={refusal} /> : null}
+        </div>
 
         {error ? (
           <p

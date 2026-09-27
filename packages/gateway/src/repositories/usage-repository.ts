@@ -140,10 +140,16 @@ export function createUsageAccounting(
         : { ok: false, detail: "ledger returned no row id" };
     },
 
-    async snapshot({ userIdHash, now }): Promise<readonly BudgetSnapshot[] | null> {
+    async snapshot({ userIdHash, now, plan }): Promise<readonly BudgetSnapshot[] | null> {
       const outcome = await client.rpc("budget_snapshot", {
         p_user_id_hash: userIdHash,
         p_now: now.toISOString(),
+        // Named only when there is a plan. The function's p_plan defaults to
+        // null, so the two are the same read — but a call with no plan then
+        // sends exactly what it sent before plans existed, and does not stop
+        // every model call failing closed on a database that has not yet
+        // been migrated to the three-argument signature.
+        ...(plan ? { p_plan: plan } : {}),
       });
 
       if (outcome.error) {

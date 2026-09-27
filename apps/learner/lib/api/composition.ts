@@ -3,6 +3,15 @@ import "server-only";
 
 import { after } from "next/server";
 
+import type { BillingProvider } from "@dp/billing/provider";
+import { createStripeProvider } from "@dp/billing/stripe-provider";
+import {
+  createBillingAdminRepository,
+  createLearnerBillingRepository,
+  type BillingAdminRepository,
+  type LearnerBillingRepository,
+} from "@dp/db/billing-repository";
+
 import { createEvaluator } from "@/lib/ai/evaluation";
 import {
   createEmbeddingService,
@@ -44,6 +53,10 @@ import {
 import { loadMcpTools } from "@/lib/trainer/mcp";
 import type { TrainerDeps } from "@/lib/api/trainer";
 import type { TrainerFeedbackDeps } from "@/lib/api/trainer-feedback";
+import type { BillingWebhookDeps } from "@/lib/api/billing-webhook";
+import type { BillingOrderDeps } from "@/lib/billing/orders";
+import { DEFAULT_CURRENCY } from "@/lib/billing/offers";
+import { pseudonymOrUnavailable } from "@/lib/api/pseudonym";
 import { createConversationRepository } from "@dp/db/conversation-repository";
 import { createEmbeddingCache } from "@dp/gateway/repositories/embedding-cache-repository";
 import { createGrammarRepository } from "@dp/db/grammar-repository";
@@ -387,5 +400,135 @@ export async function createTrainerFeedbackGraph(): Promise<{
       newId: () => randomUUID(),
       logger,
     },
+  };
+}
+
+// --- payments -------------------------------------------------------------------
+
+/**
+ * A logger for the billing surfaces: the pages, the actions and the webhook.
+ *
+ * The landing page and /pricing log through this when the price list cannot
+ * be read, and they render where the production secrets may be absent (see
+ * siteEnv). So it names the environment when it can and never throws for
+ * want of one: the line saying why prices are missing must not be what takes
+ * the page down.
+ */
+export function billingLogger(): Logger {
+  let environment: string;
+  try {
+    environment = serverEnv().NODE_ENV;
+  } catch {
+    environment = "unconfigured";
+  }
+  return createLogger({ base: { service: "billing", environment } });
+}
+
+/**
+ * Payments, or nothing when no Stripe key is configured.
+ *
+ * Nothing rather than a throw, as with voice: an unset optional capability
+ * must not take a required one down. With no key the pricing page still
+ * renders and describes the plans, the order page says payments are not
+ * switched on yet, and the webhook answers 503 so Stripe keeps its events
+ * until they are. The env schema already refuses a key without a webhook
+ * secret, and the reverse.
+ */
+export function createBillingProviderOrNull(): BillingProvider | null {
+  const env = serverEnv();
+  if (!env.STRIPE_SECRET_KEY) return null;
+
+  return createStripeProvider({
+    secretKey: env.STRIPE_SECRET_KEY,
+    webhookSecret: env.STRIPE_WEBHOOK_SECRET ?? null,
+  });
+}
+
+/** Whether payments are switched on, for a page that only needs to say so. */
+export function paymentsEnabled(): boolean {
+  return serverEnv().STRIPE_SECRET_KEY !== undefined;
+}
+
+/**
+ * The signed-in learner's own billing rows. RLS applies: the tables grant a
+ * learner select on their own rows and nothing else, so this can read what
+ * entitlement resolves from and cannot write any of it.
+ */
+export async function createLearnerBilling(): Promise<LearnerBillingRepository> {
+  const learnerClient =
+    (await createServerSupabaseClient()) as unknown as DatabaseClient;
+  return createLearnerBillingRepository(learnerClient);
+}
+
+/**
+ * The price mirror, for the pricing and landing pages.
+ *
+ * Bypasses RLS, for one reason: billing_prices is operator scope — RLS on
+ * and no policy — and a visitor reading the pricing page has no session to
+ * read it with. It holds Stripe's public price list and no learner data, and
+ * this hands out its one read and nothing else of the admin repository.
+ */
+export function createPriceReader(): Pick<BillingAdminRepository, "activePrices"> {
+  const admin = createBillingAdminRepository(
+    createSecretKeySupabaseClient() as unknown as DatabaseClient,
+  );
+  return { activePrices: () => admin.activePrices() };
+}
+
+/**
+ * The order page's, the trial's and the Customer Portal's dependencies, less
+ * the rate limiters, which the actions take from their own module.
+ */
+export async function createBillingGraph(): Promise<
+  Omit<BillingOrderDeps, "limiter" | "trialLimiter">
+> {
+  const env = serverEnv();
+
+  // RLS applies. What the learner has — and whether their trial is used —
+  // is read as the learner.
+  const learnerClient =
+    (await createServerSupabaseClient()) as unknown as DatabaseClient;
+  // Bypasses RLS. The billing tables grant a learner select only; the order
+  // record, the customer mapping and the price mirror are written or read
+  // with the secret key, and every call takes the learner id from the
+  // verified session, never from the form.
+  const operatorClient =
+    createSecretKeySupabaseClient() as unknown as DatabaseClient;
+
+  return {
+    provider: createBillingProviderOrNull(),
+    learner: createLearnerBillingRepository(learnerClient),
+    admin: createBillingAdminRepository(operatorClient),
+    logger: billingLogger(),
+    now: () => new Date(),
+    appUrl: env.APP_URL,
+    automaticTax: env.STRIPE_AUTOMATIC_TAX,
+    currency: DEFAULT_CURRENCY,
+  };
+}
+
+/**
+ * The webhook's dependencies, or null when payments are off.
+ *
+ * Bypasses RLS, and has to: the webhook has no session. The Stripe signature
+ * is its authentication, and every learner it writes for is found through
+ * the customer mapping this application created for an authenticated
+ * session — never from anything in the event.
+ */
+export function createBillingWebhookGraph(): BillingWebhookDeps | null {
+  const provider = createBillingProviderOrNull();
+  if (!provider) return null;
+
+  const operatorClient =
+    createSecretKeySupabaseClient() as unknown as DatabaseClient;
+
+  return {
+    provider,
+    repo: createBillingAdminRepository(operatorClient),
+    logger: billingLogger(),
+    now: () => new Date(),
+    // The audit trail's pseudonym, or a marker saying there is none: an
+    // unset salt must not turn every payment event into a retry.
+    pseudonymFor: pseudonymOrUnavailable,
   };
 }

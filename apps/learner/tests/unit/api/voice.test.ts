@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   createMockSpeechToText,
@@ -253,6 +253,118 @@ describe("reading what the browser recorded in", () => {
 
     expect(result).toEqual({ ok: false, error: "unsupported_format" });
     expect(stt.calls).toHaveLength(0);
+  });
+});
+
+describe("the plan's daily voice allowance", () => {
+  // Counted last: a clip the checks above would refuse, or a body that does
+  // not parse, has used nothing (billing-and-plans-spec.md S2). Free has five
+  // spoken answers a day, and a browser that records an odd format must not
+  // be able to spend them.
+  const RESET = new Date("2026-10-02T09:30:00.000Z");
+  const allowed = () => vi.fn(async () => ({ allowed: true as const, remaining: 3, resetAt: RESET }));
+  const exhausted = () =>
+    vi.fn(async () => ({ allowed: false as const, refusal: "quota_exhausted" as const, resetAt: RESET }));
+
+  it.each([
+    ["an empty clip", { audio: new Uint8Array(0) }],
+    ["a format nobody records", { format: "flac" }],
+    ["a clip longer than a spoken turn", { durationMs: MAX_TURN_AUDIO_MS + 1 }],
+  ] as const)("counts nothing for %s", async (_label, over) => {
+    const admit = allowed();
+
+    await handleTranscription(clip(over), createMockSpeechToText(), admit);
+
+    expect(admit).not.toHaveBeenCalled();
+  });
+
+  it("counts a clip that passed every check, once, before the provider hears it", async () => {
+    const admit = allowed();
+    const stt = createMockSpeechToText({ transcript: "Hallo" });
+
+    expect(await handleTranscription(clip(), stt, admit)).toMatchObject({ ok: true });
+    expect(admit).toHaveBeenCalledTimes(1);
+    expect(stt.calls).toHaveLength(1);
+  });
+
+  it("refuses a spent allowance with when it reopens, and uploads nothing", async () => {
+    const stt = createMockSpeechToText();
+
+    const result = await handleTranscription(clip(), stt, exhausted());
+
+    expect(result).toEqual({ ok: false, error: "quota_exhausted", resetAt: RESET });
+    expect(stt.calls).toHaveLength(0);
+  });
+
+  it("answers a quota store that could not count as the voice being unavailable, not a spent day", async () => {
+    const stt = createMockSpeechToText();
+    const down = vi.fn(async () => ({ allowed: false as const, refusal: "unavailable" as const, resetAt: null }));
+
+    expect(await handleTranscription(clip(), stt, down)).toEqual({ ok: false, error: "voice_unavailable" });
+    expect(await handleSynthesis({ text: "Hallo!" }, createMockTextToSpeech(), down)).toEqual({
+      ok: false,
+      error: "voice_unavailable",
+    });
+    expect(stt.calls).toHaveLength(0);
+  });
+
+  it("counts nothing for a line that does not parse", async () => {
+    const admit = allowed();
+
+    await handleSynthesis({ text: "" }, createMockTextToSpeech(), admit);
+
+    expect(admit).not.toHaveBeenCalled();
+  });
+
+  it("refuses a plan without the model voice before the provider is asked", async () => {
+    const tts = createMockTextToSpeech();
+    const admit = vi.fn(async () => ({
+      allowed: false as const,
+      refusal: "plan_required" as const,
+      resetAt: null,
+    }));
+
+    const result = await handleSynthesis({ text: "Hallo!" }, tts, admit);
+
+    expect(result).toEqual({ ok: false, error: "plan_required", resetAt: null });
+    expect(tts.calls).toHaveLength(0);
+  });
+
+  it("tells the admission where the line is read, so the Trainer's voice can be its own feature", async () => {
+    // Voice in the Trainer is Premium's (spec S2). A wrong claim can only
+    // spend voice lines the plan already has; the quota is the bound.
+    const admit = allowed();
+
+    await handleSynthesis({ text: "Hallo!", surface: "trainer" }, createMockTextToSpeech(), admit);
+    await handleSynthesis({ text: "Hallo!" }, createMockTextToSpeech(), admit);
+
+    expect(admit).toHaveBeenNthCalledWith(1, { surface: "trainer" });
+    expect(admit).toHaveBeenNthCalledWith(2, { surface: "chat" });
+  });
+
+  it("refuses a surface the product does not have", async () => {
+    const admit = allowed();
+
+    expect(await handleSynthesis({ text: "Hallo!", surface: "radio" }, createMockTextToSpeech(), admit)).toEqual({
+      ok: false,
+      error: "invalid_body",
+    });
+    expect(admit).not.toHaveBeenCalled();
+  });
+
+  it("counts nothing when speaking is not configured at all", async () => {
+    const admit = allowed();
+
+    await handleSynthesis({ text: "Hallo!" }, null, admit);
+    await handleTranscription(clip(), null, admit);
+
+    expect(admit).not.toHaveBeenCalled();
+  });
+
+  it("names both refusals, with the status a client branches on", () => {
+    expect(VOICE_FAILURES).toEqual(expect.arrayContaining(["plan_required", "quota_exhausted"]));
+    expect(voiceErrorResponse("plan_required").status).toBe(402);
+    expect(voiceErrorResponse("quota_exhausted").status).toBe(429);
   });
 });
 

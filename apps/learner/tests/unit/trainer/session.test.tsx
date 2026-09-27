@@ -423,6 +423,121 @@ describe("a turn the server refused", () => {
   });
 });
 
+describe("a request the plan refused", () => {
+  // billing-and-plans-spec.md S4: a quota refuses this request and nothing
+  // else. The agenda, what it has covered and the transcript are the
+  // browser's, and stay; the sentence goes back in the box; the prompt says
+  // when the window reopens and that progress is saved.
+  const refusal = (over: Record<string, unknown> = {}) => ({
+    error: "quota_exhausted",
+    message: "You've used today's Trainer requests.",
+    resetAt: new Date(Date.now() + 3_600_000).toISOString(),
+    upgrade: true,
+    ...over,
+  });
+
+  async function refuseSecondTurn(body: Record<string, unknown>) {
+    let turn = 0;
+    server.use(
+      http.post(TRAINER_ENDPOINT, () => {
+        turn += 1;
+        return turn === 1 ? HttpResponse.json(REPLY) : HttpResponse.json(body, { status: 429 });
+      }),
+    );
+    const rendered = render(<TrainerSession />);
+
+    await sendMessage();
+    await screen.findByText(/richtig!/i);
+    const user = await sendMessage("Fahren heißt to drive.");
+    await screen.findByText(String(body.message));
+
+    return { user, ...rendered };
+  }
+
+  it("shows an upgrade prompt in place of the red alert", async () => {
+    await refuseSecondTurn(refusal());
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByText(/your progress is saved/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /see plans/i })).toHaveAttribute("href", "/pricing");
+  });
+
+  it("says it in a live region that was on the page before it, so a screen reader hears it", async () => {
+    let region: Element | null = null;
+    let turn = 0;
+    server.use(
+      http.post(TRAINER_ENDPOINT, () => {
+        turn += 1;
+        return turn === 1 ? HttpResponse.json(REPLY) : HttpResponse.json(refusal(), { status: 429 });
+      }),
+    );
+    const { container } = render(<TrainerSession />);
+    region = container.querySelector("[data-live='plan']");
+    expect(region).toHaveAttribute("aria-live", "polite");
+    expect(region).toBeEmptyDOMElement();
+
+    await sendMessage();
+    await screen.findByText(/richtig!/i);
+    await sendMessage("Fahren heißt to drive.");
+
+    await waitFor(() => expect(region).toHaveTextContent("You've used today's Trainer requests."));
+    expect(container.querySelector("[data-live='plan']")).toBe(region);
+  });
+
+  it("keeps the session: the transcript, the agenda and the draft", async () => {
+    const { container } = await refuseSecondTurn(refusal());
+
+    expect(screen.getByText(/richtig!/i)).toBeInTheDocument();
+    expect(container.querySelectorAll("[data-role='user']")).toHaveLength(1);
+    expect(screen.getAllByText("fahren").length).toBeGreaterThan(0);
+    expect(screen.getByLabelText(/your message to the trainer/i)).toHaveValue("Fahren heißt to drive.");
+    // Still a session in progress, not one that ended.
+    expect(container.querySelector("[data-role='session-end']")).not.toBeInTheDocument();
+  });
+
+  it("resumes the same agenda once a request goes through", async () => {
+    const sent: unknown[] = [];
+    const { user } = await refuseSecondTurn(refusal());
+    server.use(
+      http.post(TRAINER_ENDPOINT, async ({ request }) => {
+        sent.push(await request.json());
+        return HttpResponse.json(REPLY);
+      }),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0]).toMatchObject({
+      agenda: REPLY.agenda,
+      covered: REPLY.covered,
+      message: "Fahren heißt to drive.",
+    });
+    await waitFor(() =>
+      expect(screen.queryByText("You've used today's Trainer requests.")).not.toBeInTheDocument(),
+    );
+  });
+
+  it("sells a Premium learner nothing", async () => {
+    await refuseSecondTurn(refusal({ upgrade: false }));
+
+    expect(screen.queryByRole("link", { name: /see plans/i })).not.toBeInTheDocument();
+  });
+
+  it("says a spent allowance the same way", async () => {
+    await refuseSecondTurn(
+      refusal({
+        error: "budget_exhausted",
+        message: "You've used your AI allowance for now.",
+        resetAt: "2026-11-01T00:00:00.000Z",
+      }),
+    );
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByText(/renews on/i)).toBeInTheDocument();
+  });
+});
+
 describe("what the learner's feedback has changed", () => {
   it("offers a vote under every reply and none under the learner's own lines", async () => {
     server.use(http.post(TRAINER_ENDPOINT, () => HttpResponse.json(REPLY)));

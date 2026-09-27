@@ -1,4 +1,5 @@
 import { CEFR_LEVELS, MAX_MINI_LEVEL } from "@dp/domain/cefr";
+import { PLAN_CATALOGUE } from "@dp/domain/plans";
 import { TUTOR } from "@dp/domain/tutor";
 
 import { GUIDED_HOURS, timelinePhrase } from "@/lib/landing/timeline";
@@ -20,6 +21,20 @@ export interface Faq {
 }
 
 const lastLevel = CEFR_LEVELS[CEFR_LEVELS.length - 1]!;
+
+const turns = (plan: keyof typeof PLAN_CATALOGUE) => PLAN_CATALOGUE[plan].dailyQuotas.tutor_turns;
+
+/**
+ * The fear worth answering before anyone pays: that paying buys a better
+ * grade, or that not paying buys a worse one (billing-and-plans-spec.md S4).
+ * Asked on the landing page and on /pricing, in the same words.
+ */
+export const ASSESSMENT_FAQ: Faq = {
+  question: "Does paying change how I am assessed?",
+  answer:
+    `No. Every plan gets the same evaluation, the same levels and the same curriculum. ` +
+    `A plan buys more practice with ${TUTOR.name} and a stronger tutor model, never a different grade.`,
+};
 
 export const FAQ: readonly Faq[] = [
   {
@@ -57,6 +72,15 @@ export const FAQ: readonly Faq[] = [
       "No. Create an account and your first conversation takes about two minutes. " +
       "No card is asked for.",
   },
+  {
+    question: `What do ${PLAN_CATALOGUE.plus.name} and ${PLAN_CATALOGUE.premium.name} add?`,
+    answer:
+      `A stronger tutor model, more conversation each day (${turns("plus")} and ` +
+      `${turns("premium")} tutor turns, against ${turns("free")} on ${PLAN_CATALOGUE.free.name}), ` +
+      `and a natural AI voice. ${PLAN_CATALOGUE.premium.name} also keeps more of each conversation ` +
+      `in view. Prices are on the pricing page, and they include VAT.`,
+  },
+  ASSESSMENT_FAQ,
   {
     question: "Does it issue certificates?",
     answer:

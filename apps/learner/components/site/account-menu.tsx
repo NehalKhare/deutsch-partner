@@ -14,7 +14,8 @@ import { cn } from "@dp/ui/utils";
  * The account menu.
  *
  * Everything that is about *you* rather than about learning German: which
- * account you are in, your settings, and the way out. None of those is a room
+ * account you are in, your settings, your plan and what you pay for it, and
+ * the way out. None of those is a room
  * to walk into, so none of them belongs in the main navigation beside Chat and
  * Catch up — and a sign-out link sitting permanently in the open, one mis-click
  * from ending a session, is the worst of them. The operator pages are a
@@ -48,7 +49,10 @@ export function AccountMenu({ label, email, signOut }: AccountMenuProps) {
   const panelId = useId();
   const labelId = useId();
 
-  const links = [{ href: "/settings", label: "Settings" }];
+  const links = [
+    { href: "/settings", label: "Settings" },
+    { href: "/billing", label: "Plan & billing" },
+  ];
 
   return (
     <div ref={container} className="relative">

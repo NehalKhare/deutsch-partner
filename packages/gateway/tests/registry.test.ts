@@ -6,7 +6,18 @@ import {
   downgradeTier,
   registryOverridesFromEnv,
 } from "../src/registry";
-import { TASK_IDS, TIERS, ceilingsFor, routeFor, type Tier } from "@dp/domain/tasks";
+import { CEFR_LEVELS } from "@dp/domain/cefr";
+import { PLAN_CODES } from "@dp/domain/plans";
+import {
+  CHAT_TIER_LADDER,
+  TASK_IDS,
+  TIERS,
+  ceilingsFor,
+  maxCeilingsFor,
+  routeFor,
+  tierFor,
+  type Tier,
+} from "@dp/domain/tasks";
 import { parseEnv } from "@dp/env/schema";
 
 const registry = createModelRegistry();
@@ -69,11 +80,12 @@ describe("model registry", () => {
 
   it("gives every tier headroom for the largest task routed to it", () => {
     // A tier whose hard ceiling sits under a task's ceiling is a call that can
-    // only ever be denied, discovered in production rather than here.
+    // only ever be denied, discovered in production rather than here. The
+    // row, not a resolution: it is the most any plan or level reaches.
     for (const task of TASK_IDS) {
       const tier = routeFor(task).tier;
       const entry = registry.forTier(tier);
-      const ceilings = ceilingsFor(task);
+      const ceilings = maxCeilingsFor(task);
 
       expect(entry.hardMaxOutputTokens, `${task} output`).toBeGreaterThanOrEqual(
         ceilings.maxOutputTokens,
@@ -81,6 +93,29 @@ describe("model registry", () => {
       expect(entry.hardMaxInputTokens, `${task} input`).toBeGreaterThanOrEqual(
         ceilings.maxInputTokens,
       );
+    }
+  });
+
+  it("fits every plan's route inside the hard maxima of the tier it runs on", () => {
+    // billing-and-plans-spec.md S3. A plan that moves a task down to mid
+    // brings its ceilings with it, and mid's maxima are smaller than strong's:
+    // a free tutor handed premium's context would be refused on every call.
+    for (const task of TASK_IDS) {
+      for (const plan of [...PLAN_CODES, undefined]) {
+        const entry = registry.forTier(tierFor(task, plan));
+
+        for (const level of [...CEFR_LEVELS, undefined]) {
+          const ceilings = ceilingsFor(task, level, plan);
+          const label = `${task} ${plan ?? "no plan"} ${level ?? "no level"}`;
+
+          expect(entry.hardMaxInputTokens, `${label} input`).toBeGreaterThanOrEqual(
+            ceilings.maxInputTokens,
+          );
+          expect(entry.hardMaxOutputTokens, `${label} output`).toBeGreaterThanOrEqual(
+            ceilings.maxOutputTokens,
+          );
+        }
+      }
     }
   });
 
@@ -135,6 +170,12 @@ describe("model registry", () => {
 });
 
 describe("tier ordering", () => {
+  it("walks the same ladder the routing table ranks plans on", () => {
+    // Degradation and the byPlan rule "down the ladder, never up" must mean the
+    // same ladder, or a plan could be "down" by one and "up" by the other.
+    expect(CHAT_TIERS).toEqual(CHAT_TIER_LADDER);
+  });
+
   it("walks downward one step at a time and stops at the cheapest", () => {
     const walked: Tier[] = [];
     let tier: Tier | null = "reasoning";

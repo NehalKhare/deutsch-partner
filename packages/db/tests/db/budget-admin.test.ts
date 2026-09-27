@@ -1,7 +1,9 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
+import { createBudgetRepository } from "../../src/budget-repository";
 import { LEDGER_COLUMNS, invocationSchema } from "../../src/ledger-repository";
 import { ALICE, createTestDatabase, type TestDatabase } from "../../src/testing/harness";
+import { createPgliteClient } from "../../src/testing/pglite-client";
 
 /**
  * The operator's budget and pricing functions, against a real engine.
@@ -23,9 +25,18 @@ const TOMORROW = "2026-09-24T00:00:00Z";
 const MONTH = "2026-09-01T00:00:00Z";
 const NEXT_MONTH = "2026-10-01T00:00:00Z";
 
+/** budget_limits as the migrations leave it, before any test clears it. */
+let seeded: Array<{ scope: string; scope_key: string | null; limit_eur: string; warn_pct: string; degrade_pct: string; active: boolean }>;
+
 beforeAll(async () => {
   database = await createTestDatabase();
   await database.seedLearner(ALICE);
+  seeded = (
+    await database.db.query<(typeof seeded)[number]>(
+      `select scope, scope_key, limit_eur, warn_pct, degrade_pct, active
+         from public.budget_limits order by scope, scope_key`,
+    )
+  ).rows;
 });
 
 afterAll(async () => {
@@ -140,6 +151,44 @@ describe("set_budget_limit", () => {
   });
 });
 
+describe("set_budget_limit with a plan", () => {
+  it("keeps a plan's default apart from the scope's and from a learner's", async () => {
+    await setLimit("per_user_monthly", null, "10");
+    await setLimit("per_user_monthly", "plan:plus", "4");
+    await setLimit("per_user_monthly", HASH_A, "20");
+
+    const rows = await database.db.query<{ scope_key: string | null }>(
+      `select scope_key from public.budget_limits order by scope_key nulls first`,
+    );
+    expect(rows.rows.map((row) => row.scope_key)).toEqual([null, HASH_A, "plan:plus"]);
+  });
+
+  it("edits a plan's default in place", async () => {
+    await setLimit("per_user_monthly", "plan:free", "1");
+    const edited = await setLimit("per_user_monthly", "plan:free", "0.80");
+
+    expect(Number(edited.before?.limit_eur)).toBe(1);
+    expect(Number(edited.after.limit_eur)).toBe(0.8);
+  });
+
+  it("refuses a plan that does not exist, and a key that is neither a pseudonym nor a plan", async () => {
+    // The form refuses both first; this is the refusal below it.
+    for (const key of ["plan:gold", "alice@example.com", "11111111-1111-4111-8111-111111111111"]) {
+      expect(await refusal(() => setLimit("per_user_monthly", key, "1")), key).toBe("22023");
+    }
+  });
+
+  it("refuses a plan key on the global scope", async () => {
+    expect(await refusal(() => setLimit("global_daily", "plan:free", "5"))).toBe("22023");
+  });
+
+  it("refuses to switch a plan's default off", async () => {
+    expect(
+      await refusal(() => setLimit("per_user_monthly", "plan:free", "1", { active: false })),
+    ).toBe("22023");
+  });
+});
+
 describe("remove_budget_override", () => {
   it("removes one learner's override and returns what it was", async () => {
     await setLimit("per_user_daily", HASH_A, "2");
@@ -154,6 +203,18 @@ describe("remove_budget_override", () => {
     expect(rows.rows).toHaveLength(0);
   });
 
+  it("never removes a plan's default", async () => {
+    await setLimit("per_user_monthly", "plan:premium", "9");
+
+    const result = await database.db.query<{ removed: unknown }>(
+      `select public.remove_budget_override('per_user_monthly', 'plan:premium') as removed`,
+    );
+    expect(result.rows[0].removed).toBeNull();
+
+    const rows = await database.db.query(`select * from public.budget_limits`);
+    expect(rows.rows).toHaveLength(1);
+  });
+
   it("never removes a scope's default", async () => {
     await setLimit("per_user_daily", null, "0.50");
 
@@ -164,6 +225,117 @@ describe("remove_budget_override", () => {
 
     const rows = await database.db.query(`select * from public.budget_limits`);
     expect(rows.rows).toHaveLength(1);
+  });
+});
+
+describe("the plans' starting budgets", () => {
+  it("are seeded as spec S9 states them, per learner per month", () => {
+    const plans = seeded
+      .filter((row) => row.scope_key?.startsWith("plan:"))
+      .map((row) => [row.scope, row.scope_key, Number(row.limit_eur), Number(row.degrade_pct), row.active]);
+
+    // Degraded one tier at 90%, refused at 100% (spec S9, routing S9).
+    expect(plans).toEqual([
+      ["per_user_monthly", "plan:free", 1, 0.9, true],
+      ["per_user_monthly", "plan:plus", 4, 0.9, true],
+      ["per_user_monthly", "plan:premium", 9, 0.9, true],
+    ]);
+  });
+
+  it("are the only rows the migrations write: every other limit is an operator's decision", () => {
+    expect(seeded.filter((row) => !row.scope_key?.startsWith("plan:"))).toEqual([]);
+  });
+});
+
+interface SnapshotRow {
+  scope: string;
+  scope_key: string | null;
+  limit_eur: string;
+  spent_eur: string;
+}
+
+async function snapshotFor(hash: string | null, plan?: string | null): Promise<Record<string, SnapshotRow>> {
+  const result =
+    plan === undefined
+      ? await database.db.query<SnapshotRow>(
+          `select scope, scope_key, limit_eur, spent_eur from public.budget_snapshot($1, $2::timestamptz)`,
+          [hash, NOW],
+        )
+      : await database.db.query<SnapshotRow>(
+          `select scope, scope_key, limit_eur, spent_eur from public.budget_snapshot($1, $2::timestamptz, $3)`,
+          [hash, NOW, plan],
+        );
+  return Object.fromEntries(result.rows.map((row) => [row.scope, row]));
+}
+
+const limitOf = (rows: Record<string, SnapshotRow>, scope: string) =>
+  rows[scope] === undefined ? undefined : Number(rows[scope].limit_eur);
+
+describe("budget_snapshot with a plan", () => {
+  beforeEach(async () => {
+    await setLimit("global_daily", null, "50");
+    await setLimit("per_user_monthly", null, "10");
+    await setLimit("per_user_monthly", "plan:free", "1");
+    await setLimit("per_user_monthly", "plan:premium", "9");
+  });
+
+  it("applies the plan's default in place of the scope's", async () => {
+    expect(limitOf(await snapshotFor(HASH_A, "free"), "per_user_monthly")).toBe(1);
+    expect(limitOf(await snapshotFor(HASH_A, "premium"), "per_user_monthly")).toBe(9);
+  });
+
+  it("lets a learner's own override beat their plan's default", async () => {
+    // How support gives one heavy free learner more room, or an abusive one less.
+    await setLimit("per_user_monthly", HASH_A, "3");
+
+    expect(limitOf(await snapshotFor(HASH_A, "free"), "per_user_monthly")).toBe(3);
+    expect(limitOf(await snapshotFor(HASH_B, "free"), "per_user_monthly")).toBe(1);
+  });
+
+  it("falls back to the scope's default for a plan with no row of its own", async () => {
+    expect(limitOf(await snapshotFor(HASH_A, "plus"), "per_user_monthly")).toBe(10);
+  });
+
+  it("falls back to the scope's default when the plan's row is inactive", async () => {
+    // Not reachable from the form, which refuses it; the gate agrees anyway.
+    await database.db.exec(`update public.budget_limits set active = false where scope_key = 'plan:free'`);
+
+    expect(limitOf(await snapshotFor(HASH_A, "free"), "per_user_monthly")).toBe(10);
+  });
+
+  it("resolves exactly as before when the call names no plan", async () => {
+    // Every call site until plans are enforced: the plan rows must be invisible to it.
+    const twoArguments = await snapshotFor(HASH_A);
+    const nullPlan = await snapshotFor(HASH_A, null);
+
+    expect(limitOf(twoArguments, "per_user_monthly")).toBe(10);
+    expect(nullPlan).toEqual(twoArguments);
+  });
+
+  it("does not match a plan it does not know", async () => {
+    expect(limitOf(await snapshotFor(HASH_A, "gold"), "per_user_monthly")).toBe(10);
+  });
+
+  it("leaves the global scope to its own row, whatever the plan", async () => {
+    expect(limitOf(await snapshotFor(HASH_A, "free"), "global_daily")).toBe(50);
+  });
+
+  it("gives a per-learner scope a plan's row even where the scope has no default", async () => {
+    await setLimit("per_user_daily", "plan:free", "0.10");
+
+    expect(limitOf(await snapshotFor(HASH_A, "free"), "per_user_daily")).toBe(0.1);
+    expect(limitOf(await snapshotFor(HASH_A, "premium"), "per_user_daily")).toBeUndefined();
+  });
+
+  it("still counts the learner's own spend, never the plan's together", async () => {
+    // A plan bounds each of its learners; the counter stays keyed by the learner.
+    await count("per_user_monthly", HASH_A, MONTH, NEXT_MONTH, "0.75");
+    await count("per_user_monthly", HASH_B, MONTH, NEXT_MONTH, "0.20");
+
+    const alice = await snapshotFor(HASH_A, "free");
+    expect(alice.per_user_monthly).toMatchObject({ scope_key: HASH_A });
+    expect(Number(alice.per_user_monthly?.spent_eur)).toBe(0.75);
+    expect(Number((await snapshotFor(HASH_B, "free")).per_user_monthly?.spent_eur)).toBe(0.2);
   });
 });
 
@@ -244,6 +416,21 @@ describe("budget_overview", () => {
     // No limit configured is reported as none, not as zero.
     expect(monthly[0]?.limitEur).toBeNull();
     expect(result.learnerCounts).toEqual({ daily: 0, monthly: 1 });
+  });
+
+  it("lists a plan's default among the limits and never as a learner", async () => {
+    await setLimit("per_user_monthly", null, "10");
+    await setLimit("per_user_monthly", "plan:free", "1");
+    await count("per_user_monthly", HASH_A, MONTH, NEXT_MONTH, "4");
+
+    const result = await overview();
+
+    expect(result.limits.map((row) => row.scopeKey)).toEqual([null, "plan:free"]);
+    expect(result.learners.map((row) => row.userIdHash)).toEqual([HASH_A]);
+    // Against the scope's default: the counters do not say which plan a
+    // pseudonym is on, so the overview cannot, and does not pretend to.
+    expect(Number(result.learners[0]?.limitEur)).toBe(10);
+    expect(result.learners[0]?.overridden).toBe(false);
   });
 
   it("caps the list per scope and still counts everyone", async () => {
@@ -343,8 +530,39 @@ describe("the ledger explorer's columns", () => {
   });
 });
 
+describe("the repository, against the real functions", () => {
+  it("saves a plan's default and reads it back as a limit", async () => {
+    const budgets = createBudgetRepository(createPgliteClient(database.db));
+
+    const saved = await budgets.setLimit({
+      scope: "per_user_monthly",
+      scopeKey: "plan:plus",
+      limitEur: "4.50",
+      warnPct: "0.70",
+      degradePct: "0.90",
+      active: true,
+    });
+    expect(saved.ok && saved.data.after).toMatchObject({ scopeKey: "plan:plus", limitEur: 4.5 });
+
+    const read = await budgets.overview(new Date(NOW));
+    expect(read.ok && read.data.limits.map((row) => row.scopeKey)).toEqual(["plan:plus"]);
+  });
+
+  it("refuses to remove a plan's default before asking the database", async () => {
+    await setLimit("per_user_monthly", "plan:plus", "4");
+    const budgets = createBudgetRepository(createPgliteClient(database.db));
+
+    const removed = await budgets.removeOverride({ scope: "per_user_monthly", scopeKey: "plan:plus" });
+
+    expect(removed).toMatchObject({ ok: false, error: { kind: "invalid_input" } });
+    const rows = await database.db.query(`select * from public.budget_limits`);
+    expect(rows.rows).toHaveLength(1);
+  });
+});
+
 describe("from a learner's session", () => {
   it.each([
+    [`select public.budget_snapshot('${HASH_A}', now(), 'premium')`],
     [`select public.budget_overview()`],
     [`select public.set_budget_limit('global_daily', null, 1000, 0.7, 0.9, true)`],
     [`select public.remove_budget_override('per_user_daily', '${HASH_A}')`],

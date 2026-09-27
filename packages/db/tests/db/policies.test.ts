@@ -44,6 +44,20 @@ const OPERATOR_TABLES = [
   "embedding_cache",
   "ops_jobs",
   "rate_limit_buckets",
+  "billing_prices",
+  "billing_events",
+];
+
+/**
+ * A learner's own billing rows: readable by them, written only by the Stripe
+ * webhook through the secret key (billing-and-plans-spec.md S5, S10). A
+ * learner who could insert a subscription row could grant themselves a plan.
+ */
+const READ_ONLY_OWNED_TABLES = [
+  "billing_customers",
+  "billing_checkouts",
+  "subscriptions",
+  "plan_passes",
 ];
 
 beforeAll(async () => {
@@ -134,6 +148,38 @@ describe.each(OWNED_TABLES)("%s policies", (table) => {
       .map((policy) => policy.policyname);
 
     expect(rolesOnly).toEqual([]);
+  });
+});
+
+describe.each(READ_ONLY_OWNED_TABLES)("%s policies", (table) => {
+  it("has exactly one policy, and it reads", () => {
+    const found = policies.filter((policy) => policy.tablename === table);
+
+    expect(found.map((policy) => [policy.cmd, policy.roles])).toEqual([
+      ["SELECT", "{authenticated}"],
+    ]);
+  });
+
+  it("reads only the signed-in learner's own rows", () => {
+    const [policy] = policies.filter((row) => row.tablename === table);
+
+    expect(policy?.qual).toContain("SELECT auth.uid()");
+    expect(policy?.qual).toContain("learner_id");
+  });
+
+  it("grants a learner select and nothing else, and anon nothing at all", async () => {
+    const grants = (
+      await database.db.query(
+        `select grantee, privilege_type
+         from information_schema.role_table_grants
+         where table_schema='public' and table_name=$1
+           and grantee in ('anon','authenticated')
+         order by grantee, privilege_type`,
+        [table],
+      )
+    ).rows;
+
+    expect(grants).toEqual([{ grantee: "authenticated", privilege_type: "SELECT" }]);
   });
 });
 

@@ -3,6 +3,7 @@ import { HISTORY_WINDOW } from "@dp/domain/conversation";
 import type { LearningEvaluation } from "@dp/domain/evaluation";
 import type { LearnerProfile, LearnerState } from "@dp/domain/learner";
 import type { MiniLevelDefinition } from "@dp/domain/mini-level";
+import type { PlanCode } from "@dp/domain/plans";
 import type { RetrievalIntent } from "@dp/domain/retrieval";
 import type { LearnerContext, PromptMessage } from "@dp/prompts";
 import type { RetrievedChunk } from "@/lib/retrieval/retriever";
@@ -32,6 +33,13 @@ export interface TurnInput {
   readonly requestId: string;
   readonly userIdHash: string;
   readonly traceId?: string;
+  /**
+   * The learner's plan, resolved by the route from entitlement rows. It picks
+   * the tutor's tier and context, how much is retrieved, and which euro limit
+   * every call is read against. The chat route always passes one; a turn
+   * without one resolves exactly as it did before plans.
+   */
+  readonly plan?: PlanCode;
 }
 
 export interface LoadedLearner {

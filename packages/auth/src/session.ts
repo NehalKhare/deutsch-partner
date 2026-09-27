@@ -29,6 +29,8 @@ export interface SessionRefresherConfig {
   /** Where to send this request, or null to let it through. */
   readonly decide: (input: {
     readonly pathname: string;
+    /** The query, "?" included, or "" — for remembering a destination, never for matching one. */
+    readonly search: string;
     readonly session: SessionClaims | null;
   }) => string | null;
 }
@@ -71,7 +73,11 @@ export function createSessionRefresher(config: SessionRefresherConfig) {
       session = null;
     }
 
-    const destination = config.decide({ pathname: request.nextUrl.pathname, session });
+    const destination = config.decide({
+      pathname: request.nextUrl.pathname,
+      search: request.nextUrl.search,
+      session,
+    });
     if (!destination) return response;
 
     const redirect = NextResponse.redirect(new URL(destination, request.url));

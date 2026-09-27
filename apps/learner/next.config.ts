@@ -15,6 +15,7 @@ const nextConfig: NextConfig = {
   // the app instead of expecting a prebuilt dist.
   transpilePackages: [
     "@dp/auth",
+    "@dp/billing",
     "@dp/db",
     "@dp/domain",
     "@dp/env",

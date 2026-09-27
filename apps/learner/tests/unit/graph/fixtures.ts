@@ -126,7 +126,10 @@ export function fakeGraph(options: FakeOptions = {}) {
   const threadReads: string[] = [];
   const prompts: GatewayPrompt[] = [];
   const gatewayContexts: Record<string, unknown>[] = [];
+  const gatewaySpecs: Record<string, unknown>[] = [];
   const retrievalContexts: Record<string, unknown>[] = [];
+  const retrievalOptions: Record<string, unknown>[] = [];
+  const evaluationContexts: Record<string, unknown>[] = [];
 
   const replyText = options.replyText ?? "Guten Tag! Wohin fährst du?";
 
@@ -134,8 +137,9 @@ export function fakeGraph(options: FakeOptions = {}) {
     async complete() {
       throw new Error("the graph streams its turn");
     },
-    async stream(_spec, prompt, context) {
+    async stream(spec, prompt, context) {
       prompts.push(prompt);
+      gatewaySpecs.push(spec as unknown as Record<string, unknown>);
       gatewayContexts.push(context as unknown as Record<string, unknown>);
 
       if (options.generation) return options.generation;
@@ -178,8 +182,9 @@ export function fakeGraph(options: FakeOptions = {}) {
   };
 
   const retriever: GermanLearningRetriever = {
-    async retrieve(_message, context) {
+    async retrieve(_message, context, asked) {
       retrievalContexts.push(context as Record<string, unknown>);
+      retrievalOptions.push((asked ?? {}) as Record<string, unknown>);
       if (options.retrieval) return options.retrieval;
 
       return gatewayOk({
@@ -194,7 +199,8 @@ export function fakeGraph(options: FakeOptions = {}) {
   const evaluator: Evaluator = {
     evaluateLearnerMessage:
       options.evaluator?.evaluateLearnerMessage ??
-      (async (request) => {
+      (async (request, context) => {
+        evaluationContexts.push(context as unknown as Record<string, unknown>);
         if (/^danke/iu.test(request.learnerMessage.trim())) {
           return { status: "skipped", reason: "formulaic" };
         }
@@ -346,6 +352,9 @@ export function fakeGraph(options: FakeOptions = {}) {
     threadReads,
     prompts,
     gatewayContexts,
+    gatewaySpecs,
     retrievalContexts,
+    retrievalOptions,
+    evaluationContexts,
   };
 }

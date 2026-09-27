@@ -4,18 +4,19 @@ import {
   LOGIN_PATH,
   isAuthPath,
   isProtectedPath,
+  safeNextPath,
   signInRedirectTarget,
 } from "@/lib/auth/routes";
 
 describe("isProtectedPath", () => {
-  it.each(["/dashboard", "/dashboard/progress", "/review", "/chat", "/settings"])(
+  it.each(["/dashboard", "/dashboard/progress", "/review", "/chat", "/settings", "/billing", "/billing/checkout"])(
     "protects %s",
     (path) => {
       expect(isProtectedPath(path)).toBe(true);
     },
   );
 
-  it.each(["/", "/auth/login", "/auth/sign-up", "/auth/callback", "/about"])(
+  it.each(["/", "/auth/login", "/auth/sign-up", "/auth/callback", "/about", "/pricing", "/legal/terms"])(
     "leaves %s public",
     (path) => {
       expect(isProtectedPath(path)).toBe(false);
@@ -70,6 +71,58 @@ describe("signInRedirectTarget", () => {
   it("falls back to the default destination for the root path", () => {
     expect(signInRedirectTarget("/")).toBe(LOGIN_PATH);
   });
+
+  it("keeps the query, so an order link survives the trip through sign-in", () => {
+    expect(signInRedirectTarget("/billing/checkout?offer=dp_plus_month")).toBe(
+      `${LOGIN_PATH}?next=${encodeURIComponent("/billing/checkout?offer=dp_plus_month")}`,
+    );
+  });
+
+  it.each(["/\t/evil.example", "/\n/evil.example", "/\r/evil.example"])(
+    "refuses a path carrying a control character (%j)",
+    (path) => {
+      // The URL parser strips tab, CR and LF before resolving, so "/\t/x"
+      // arrives in a browser as "//x" — another origin.
+      expect(signInRedirectTarget(path)).toBe(LOGIN_PATH);
+    },
+  );
+});
+
+describe("safeNextPath", () => {
+  it("keeps a same-site path with its query", () => {
+    expect(safeNextPath("/billing/checkout?offer=dp_plus_month")).toBe(
+      "/billing/checkout?offer=dp_plus_month",
+    );
+  });
+
+  it.each([undefined, null, "", "https://evil.example", "//evil.example", "/\\evil.example"])(
+    "falls back to the default for %j",
+    (next) => {
+      expect(safeNextPath(next)).toBe(DEFAULT_SIGNED_IN_PATH);
+    },
+  );
+
+  it.each(["/\t/evil.example", "/\n/evil.example", "/\r/evil.example", "/\u0000/evil.example", "/\u007f/evil.example"])(
+    "refuses a path smuggling a control character (%j) in front of a second slash",
+    (next) => {
+      // "/\t/evil.example" passes a naive "starts with one slash" check, and
+      // the WHATWG URL parser then removes the tab and resolves "//evil.example".
+      expect(safeNextPath(next)).toBe(DEFAULT_SIGNED_IN_PATH);
+    },
+  );
+
+  it("refuses a value that repeated in the query and arrived as a list", () => {
+    // `?next=a&next=b` reaches a page as string[]; it must not throw a 500.
+    expect(safeNextPath(["/billing", "/dashboard"])).toBe(DEFAULT_SIGNED_IN_PATH);
+  });
+
+  it.each(["/%2F/evil.example", "/billing/../..//evil.example", "/./%09/evil.example"])(
+    "never returns a destination that resolves off-site (%j)",
+    (next) => {
+      const base = "https://app.example/";
+      expect(new URL(safeNextPath(next), base).origin).toBe(new URL(base).origin);
+    },
+  );
 });
 
 describe("DEFAULT_SIGNED_IN_PATH", () => {

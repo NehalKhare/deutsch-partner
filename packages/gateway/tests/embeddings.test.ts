@@ -261,6 +261,52 @@ describe("embedding through the gateway", () => {
     });
   });
 
+  it("reads the learner's plan limit, so retrieval spends from the same allowance as the turn", async () => {
+    // billing-and-plans-spec.md S9: a per-user scope with no override of its
+    // own falls back to the plan's limit. A turn's embedding read against the
+    // default instead would be the one call a plan's budget cannot see.
+    const asked: Array<Parameters<BudgetSource["snapshot"]>[0]> = [];
+    const { gateway } = harness({
+      budgets: {
+        async snapshot(input) {
+          asked.push(input);
+          return [];
+        },
+      },
+    });
+
+    await gateway.embed(spec(), ["eins"], { ...CONTEXT, plan: "free" });
+    await gateway.embed(spec(), ["zwei"], CONTEXT);
+
+    expect(asked[0]).toMatchObject({ userIdHash: "hash-alice", plan: "free" });
+    // Absent, it reads exactly as it did before plans existed.
+    expect(asked[1]).not.toHaveProperty("plan");
+  });
+
+  it("names the scope that refused", async () => {
+    const { gateway } = harness({
+      budgets: {
+        async snapshot() {
+          return [
+            {
+              scope: "per_user_monthly" as const,
+              scopeKey: "hash-alice",
+              limitEur: 1,
+              spentEur: 1,
+              warnPct: 0.7,
+              degradePct: 0.9,
+            },
+          ];
+        },
+      },
+    });
+
+    expect(await gateway.embed(spec(), ["eins"], CONTEXT)).toMatchObject({
+      failure: "budget_denied",
+      budgetScope: "per_user_monthly",
+    });
+  });
+
   it("fails closed when the counters cannot be read", async () => {
     const { gateway } = harness({ budgets: { async snapshot() { return null; } } });
 

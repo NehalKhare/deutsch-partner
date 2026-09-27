@@ -34,7 +34,13 @@ Read in this order. Where documents disagree, the precedence below wins.
    gates, and what the coding agent may touch.
    Authoritative for: the product-ops workflow. Depends on documents 3 and 4.
 
-Precedence: 3 > 4 > 5 = 6 = 7 > 2 > 1.
+8. billing-and-plans-spec.md
+   Plans, entitlements, plan-dependent routing, Stripe payments, the webhook,
+   and the consumer-law obligations of selling a subscription in Germany.
+   Authoritative for: what each plan includes and how money is taken.
+   Depends on documents 3 and 4.
+
+Precedence: 3 > 4 > 5 = 6 = 7 = 8 > 2 > 1.
 Security beats cost. Cost beats convenience. Neither beats correctness of the
 learning model, which is why disagreements get resolved in the documents rather
 than at the keyboard.

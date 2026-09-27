@@ -5,6 +5,7 @@ import {
   type BudgetScope,
   type BudgetState,
 } from "@dp/domain/budgets";
+import type { PlanCode } from "@dp/domain/plans";
 
 /**
  * Layer 4: the euro budget gate.
@@ -37,6 +38,12 @@ export interface BudgetSource {
   snapshot(input: {
     readonly userIdHash: string | null;
     readonly now: Date;
+    /**
+     * The learner's plan, so a per-user scope with no override of its own
+     * falls back to the plan's limit before the default
+     * (billing-and-plans-spec.md S9). Absent reads exactly as before plans.
+     */
+    readonly plan?: PlanCode;
   }): Promise<readonly BudgetSnapshot[] | null>;
 }
 

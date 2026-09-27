@@ -4,7 +4,10 @@
 
 ```
 apps/learner     the learner product: Next.js, its own route handlers, its own
-                 composition root. Calls the gateway for chat, trainer, embeddings.
+                 composition root. Calls the gateway for chat, trainer, embeddings,
+                 and @dp/billing for plans: the pricing, order, trial and billing
+                 pages, Stripe's webhook, the plan and daily quotas per request.
+                 The only deployable that holds a Stripe key.
 apps/ops         the operator product on its own origin: sign-in with a second
                  factor, the product-ops board and runs, the AI spend dashboard.
                  Holds no model key; it records jobs for the worker.
@@ -12,8 +15,8 @@ apps/worker      Node, no Next: drains the ops_jobs queue — product-ops stages
                  FX and pricing snapshots, checkpoint pruning, ingestion — and,
                  with a checkout and the repository token, the coding stages.
 packages/db      the one migration set, the repository kernel and the learner
-                 repositories, the queue and rate-limit repositories, the PGlite
-                 test harness
+                 repositories, the billing and rate-limit repositories, the queue,
+                 the PGlite test harness
 ```
 
 Independently built, independently deployed, one database. What they share is
@@ -23,6 +26,8 @@ packages:
 packages/domain          Zod schemas and pure rules; the task routing table. No I/O.
 packages/prompts         the versioned prompt catalogue and its builder
 packages/gateway         the only code allowed to call a provider; the usage ledger
+packages/billing         the only code allowed to reach Stripe: the payment provider,
+                         webhook application, the price mirror's sync, catalogue.json
 packages/product-ops     the operator workflow: repository, board view, the graph,
                          the agents, the trusted validation layer, review helpers
 packages/learning        the curriculum and the engines that move a learner through it
@@ -105,7 +110,15 @@ Nineteen tasks, each pinned to a tier and two token ceilings:
 
 A task that is not in the table does not get to call a model.
 
-> `lib/ai/tasks.ts`, `lib/ai/gateway/`
+Three tasks — `conversation.turn`, `conversation.repair` and `trainer.session`
+— also carry a `byPlan` entry (billing-and-plans-spec.md S3): Free runs them on
+`mid`, and Premium's tutor gets wider context ceilings. A plan entry may only
+move a task *down* the tier ladder and never past its row's ceilings, and the
+tasks that write learner state or assess a level carry none, so no plan grades
+the same German differently. The plan comes from the learner's entitlement
+rows on the server; a call with no plan resolves exactly as before plans.
+
+> `packages/domain/src/tasks.ts`, `packages/gateway/src/`
 
 ## Data access
 
@@ -132,6 +145,13 @@ learner-id argument:
 | `advance_product_ops_run` | A stage transition is a compare-and-set: two workers racing must not both win |
 | `record_proposal_review` | The review row, the proposal's status and the plan's approval move together |
 | `product_ops_dashboard` | Operator-only; the board is one query rather than six that can disagree |
+| `budget_snapshot` | A learner's limit per scope: their own override, then their plan's (`plan:<code>`), then the default |
+| `billing_claim_event` | A webhook event is claimed once; a redelivery of a finished one does nothing |
+| `billing_upsert_subscription` | A subscription as Stripe says it is now; an older read never overwrites a newer one |
+| `billing_grant_pass` | Once per Checkout Session, and stacked after the learner's running pass of the plan under a per-learner lock |
+| `billing_revoke_pass` | A refund revokes once and brings the passes stacked behind it forward |
+| `billing_open_trial_checkout` | One trial checkout at a time, and one trial ever, under a per-learner lock |
+| `billing_replace_prices` | The price mirror replaced in one transaction; a Price Stripe dropped is kept, inactive |
 
 None of them is `SECURITY DEFINER`. A migration test fails the build if one
 appears.
@@ -264,13 +284,57 @@ command, and no way to name a URL.
 > `scripts/product-implement.ts`, `lib/dashboard/product-ops.ts`,
 > `docs/product-ops-agents.md`, `.claude/docs/product-ops-spec.md`
 
+## Plans and payments
+
+billing-and-plans-spec.md is the contract; this is how it is put together.
+
+**The plan is read, never told.** Every learner-facing route that spends on a
+model resolves the plan per request from the learner's own billing rows, read
+under RLS and resolved by a pure function (`packages/domain/src/entitlement.ts`).
+A body, a header or a cookie cannot name one. A failed read serves Free, the
+floor, and offers no upgrade — the learner may already be paying.
+
+**Three bounds, all required.** The per-minute limits bound how fast; the daily
+quotas (`lib/api/quota.ts`, the same Postgres fixed window over 24 hours) bound
+how much; the plan's monthly euro budget bounds what it costs. A quota is
+counted as late as the request allows — after the body parses, the learner and
+thread load, the budget allows it — so a request that could never have run uses
+nothing. A quota store that cannot count answers as an outage (503, a short
+`retry-after`), never as a spent day. A Trainer session under way is never cut
+off by a spent day: its continuations run from a small, bounded overdraft.
+
+**The order is placed here.** `/billing/checkout?offer=…` is the §312j order
+page. Pressing "Order with obligation to pay" writes the `billing_checkouts`
+row — the offer, the terms version, the early-start consent — and only then
+opens a hosted Checkout Session carrying that row's id. The trial has no order
+page because it cannot become a charge: no card is collected, the webhook sets
+the subscription to cancel at its end on first sight, and the Customer Portal
+is not offered while the trial is all a learner holds. A learner on the trial
+orders what comes after it on the order page like anyone else.
+
+**Stripe's word, read fresh.** `POST /api/billing/webhook` has no session; the
+signature is its authentication, checked before anything is read beyond a
+byte-counted body. Each event is a doorbell: the subscription, session or
+charge is retrieved fresh and written through the functions above, so late,
+duplicate and out-of-order delivery cannot regress anything. The plan a Price
+sells comes from its lookup key, then the price mirror by Price id (which keeps
+every Price it ever listed, so a subscriber left on an old Price after a price
+change is still placed), then the Price's own metadata. Our own customer on a
+Price nothing can place is a failure Stripe retries, not an acknowledgement.
+
+> `packages/billing/src/webhook.ts`, `apps/learner/lib/billing/`,
+> `apps/learner/lib/api/quota.ts`, `packages/db/src/billing-repository.ts`
+
 ## Two Supabase clients, deliberately
 
 The request-scoped client carries the learner's session, so Row Level Security
 decides what is reachable and a bug cannot reach another learner's thread. The
-secret-key client bypasses RLS and is used for exactly two things: the
-accounting tables, which have RLS on and no policy at all, and the shared
-embedding cache.
+secret-key client bypasses RLS and is used for a short, named list: the
+accounting tables, which have RLS on and no policy at all; the shared
+embedding cache; the rate-limit and quota buckets; and billing's writes — the
+webhook, which has no session; the order record and the Stripe customer
+mapping, which a learner may read but never write; and the price mirror, which
+holds no learner data.
 
 Which client a piece of code gets is an explicit argument at the composition
 root, not a default.
@@ -279,8 +343,9 @@ root, not a default.
 
 ## Testing
 
-**3603 unit and integration tests, 182 test files** — plus 31 Python tests
-over the scenario parser and ingestion plan (`pnpm scenarios:test`).
+**5650 unit and integration tests, 302 test files**, as `pnpm verify` runs
+them — plus 31 Python tests over the scenario parser and ingestion plan
+(`pnpm scenarios:test`).
 
 | Kind | What it runs against |
 | --- | --- |
@@ -324,6 +389,58 @@ Stated here so nobody has to discover it by reading the code.
   given, and a worker without one fails the planning stage with
   `no_repository`.
 
+- **Payments have never reached Stripe.** The pricing, order, trial, success
+  and Plan & billing pages, the webhook route, plan resolution per request, the
+  daily quotas, plan routing and the plans' euro budgets are built and tested
+  (billing-and-plans-spec.md S14, B1–B6). The Stripe provider is tested against
+  an SDK-shaped fake and, for signatures, against the real SDK's HMAC; the
+  webhook against the real repository on PGlite. No request has gone to Stripe,
+  test mode or live, and `stripe:bootstrap` has never been run against an
+  account.
+- **B7 to B10 are not built.** No hands-free conversation mode for Premium
+  (B7); voice is not in the ledger (B8, below); the operator app has no revenue
+  or margin view per plan, no comps and no refunds through worker jobs (B9);
+  and none of the consumer-law pages or Stripe Tax live (B10).
+- **No reconcile job.** Stripe's retry schedule is the only queue: an event
+  that fails for longer than Stripe retries (three days in live mode) is never
+  applied unless an operator resends it, and
+  nothing compares the mirror with Stripe on a schedule. `billing_events` rows
+  with `status = 'failed'` are where to look. The worker holds no Stripe key
+  until such a job exists.
+- **The live-mode preconditions are not met.** There is no "Cancel contracts
+  here" button (§312k BGB) and no "Withdraw from contract" button (§356a BGB),
+  and both need a confirmation in text form, which needs an email sender this
+  product does not have. `/legal/terms` is a stub that says it is one, and is
+  not indexed; there is no Impressum, privacy policy or withdrawal form. The
+  annual plan's post-first-year cancellation terms (§309 Nr. 9) are not
+  enforced anywhere. A live key must not be configured before these exist
+  (spec S11); `stripe:bootstrap` refuses one.
+- **Deleting an account does not cancel its subscription.** The billing rows
+  go with the profile; the Stripe subscription does not, and would keep
+  charging. The ops deletion action must refuse while a subscription is active
+  (spec S10) and does not yet.
+- **The Customer Portal is Stripe's default one.** No portal configuration is
+  created or passed, so what the portal allows — plan changes, cancellation,
+  card updates — is whatever the Dashboard says. The app withholds the portal
+  during a trial; everything else is the Dashboard's configuration
+  ([operations](operations.md#payments-with-stripe)).
+- **Free's tutor runs on `mid` with no evaluation behind it.** Spec S3 permits
+  it and document 4 S11 asks for an eval before a downgrade; the conversation
+  golden set comparing Free and Plus, which is the first eval set to write, is
+  not written (see "No golden eval sets" below).
+- **The ops overview is not plan-aware.** The budgets page shows and edits each
+  plan's monthly euro bound; the cost dashboard does not break spend down by
+  plan, so per-plan margin is not measured.
+- **A daily quota counts a request that goes ahead, even if it then fails.**
+  A turn refused by the provider or by the euro budget after admission has
+  used its count: the fixed-window counter cannot give one back. Requests that
+  fail their own checks first — the body, the learner, the thread — use
+  nothing.
+- **The Trainer's overdraft trusts the browser.** Whether a request continues
+  a session is the client's claim (it carries the pinned agenda), so a client
+  that always claims one gets the overdraft — twice the longest agenda, per
+  day — past the plan's number. The per-minute limit, the per-request euro
+  bound and the monthly allowance still hold.
 - **No chat model has ever been called.** Every test drives a fake transport;
   the real transports are tested against a fake `fetch`. The embedding
   pipelines, by contrast, *have* run for real: both corpora — 599 knowledge
@@ -371,10 +488,11 @@ Stated here so nobody has to discover it by reading the code.
   product is routed, capped, priced and written to an append-only ledger.
   Transcription and speech are not: they are billed per minute and per
   character, which the token-shaped rate table cannot express, and closing that
-  gap was deliberately deferred. Until it is closed, the rate limits
-  (10 transcriptions and 20 readings a minute) and the audio bounds (60 seconds,
-  15 MB, 1000 characters) are the *only* ceiling on voice spend. That is a
-  smaller hole than it sounds and a real one.
+  gap was deliberately deferred (billing-and-plans-spec.md B8). Until it is
+  closed, the plans' daily voice quotas (5 / 60 / 200 transcriptions, 0 / 150 /
+  400 AI voice lines), the rate limits (10 transcriptions and 20 readings a
+  minute) and the audio bounds (60 seconds, 15 MB, 1000 characters) are the
+  *only* ceiling on voice spend, and Premium's voice margin is unmeasured.
 - **Speech rides OpenRouter, in a chat model's clothing.** It once could not:
   the router listed no speech model, so voice went direct to OpenAI on a second
   key. It now serves audio-capable chat models, so `/api/speak` and
@@ -414,8 +532,8 @@ Stated here so nobody has to discover it by reading the code.
   exists and the agent is told about it, but the composition wires no corpus
   behind it: the retriever wants a learner-shaped context the CPO does not
   have. Adapting it is the obvious next thing to do.
-- **Search reaches three pages.** The landing page, sign-up and sign-in are
-  the whole indexable surface: they carry canonical URLs, a share card,
+- **Search reaches four pages.** The landing page, `/pricing`, sign-up and
+  sign-in are the whole indexable surface: they carry canonical URLs, a share card,
   structured data and a plain-text `/llms.txt` for answer engines, and every
   room behind sign-in is kept out three ways (`docs/seo-and-geo.md`). There
   are no content pages, no second language and no `hreflang`; a deployment

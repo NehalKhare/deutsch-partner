@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 
@@ -257,6 +257,205 @@ function fakeVoice(
   };
   return voice;
 }
+
+describe("a spent transcription allowance", () => {
+  it("says so beside the microphone with when it reopens, and leaves the box alone", async () => {
+    server.use(
+      http.post(TRANSCRIBE, () =>
+        HttpResponse.json(
+          {
+            error: "quota_exhausted",
+            message: "You've used today's voice allowance.",
+            resetAt: new Date(Date.now() + 3_600_000).toISOString(),
+            upgrade: true,
+          },
+          { status: 429 },
+        ),
+      ),
+    );
+
+    const user = userEvent.setup();
+    renderConversation();
+
+    await user.type(box(), "Mir geht es gut");
+    await user.click(screen.getByRole("button", { name: /speak your message/i }));
+    await user.click(screen.getByRole("button", { name: /stop recording/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText("You've used today's voice allowance.")).toBeInTheDocument();
+    });
+    expect(screen.getByRole("link", { name: /see plans/i })).toHaveAttribute("href", "/pricing");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(box()).toHaveValue("Mir geht es gut");
+  });
+});
+
+describe("a plan without the AI voice", () => {
+  // Free reads replies in the device's own voice, unlimited (spec S2). The
+  // server says 402 once; the page falls back, says why once, quietly, and
+  // stops asking for the rest of the visit.
+  function stubStorage(): Map<string, string> {
+    // Seeded as a device that has never put the note away. Explicitly, since
+    // a dismissal in one test is remembered for the visit, and each test here
+    // is a fresh device.
+    const store = new Map<string, string>([["deutsch-partner.voice-plan-note", "shown"]]);
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (key: string) => store.get(key) ?? null,
+        setItem: (key: string, value: string) => void store.set(key, String(value)),
+        removeItem: (key: string) => void store.delete(key),
+        clear: () => store.clear(),
+      },
+    });
+    return store;
+  }
+
+  function refuseSpeaking(body: Record<string, unknown> = {}, status = 402): () => number {
+    let calls = 0;
+    server.use(
+      http.post(SPEAK, () => {
+        calls += 1;
+        return HttpResponse.json(
+          {
+            error: "plan_required",
+            message: "The AI voice comes with a paid plan.",
+            resetAt: null,
+            upgrade: true,
+            ...body,
+          },
+          { status },
+        );
+      }),
+    );
+    return () => calls;
+  }
+
+  const SECOND: ChatMessage = { id: "reply-2", role: "assistant", content: "Und woher kommst du?" };
+
+  function renderWithVoice(voice = fakeVoice()) {
+    render(
+      <Conversation
+        threadId="1e2f0a4c-6b7d-4e8f-9a0b-1c2d3e4f5a6b"
+        initialMessages={[REPLY, SECOND]}
+        miniLevel={1}
+        cefr="A1"
+        capture={fakeCapture()}
+        playback={fakePlayback()}
+        voice={voice}
+      />,
+    );
+    return voice;
+  }
+
+  it("reads the reply in the device's voice", async () => {
+    stubStorage();
+    refuseSpeaking();
+    const voice = renderWithVoice();
+
+    await userEvent.setup().click(screen.getAllByRole("button", { name: /read this reply aloud/i })[0]!);
+
+    await waitFor(() => expect(voice.spoken).toHaveLength(1));
+    expect(voice.spoken[0]?.text).toBe("Wie geht es dir?");
+  });
+
+  it("says why once, quietly, with where the plans are", async () => {
+    stubStorage();
+    refuseSpeaking();
+    renderWithVoice();
+
+    await userEvent.setup().click(screen.getAllByRole("button", { name: /read this reply aloud/i })[0]!);
+
+    await waitFor(() => expect(screen.getByText(/your device's voice/i)).toBeInTheDocument());
+    expect(screen.getByText(/comes with Plus/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /see plans/i })).toHaveAttribute("href", "/pricing");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("stops asking the server for the rest of the visit", async () => {
+    stubStorage();
+    const speakCalls = refuseSpeaking();
+    const voice = renderWithVoice();
+    const user = userEvent.setup();
+    const [first, second] = screen.getAllByRole("button", { name: /read this reply aloud/i });
+
+    await user.click(first!);
+    await waitFor(() => expect(voice.spoken).toHaveLength(1));
+    await user.click(second!);
+    await waitFor(() => expect(voice.spoken).toHaveLength(2));
+
+    expect(speakCalls()).toBe(1);
+  });
+
+  it("puts the note away when dismissed, and keeps it away on this device", async () => {
+    stubStorage();
+    refuseSpeaking();
+    renderWithVoice();
+    const user = userEvent.setup();
+
+    await user.click(screen.getAllByRole("button", { name: /read this reply aloud/i })[0]!);
+    await waitFor(() => expect(screen.getByText(/your device's voice/i)).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: /dismiss/i }));
+
+    expect(screen.queryByText(/your device's voice/i)).not.toBeInTheDocument();
+
+    cleanup();
+    const voice = renderWithVoice();
+    await user.click(screen.getAllByRole("button", { name: /read this reply aloud/i })[0]!);
+    await waitFor(() => expect(voice.spoken).toHaveLength(1));
+    expect(screen.queryByText(/your device's voice/i)).not.toBeInTheDocument();
+  });
+
+  it("stays quiet when the plan could not be read, since the learner may be paying", async () => {
+    // Served as Free as the safe floor; told nothing about which plan has
+    // the voice, because they may already hold it.
+    stubStorage();
+    refuseSpeaking({ upgrade: false });
+    const voice = renderWithVoice();
+
+    await userEvent.setup().click(screen.getAllByRole("button", { name: /read this reply aloud/i })[0]!);
+
+    await waitFor(() => expect(voice.spoken).toHaveLength(1));
+    expect(screen.queryByText(/your device's voice/i)).not.toBeInTheDocument();
+  });
+
+  it("asks again on the next line when the plan could not be read, rather than holding the voice back", async () => {
+    // One failed billing read is no reason to keep a paying learner on the
+    // device voice for the rest of the page: the next line asks again.
+    stubStorage();
+    const speakCalls = refuseSpeaking({ upgrade: false });
+    const voice = renderWithVoice();
+    const user = userEvent.setup();
+    const [first, second] = screen.getAllByRole("button", { name: /read this reply aloud/i });
+
+    await user.click(first!);
+    await waitFor(() => expect(voice.spoken).toHaveLength(1));
+    await user.click(second!);
+    await waitFor(() => expect(voice.spoken).toHaveLength(2));
+
+    expect(speakCalls()).toBe(2);
+  });
+
+  it("tells a Premium learner their voice lines are spent, and sells them nothing", async () => {
+    stubStorage();
+    refuseSpeaking(
+      {
+        error: "quota_exhausted",
+        message: "You've used today's voice allowance.",
+        resetAt: new Date(Date.now() + 3_600_000).toISOString(),
+        upgrade: false,
+      },
+      429,
+    );
+    const voice = renderWithVoice();
+
+    await userEvent.setup().click(screen.getAllByRole("button", { name: /read this reply aloud/i })[0]!);
+
+    await waitFor(() => expect(voice.spoken).toHaveLength(1));
+    expect(screen.getByText(/your device's voice/i)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /see plans/i })).not.toBeInTheDocument();
+  });
+});
 
 describe("the browser's own voice", () => {
   it("reads the reply when the server has no voice configured", async () => {

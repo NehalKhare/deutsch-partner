@@ -11,7 +11,12 @@ import {
 import type { CEFRLevel } from "@dp/domain/cefr";
 import { SPEECH_RATES, speechRateFor } from "@dp/domain/speech";
 import { toPlainText } from "@dp/ui/markdown/parse";
-import { useDevicePreference, voiceEngineStore } from "@/lib/settings/device";
+import { planRefusalFrom, type PlanRefusal } from "@/lib/billing/refusal";
+import {
+  useDevicePreference,
+  voiceEngineStore,
+  voicePlanNoteStore,
+} from "@/lib/settings/device";
 
 /**
  * Reading a line of German aloud, wherever it was said.
@@ -34,6 +39,14 @@ import { useDevicePreference, voiceEngineStore } from "@/lib/settings/device";
  * The ports arrive as arguments rather than being reached for, because jsdom
  * has neither an Audio element nor a speech synthesiser: a hook that called
  * them directly could not be tested at all.
+ *
+ * The AI voice is a paid feature with a daily allowance; the device's voice
+ * is neither (billing-and-plans-spec.md S2, S4). When the server declines for
+ * the plan's sake the line is read by the device as for any other refusal,
+ * the reason is kept so the page can say it once, and the model is not asked
+ * again until the refusal says it would answer: never, for a plan without it;
+ * when the window reopens, for spent voice lines. A plan the server could not
+ * read is no answer at all, so that line falls back and the next one asks.
  */
 
 /** What a device can do does not change while the page is open. */
@@ -53,6 +66,11 @@ export interface ReadAloudOptions {
   readonly playback?: SpeechPlayback;
   /** The browser's own voice, used when the server has none configured. */
   readonly voice?: SpeechVoice;
+  /**
+   * Where the lines are read. The Trainer's AI voice is a feature of its own
+   * (Premium's); the conversation's is the default and is not named.
+   */
+  readonly surface?: "chat" | "trainer";
 }
 
 export interface ReadAloud {
@@ -62,21 +80,34 @@ export interface ReadAloud {
   readonly speakingId: string | null;
   /** Said quietly beside the control that caused it, never as an error. */
   readonly notice: string | null;
+  /**
+   * Why the device's voice is reading rather than the AI's, when the plan is
+   * the reason — or null, including once the learner put the note away.
+   */
+  readonly planRefusal: PlanRefusal | null;
+  /** Puts the plan note away, on this device, for good. */
+  readonly dismissPlanRefusal: () => void;
   /** Reads a line, or stops it if it is the one already being read. */
   readonly speak: (line: SpokenLine) => Promise<void>;
   readonly stop: () => void;
 }
 
 export function useReadAloud(options: ReadAloudOptions): ReadAloud {
-  const { cefr, voiceGender } = options;
+  const { cefr, voiceGender, surface = "chat" } = options;
 
   // Which voice reads replies aloud: the speech model (device voice as its
   // fallback), or the device's own voice alone. Chosen on the settings page,
   // remembered per device, and read here so a change applies immediately.
   const voiceEngine = useDevicePreference(voiceEngineStore);
+  const planNote = useDevicePreference(voicePlanNoteStore);
 
   const [speakingId, setSpeakingId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [planRefusal, setPlanRefusal] = useState<PlanRefusal | null>(null);
+  // Until when asking the model is pointless: forever for a plan without the
+  // AI voice, until the window reopens for spent lines. A ref, because it
+  // changes nothing on screen — the note above is what the learner sees.
+  const modelHeldUntil = useRef(0);
 
   // Constructed once, and lazily: reaching for an Audio element or a speech
   // synthesiser at module load would break every environment without one,
@@ -152,14 +183,37 @@ export function useReadAloud(options: ReadAloudOptions): ReadAloud {
         // The learner chose the device's own voice, so the model is never
         // asked: instant, free, and exactly as good as this device's speech.
         await speakWithDevice();
+      } else if (Date.now() < modelHeldUntil.current) {
+        // The server already said the plan will not speak this; asking again
+        // would only be a round trip before the same fallback.
+        await speakWithDevice();
       } else {
         try {
           const response = await fetch("/api/speak", {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ text: spoken, cefr, voice: voiceGender }),
+            body: JSON.stringify({
+              text: spoken,
+              cefr,
+              voice: voiceGender,
+              ...(surface === "chat" ? {} : { surface }),
+            }),
           });
-          if (!response.ok) throw new Error("the server has no voice");
+          if (!response.ok) {
+            const refusal = planRefusalFrom(await response.json().catch(() => null));
+            // A missing feature with no upgrade on offer is a plan the server
+            // could not read: that learner may already have the voice. So
+            // this line falls back silently, as it did before plans, and the
+            // next one asks again — one failed read is not a verdict.
+            const unread = refusal?.error === "plan_required" && !refusal.upgrade;
+            if (refusal && !unread) {
+              modelHeldUntil.current = refusal.resetAt
+                ? Date.parse(refusal.resetAt)
+                : Number.POSITIVE_INFINITY;
+              setPlanRefusal(refusal);
+            }
+            throw new Error("the server has no voice");
+          }
           await player.play(await response.blob());
         } catch {
           // Deliberately cancelled reads do not fall back and do not complain.
@@ -175,5 +229,18 @@ export function useReadAloud(options: ReadAloudOptions): ReadAloud {
     }
   }
 
-  return { canSpeak, speakingId, notice, speak, stop: silence };
+  function dismissPlanRefusal() {
+    voicePlanNoteStore.write("dismissed");
+    setPlanRefusal(null);
+  }
+
+  return {
+    canSpeak,
+    speakingId,
+    notice,
+    planRefusal: planNote === "dismissed" ? null : planRefusal,
+    dismissPlanRefusal,
+    speak,
+    stop: silence,
+  };
 }

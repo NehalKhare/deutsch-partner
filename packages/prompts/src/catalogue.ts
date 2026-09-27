@@ -19,6 +19,7 @@ import {
 import { BLOCK_IDS, type BlockId, type Register } from "./blocks";
 import { STREAMED_TEXT, type OutputContract } from "./contract";
 import { taskIdSchema, tierSchema, type TaskId, type Tier } from "@dp/domain/tasks";
+import type { PlanCode } from "@dp/domain/plans";
 import { ceilingsFor, routeFor } from "@dp/domain/tasks";
 
 /**
@@ -494,9 +495,18 @@ export function findPromptEntry(name: string): PromptCatalogEntry | null {
   return BY_NAME.get(name) ?? null;
 }
 
-/** The ceilings this entry is designed against, narrowed by level where it varies. */
-export function entryCeilings(entry: PromptCatalogEntry, level?: "A1" | "A2" | "B1") {
-  return ceilingsFor(entry.task, level);
+/**
+ * The ceilings this entry is built against, narrowed by level and by plan
+ * where the routing table varies them. The plan only ever selects a row the
+ * table already holds (billing-and-plans-spec.md S3); absent, it is the
+ * level table every entry was designed against.
+ */
+export function entryCeilings(
+  entry: PromptCatalogEntry,
+  level?: "A1" | "A2" | "B1",
+  plan?: PlanCode,
+) {
+  return ceilingsFor(entry.task, level, plan);
 }
 
 export { taskIdSchema, tierSchema };

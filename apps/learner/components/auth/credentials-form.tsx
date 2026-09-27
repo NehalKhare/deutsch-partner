@@ -10,6 +10,7 @@ import {
 } from "@dp/ui/styles";
 import type { AuthFormState } from "@dp/auth/form-state";
 import { MIN_PASSWORD_LENGTH } from "@dp/auth/credentials";
+import { DEFAULT_SIGNED_IN_PATH, LOGIN_PATH, SIGN_UP_PATH } from "@/lib/auth/routes";
 
 const label = "font-display text-sm font-medium text-copy/80";
 
@@ -21,6 +22,16 @@ export interface CredentialsFormProps {
   ) => Promise<AuthFormState>;
   readonly initialState: AuthFormState;
   readonly next?: string;
+}
+
+/**
+ * The other way in, keeping the destination: a visitor who chose a plan and
+ * then remembered they already had an account should not lose the plan by
+ * pressing "Sign in". The default destination is left off, as noise.
+ */
+function otherWayIn(isSignUp: boolean, next: string | undefined): string {
+  const path = isSignUp ? LOGIN_PATH : SIGN_UP_PATH;
+  return next && next !== DEFAULT_SIGNED_IN_PATH ? `${path}?next=${encodeURIComponent(next)}` : path;
 }
 
 export function CredentialsForm({
@@ -116,10 +127,7 @@ export function CredentialsForm({
 
       <p className="text-sm text-copy/60">
         {isSignUp ? "Already have an account? " : "New here? "}
-        <Link
-          href={isSignUp ? "/auth/login" : "/auth/sign-up"}
-          className={linkInline}
-        >
+        <Link href={otherWayIn(isSignUp, next)} className={linkInline}>
           {isSignUp ? "Sign in" : "Create an account"}
         </Link>
       </p>

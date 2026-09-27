@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@dp/auth": "workspace:*",
+    "@dp/billing": "workspace:*",
     "@dp/db": "workspace:*",
     "@dp/domain": "workspace:*",
     "@dp/env": "workspace:*",

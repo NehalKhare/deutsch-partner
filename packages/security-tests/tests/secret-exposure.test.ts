@@ -14,6 +14,10 @@ const SERVER_SECRET_NAMES = [
   "GITHUB_TOKEN",
   // The OTLP gateway's basic-auth credential.
   "OTEL_EXPORTER_OTLP_HEADERS",
+  // The key that takes money and the secret that proves an event is
+  // Stripe's. Hosted Checkout needs nothing in the browser at all.
+  "STRIPE_SECRET_KEY",
+  "STRIPE_WEBHOOK_SECRET",
 ];
 
 /** Modules that must never be imported from a Client Component. */
@@ -182,6 +186,12 @@ describe.each(ROOTS.envExamples)("%s", (examplePath) => {
     const credentialShapes = [
       /^sb_(secret|publishable)_/i,
       /^sk[-_]/i,
+      // Stripe's restricted keys, webhook signing secrets and publishable
+      // keys. The last is not a secret, but a real one in a template is a
+      // real account named in the repository.
+      /^rk_/i,
+      /^whsec_/i,
+      /^pk_(test|live)_/i,
       /^gh[pousr]_/i,
       /^eyJ[\w-]+\.[\w-]+\./,
       /^lsv2_/i,

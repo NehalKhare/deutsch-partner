@@ -10,7 +10,8 @@ import {
   createModelRegistry,
   registryOverridesFromEnv,
 } from "./registry";
-import { routeFor, type TaskId, type Tier } from "@dp/domain/tasks";
+import type { PlanCode } from "@dp/domain/plans";
+import { ceilingsFor, tierFor, type TaskId, type Tier } from "@dp/domain/tasks";
 import { requireEnvValue, type AppEnv } from "@dp/env/schema";
 import { nullLogger, type Logger } from "@dp/observability/logger";
 import type { UsageAccounting } from "./repositories/usage-repository";
@@ -91,6 +92,12 @@ export interface TrainerModelContext {
    * say so.
    */
   readonly task?: TaskId;
+  /**
+   * The learner's plan, resolved on the server from entitlement rows. Where
+   * the task has a plan entry it picks the tier and ceilings, from the table
+   * like everything else here; absent resolves as it did before plans.
+   */
+  readonly plan?: PlanCode;
 }
 
 /** The same context, named for callers that are not the Trainer. */
@@ -375,7 +382,11 @@ export function createTrainerModelLadder(
   const now = deps.now ?? (() => new Date());
 
   const apiKey = requireEnvValue(deps.env.OPENROUTER_API_KEY, "OPENROUTER_API_KEY");
-  const route = routeFor(context.task ?? TRAINER_TASK);
+  const task = context.task ?? TRAINER_TASK;
+  const route = {
+    tier: tierFor(task, context.plan),
+    maxOutputTokens: ceilingsFor(task, undefined, context.plan).maxOutputTokens,
+  };
   const registry = createModelRegistry(registryOverridesFromEnv(deps.env));
 
   const accountant = createAccountant({

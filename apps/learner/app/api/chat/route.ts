@@ -7,7 +7,10 @@ import {
   toReadableStream,
 } from "@/lib/api/chat";
 import { createRequestGraph, pseudonymFor } from "@/lib/api/composition";
+import { consumeQuota } from "@/lib/api/quota";
 import { limiterFor } from "@/lib/api/rate-limit";
+import { planForRequest } from "@/lib/billing/entitlement";
+import { isPlanRefusal, planRefusalBody, retryAfterSeconds, upgradeOffered } from "@/lib/billing/refusal";
 
 /**
  * POST /api/chat
@@ -60,12 +63,36 @@ export async function POST(request: Request): Promise<Response> {
     return json({ error: "invalid_body", message }, status);
   }
 
+  // 3. The plan, from the learner's own entitlement rows — never from the
+  //    body, a header or a cookie. One tutor turn is counted against its
+  //    daily quota by the turn itself, once the body parsed, the learner
+  //    loaded and the thread proved theirs: a turn that could never have
+  //    happened uses nothing. Refused there, the turn never opens, and the
+  //    page keeps the draft. The per-minute limit bounds how fast; this, how
+  //    much.
+  const { plan, readable } = await planForRequest(learnerId);
+  const upgrade = upgradeOffered(plan, readable);
+
   const { deps } = await createRequestGraph();
-  const result = await handleChatTurn(body, { learnerId, userIdHash, requestId }, deps);
+  const result = await handleChatTurn(body, { learnerId, userIdHash, requestId, plan }, deps, () =>
+    consumeQuota(plan, "tutor_turns", userIdHash),
+  );
 
   if (!result.ok) {
     const { status, message } = chatErrorResponse(result.error);
-    return json({ error: result.error, message, requestId }, status);
+    if (isPlanRefusal(result.error)) {
+      const resetAt = result.resetAt ?? null;
+      return json(
+        { ...planRefusalBody(result.error, message, { resetAt, upgrade }), requestId },
+        status,
+        resetAt ? { "retry-after": retryAfterSeconds(resetAt) } : {},
+      );
+    }
+    return json(
+      { error: result.error, message, requestId },
+      status,
+      result.retryAfterSeconds ? { "retry-after": String(result.retryAfterSeconds) } : {},
+    );
   }
 
   // Where the learner now stands, said before the first byte. The theme is

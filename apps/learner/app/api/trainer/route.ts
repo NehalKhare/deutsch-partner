@@ -6,7 +6,10 @@ import {
   trainerErrorResponse,
 } from "@/lib/api/trainer";
 import { createTrainerGraph, pseudonymFor } from "@/lib/api/composition";
+import { consumeTrainerQuota } from "@/lib/api/quota";
 import { limiterFor } from "@/lib/api/rate-limit";
+import { planForRequest } from "@/lib/billing/entitlement";
+import { isPlanRefusal, planRefusalBody, retryAfterSeconds, upgradeOffered } from "@/lib/billing/refusal";
 
 /**
  * POST /api/trainer
@@ -62,12 +65,35 @@ export async function POST(request: Request): Promise<Response> {
     return json({ error: "invalid_body", message }, status);
   }
 
+  // 3. The plan, from the learner's own entitlement rows. One Trainer
+  //    request is counted against its daily quota by the handler, once the
+  //    body parsed and the budget allowed it. A spent day refuses a new
+  //    session and lets one under way finish (billing-and-plans-spec.md S4);
+  //    a refusal leaves the agenda and the draft in the browser, so the
+  //    session resumes where it stopped when the window reopens.
+  const { plan, readable } = await planForRequest(learnerId);
+  const upgrade = upgradeOffered(plan, readable);
+
   const { deps } = await createTrainerGraph();
-  const result = await handleTrainerTurn(body, { learnerId, userIdHash, requestId }, deps);
+  const result = await handleTrainerTurn(body, { learnerId, userIdHash, requestId, plan }, deps, (session) =>
+    consumeTrainerQuota(plan, userIdHash, session),
+  );
 
   if (!result.ok) {
     const { status, message } = trainerErrorResponse(result.error);
-    return json({ error: result.error, message, requestId }, status);
+    if (isPlanRefusal(result.error)) {
+      const resetAt = result.resetAt ?? null;
+      return json(
+        { ...planRefusalBody(result.error, message, { resetAt, upgrade }), requestId },
+        status,
+        resetAt ? { "retry-after": retryAfterSeconds(resetAt) } : {},
+      );
+    }
+    return json(
+      { error: result.error, message, requestId },
+      status,
+      result.retryAfterSeconds ? { "retry-after": String(result.retryAfterSeconds) } : {},
+    );
   }
 
   return json(result.payload, 200, { "x-request-id": requestId });

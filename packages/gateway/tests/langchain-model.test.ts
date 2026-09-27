@@ -10,7 +10,7 @@ import {
   isModelUnavailableError,
   isTransientModelError,
 } from "../src/langchain-model";
-import { routeFor } from "@dp/domain/tasks";
+import { routeFor, tierFor } from "@dp/domain/tasks";
 import { parseEnv } from "@dp/env/schema";
 import type {
   BudgetIncrement,
@@ -201,6 +201,49 @@ describe("the ladder", () => {
 
     expect(ladder[0]?.modelId).toBe("vendor/custom-model");
     expect(ladder.length).toBeGreaterThan(1);
+  });
+
+  it("runs a free learner's Trainer on the plan's tier, rung by rung", () => {
+    // billing-and-plans-spec.md S3: trainer.session carries a free entry. The
+    // ladder is the plan tier's, fallbacks included, and so is every row.
+    const { accounting } = fakeAccounting();
+    const context = {
+      requestId: "33333333-3333-4333-8333-333333333333",
+      userIdHash: "hash-user",
+      turn: createTurnBudget(0.02),
+      prompt: IDENTITY,
+    };
+
+    const free = createTrainerModelLadder({ env: ENV, accounting }, { ...context, plan: "free" });
+    const planless = createTrainerModelLadder({ env: ENV, accounting }, context);
+
+    expect(tierFor(TRAINER_TASK, "free")).not.toBe(TRAINER_TIER);
+    for (const entry of free) expect(entry.tier).toBe(tierFor(TRAINER_TASK, "free"));
+    expect(free.map((entry) => entry.modelId)).not.toEqual(planless.map((entry) => entry.modelId));
+    for (const entry of planless) expect(entry.tier).toBe(TRAINER_TIER);
+  });
+
+  it("stamps the plan's tier on the ledger row a free Trainer call writes", async () => {
+    const { accounting, rows } = fakeAccounting();
+    const [primary] = createTrainerModelLadder(
+      { env: ENV, accounting },
+      {
+        requestId: "33333333-3333-4333-8333-333333333333",
+        userIdHash: "hash-user",
+        turn: createTurnBudget(0.02),
+        prompt: IDENTITY,
+        plan: "free",
+      },
+    );
+    const handler = (primary!.model.callbacks as Array<{
+      handleLLMStart: (llm: unknown, prompts: string[], runId: string) => Promise<void>;
+      handleLLMEnd: (output: unknown, runId: string) => Promise<void>;
+    }>)[0]!;
+
+    await handler.handleLLMStart({}, [], "run-1");
+    await handler.handleLLMEnd(OUTPUT(), "run-1");
+
+    expect(rows[0]).toMatchObject({ task: "trainer.session", tier: "mid" });
   });
 
   it("grants cache marks to anthropic candidates and to nobody else", () => {

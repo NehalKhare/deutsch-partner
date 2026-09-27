@@ -69,8 +69,9 @@ rather than assuming their contents.
 | `.claude/docs/system-prompt-catalogue.md` | Prompt structure, trust boundaries, per-block token budgets, versioning |
 | `.claude/docs/cost-dashboard-spec.md` | The operator-facing EUR spend dashboard |
 | `.claude/docs/product-ops-spec.md` | The operator-facing AI Product Ops workflow: research, proposal, HITL, PRD, plan, code, PR |
+| `.claude/docs/billing-and-plans-spec.md` | Plans, entitlements, plan-dependent routing, Stripe payments, consumer-law obligations |
 
-**Precedence: guardrails > model-routing > (prompt-catalogue = cost-dashboard = product-ops) > build-spec > business-objective.**
+**Precedence: guardrails > model-routing > (prompt-catalogue = cost-dashboard = product-ops = billing) > build-spec > business-objective.**
 Security beats cost. Cost beats convenience. Neither beats correctness of the
 learning model, which is why disagreements get resolved in the documents rather than
 at the keyboard.

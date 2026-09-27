@@ -1,6 +1,9 @@
+import { TRIAL_DAYS } from "@dp/domain/billing";
 import { CEFR_LEVELS, MAX_MINI_LEVEL } from "@dp/domain/cefr";
 import { TUTOR } from "@dp/domain/tutor";
 
+import { planName } from "@/lib/billing/copy";
+import { PRICING_PATH } from "@/lib/billing/offers";
 import { FAQ } from "@/lib/landing/faq";
 import { ROOMS } from "@/lib/landing/rooms";
 import { GUIDED_HOURS, timelinePhrase } from "@/lib/landing/timeline";
@@ -53,6 +56,19 @@ export function llmsText(appUrl: string): string {
     "- It does not issue certificates. It estimates readiness and says what the estimate is based on.",
     "- It does not teach through exercises about German. It is German, used, with somebody who answers.",
     "- It is free to start and asks for no card.",
+    "",
+    // What each plan is, and no price: prices are Stripe's and change without
+    // a deploy, and a figure repeated by an answer engine outlives the page.
+    "## Plans",
+    "",
+    `- **${planName("free")}.** A real plan with daily limits, and no card. Enough practice to reach A1 without paying.`,
+    `- **${planName("plus")}.** The stronger tutor model, more conversation each day, and a natural AI voice. Monthly or yearly.`,
+    `- **${planName("premium")}.** The most practice, more of each conversation kept in view, and voice in the ` +
+      `Trainer, with a ${TRIAL_DAYS}-day trial that asks for no card. Monthly or yearly.`,
+    "- **Passes.** One payment for a fixed number of days of Plus or Premium, with no renewal.",
+    "",
+    `Prices include VAT and are listed at ${absoluteUrl(appUrl, PRICING_PATH)}. No plan changes how a ` +
+      "learner is assessed: every plan gets the same evaluation, the same levels and the same curriculum.",
     "",
     "## Questions",
     "",

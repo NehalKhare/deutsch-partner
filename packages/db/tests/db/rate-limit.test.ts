@@ -91,6 +91,44 @@ describe("consume_rate_limit", () => {
     expect(left.rows.map((row) => row.bucket_key)).toEqual(["chat:new"]);
   });
 
+  it("never purges a bucket whose day-long window is still open", async () => {
+    // The daily plan quotas (billing-and-plans-spec.md S2) share this table
+    // with the per-minute limits. A purge that dropped a quota bucket twenty
+    // hours into its window would hand the learner a fresh day's allowance,
+    // so no argument may reach back less than the longest window in use.
+    await consume("quota_tutor_turns_free:abc", 20, 86_400);
+    await database.db.query(
+      `update public.rate_limit_buckets set window_start = now() - interval '23 hours'`,
+    );
+
+    const workers = await database.db.query<{ purged: number }>(
+      `select public.purge_rate_limit_buckets(interval '1 day') as purged`,
+    );
+    const hurried = await database.db.query<{ purged: number }>(
+      `select public.purge_rate_limit_buckets(interval '1 hour') as purged`,
+    );
+    const left = await database.db.query<{ bucket_key: string }>(
+      `select bucket_key from public.rate_limit_buckets`,
+    );
+
+    expect(workers.rows[0]!.purged).toBe(0);
+    expect(hurried.rows[0]!.purged).toBe(0);
+    expect(left.rows.map((row) => row.bucket_key)).toEqual(["quota_tutor_turns_free:abc"]);
+  });
+
+  it("still purges a day-long window once it has closed", async () => {
+    await consume("quota_tutor_turns_free:abc", 20, 86_400);
+    await database.db.query(
+      `update public.rate_limit_buckets set window_start = now() - interval '25 hours'`,
+    );
+
+    const purged = await database.db.query<{ purged: number }>(
+      `select public.purge_rate_limit_buckets() as purged`,
+    );
+
+    expect(purged.rows[0]!.purged).toBe(1);
+  });
+
   it("cannot be called by a signed-in learner", async () => {
     await expect(
       database.asLearner("11111111-1111-4111-8111-111111111111", () =>

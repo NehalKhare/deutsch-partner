@@ -9,6 +9,7 @@ Five documents, written to be read in this order.
 | [How the pieces work](topics.md) | Plain-language explanations of RAG, prompting, vector search, Next.js, and the rest |
 | [Operations](operations.md) | Running it: environment, ingestion, cost, and what to check when something breaks |
 | [Search and answer engines](seo-and-geo.md) | How the learner product is found — and how the rooms and the operator app are kept out of every index |
+| [Monetisation](monetisation.md) | The business plan: plans and prices, unit economics per plan, growth stages and metrics, features to add, and the legal and tax checklist before taking money |
 
 The specification documents this was built against live in
 [`.claude/docs/`](../.claude/docs/). They are the source of the rules; these

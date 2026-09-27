@@ -3,12 +3,25 @@ import { QuietShell } from "@dp/ui/quiet-shell";
 import { pageTitle, prose } from "@dp/ui/styles";
 import { signUpAction } from "@/app/auth/actions";
 import { INITIAL_AUTH_STATE } from "@dp/auth/form-state";
-import { SIGN_UP_PATH } from "@/lib/auth/routes";
+import { SIGN_UP_PATH, safeNextPath } from "@/lib/auth/routes";
 import { publicPageMetadata } from "@/lib/seo/metadata";
 
 export const metadata = publicPageMetadata(SIGN_UP_PATH);
 
-export default function SignUpPage() {
+/**
+ * Sign-up, remembering where the visitor was heading — most often the order
+ * page for a plan picked on /pricing before there was an account to buy it
+ * with.
+ */
+export default async function SignUpPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string | string[] }>;
+}) {
+  const { next } = await searchParams;
+  // A repeated `next` arrives as a list, which names no one destination.
+  const destination = typeof next === "string" && next !== "" ? safeNextPath(next) : undefined;
+
   return (
     <QuietShell>
       <div className="flex flex-col gap-2">
@@ -19,6 +32,7 @@ export default function SignUpPage() {
         mode="sign-up"
         action={signUpAction}
         initialState={INITIAL_AUTH_STATE}
+        next={destination}
       />
     </QuietShell>
   );

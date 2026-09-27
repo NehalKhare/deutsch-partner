@@ -1,9 +1,17 @@
 import { describe, expect, it } from "vitest";
 
+import { PRICING_FAQ } from "@/lib/billing/copy";
+import { offerCatalogue } from "@/lib/billing/offers";
 import { FAQ } from "@/lib/landing/faq";
 import { ROOMS } from "@/lib/landing/rooms";
 import { PRIVATE_PATHS, SITE } from "@/lib/seo/site";
-import { landingStructuredData, serializeJsonLd } from "@/lib/seo/structured-data";
+import {
+  landingStructuredData,
+  pricingStructuredData,
+  serializeJsonLd,
+} from "@/lib/seo/structured-data";
+
+import { ALL_PRICES } from "../billing/fixtures";
 
 /**
  * The landing page as schema.org describes it. The graph is what a search
@@ -98,6 +106,85 @@ describe("the questions", () => {
     const text = JSON.stringify(faq);
     expect(text).toMatch(/never tells you that you have passed/);
     expect(text).toMatch(/about two years at 30 minutes a day/);
+  });
+
+  it("still say starting is free and asks for no card, now that there are paid plans", () => {
+    const start = FAQ.find((entry) => /cost anything to start/.test(entry.question))!;
+    expect(start.answer).toMatch(/^No\./);
+    expect(start.answer).toMatch(/No card/);
+  });
+
+  it("say what the paid plans add, and that none of them changes a grade", () => {
+    expect(FAQ.some((entry) => /Plus and Premium/.test(entry.question))).toBe(true);
+    expect(FAQ.some((entry) => /assessed/.test(entry.question))).toBe(true);
+  });
+});
+
+describe("the pricing page's graph", () => {
+  const catalogue = offerCatalogue({ status: "ready", prices: ALL_PRICES });
+  const pricing = (list = catalogue) => pricingStructuredData(ORIGIN, list)["@graph"] as Node[];
+  const app = (list = catalogue) => pricing(list).find((entry) => entry["@type"] === "WebApplication")!;
+  type Offer = {
+    "@type": string;
+    name: string;
+    price: string;
+    priceCurrency: string;
+    url: string;
+    priceSpecification: { valueAddedTaxIncluded: boolean; price: string };
+  };
+  const offers = (list = catalogue) => app(list).offers as Offer[];
+
+  it("describes the same application as the landing page, by the same id", () => {
+    expect(app()["@id"]).toBe(node("WebApplication")["@id"]);
+  });
+
+  it("offers Free and every priced plan and pass", () => {
+    expect(offers().map((offer) => offer.name)).toEqual([
+      "Free",
+      "Plus, monthly",
+      "Plus, yearly",
+      "Premium, monthly",
+      "Premium, yearly",
+      "Plus pass",
+      "Premium pass",
+    ]);
+  });
+
+  it("states each price as Stripe's cents turned into a decimal, VAT included", () => {
+    const plus = offers().find((offer) => offer.name === "Plus, monthly")!;
+    expect(plus).toMatchObject({ "@type": "Offer", price: "9.99", priceCurrency: "EUR" });
+    expect(plus.priceSpecification).toMatchObject({ price: "9.99", valueAddedTaxIncluded: true });
+    expect(offers().find((offer) => offer.name === "Free")).toMatchObject({ price: "0", priceCurrency: "EUR" });
+  });
+
+  it("says what each price buys: a month, a year, or a pass's days", () => {
+    const duration = (name: string) =>
+      (offers().find((offer) => offer.name === name) as unknown as { eligibleDuration: unknown }).eligibleDuration;
+    expect(duration("Plus, monthly")).toMatchObject({ value: 1, unitCode: "MON" });
+    expect(duration("Premium, yearly")).toMatchObject({ value: 1, unitCode: "ANN" });
+    expect(duration("Plus pass")).toMatchObject({ value: 180, unitCode: "DAY" });
+  });
+
+  it("points every offer at the pricing page, never at the order page behind sign-in", () => {
+    for (const offer of offers()) {
+      expect(offer.url).toBe(`${ORIGIN}/pricing`);
+    }
+    const text = JSON.stringify(pricingStructuredData(ORIGIN, catalogue));
+    for (const path of PRIVATE_PATHS) {
+      expect(text).not.toContain(`${ORIGIN}${path}`);
+    }
+  });
+
+  it("invents nothing when there are no prices: Free alone", () => {
+    const empty = offerCatalogue({ status: "unavailable" });
+    expect(offers(empty).map((offer) => offer.name)).toEqual(["Free"]);
+  });
+
+  it("asks the pricing questions the pricing page answers", () => {
+    const faq = pricing().find((entry) => entry["@type"] === "FAQPage")!;
+    const names = (faq.mainEntity as Array<{ name: string }>).map((entry) => entry.name);
+    expect(names).toEqual(PRICING_FAQ.map((entry) => entry.question));
+    expect(String(faq["@id"])).toBe(`${ORIGIN}/pricing#faq`);
   });
 });
 

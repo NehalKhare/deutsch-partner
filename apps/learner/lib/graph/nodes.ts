@@ -19,6 +19,8 @@ import {
   vocabularyOutcomes,
 } from "@dp/learning/vocabulary-engine";
 import type { Evaluator } from "@/lib/ai/evaluation";
+import type { BudgetScope } from "@dp/domain/budgets";
+import { PLAN_CATALOGUE, type PlanCode } from "@dp/domain/plans";
 import type { ModelGateway } from "@dp/gateway/gateway";
 import { callSpecFor } from "@dp/gateway/call-spec";
 import {
@@ -29,6 +31,7 @@ import {
   versionedText,
   type LearnerContext,
 } from "@dp/prompts";
+import { isAllowanceScope } from "@/lib/billing/allowance";
 import { DEFAULT_INTENT, classifyIntent } from "@/lib/graph/intent";
 import { note, spend, type LoadedLearner, type TurnState } from "@/lib/graph/state";
 import type { GermanLearningRetriever } from "@/lib/retrieval/retriever";
@@ -67,6 +70,17 @@ export interface GraphDeps {
 
 /** Top-K for retrieval. Small, per the context-budget discipline. */
 export const RETRIEVAL_TOP_K = 5;
+
+/**
+ * How many knowledge snippets a turn is given: the plan's number, or the
+ * default a turn had before plans (billing-and-plans-spec.md S2).
+ */
+export function retrievalTopKFor(plan: PlanCode | undefined): number {
+  return plan ? PLAN_CATALOGUE[plan].retrievalTopK : RETRIEVAL_TOP_K;
+}
+
+/** The plan as a call carries it: named when there is one, absent when not. */
+const withPlan = (plan: PlanCode | undefined) => (plan ? { plan } : {});
 
 const CONVERSATION_TIMEOUT_MS = 45_000;
 
@@ -345,8 +359,13 @@ export async function retrieve(
       targetVocabularyLemmas: [...state.learner.miniLevel.targetVocabulary],
     },
     {
-      topK: RETRIEVAL_TOP_K,
-      context: { requestId: state.input.requestId, userIdHash: state.input.userIdHash },
+      topK: retrievalTopKFor(state.input.plan),
+      // The query's embedding spends from the same allowance as the turn.
+      context: {
+        requestId: state.input.requestId,
+        userIdHash: state.input.userIdHash,
+        ...withPlan(state.input.plan),
+      },
     },
   );
 
@@ -375,11 +394,22 @@ export interface GeneratedTurn {
  * Returns the stream rather than the text: the learner should see the first
  * words as they arrive, and everything after this node runs once the stream
  * has finished.
+ *
+ * The plan decides the tier, the context and the output ceiling, and all
+ * three come from the routing table through the spec — this node names the
+ * plan, never a tier. A refusal because the learner's own allowance is spent
+ * is carried out by its scope, so the learner is told that rather than that
+ * their tutor is unavailable.
  */
 export async function generate(
   state: TurnState,
   deps: GraphDeps,
-): Promise<{ state: TurnState; turn: GeneratedTurn | null }> {
+): Promise<{
+  state: TurnState;
+  turn: GeneratedTurn | null;
+  /** Set only when the reply was refused because the learner's own allowance is spent. */
+  allowanceSpent?: BudgetScope;
+}> {
   if (!state.learner) {
     return { state: note(state, "generate", "failed", "no learner"), turn: null };
   }
@@ -403,6 +433,7 @@ export async function generate(
     })),
     recentMessages: [...(state.history ?? [])],
     userMessage: state.input.message,
+    ...withPlan(state.input.plan),
   });
 
   if (!built.ok) {
@@ -414,6 +445,7 @@ export async function generate(
 
   const spec = callSpecFor("conversation.turn", {
     level: state.learner.cefr,
+    ...withPlan(state.input.plan),
     timeoutMs: CONVERSATION_TIMEOUT_MS,
   });
   if (!spec.ok) {
@@ -433,6 +465,7 @@ export async function generate(
       traceId: state.input.traceId ?? null,
       userIdHash: state.input.userIdHash,
       threadId: state.input.threadId,
+      ...withPlan(state.input.plan),
       prompt: {
         name: entry.name,
         version: entry.version,
@@ -442,6 +475,13 @@ export async function generate(
   );
 
   if (!opened.ok) {
+    if (opened.failure === "budget_denied" && isAllowanceScope(opened.budgetScope)) {
+      return {
+        state: note(state, "generate", "failed", `allowance_spent:${opened.budgetScope}`),
+        turn: null,
+        allowanceSpent: opened.budgetScope,
+      };
+    }
     return { state: note(state, "generate", "failed", opened.failure), turn: null };
   }
 
@@ -477,6 +517,9 @@ export async function evaluate(
       traceId: state.input.traceId ?? null,
       userIdHash: state.input.userIdHash,
       threadId: state.input.threadId,
+      // The evaluator's route is the same on every plan (spec S4); only the
+      // allowance it is read against is the learner's.
+      ...withPlan(state.input.plan),
     },
   );
 

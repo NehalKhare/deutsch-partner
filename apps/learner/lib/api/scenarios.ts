@@ -6,6 +6,7 @@ import {
   scenarioTypeSchema,
   type ScenarioSummary,
 } from "@dp/domain/scenario";
+import type { PlanCode } from "@dp/domain/plans";
 import { nonEmptyTextSchema } from "@dp/domain/primitives";
 import type { EmbeddingService } from "@dp/gateway/embedding-service";
 import { nullLogger, type Logger } from "@dp/observability/logger";
@@ -71,7 +72,16 @@ export type ScenarioSearchResult =
 
 export async function handleScenarioSearch(
   body: unknown,
-  identity: { readonly userIdHash: string; readonly requestId: string },
+  identity: {
+    readonly userIdHash: string;
+    readonly requestId: string;
+    /**
+     * Resolved by the route from entitlement rows — required, so no route
+     * forgets it. The embedding is charged to the learner's own allowance,
+     * which is their plan's unless an operator set one of their own (spec S9).
+     */
+    readonly plan: PlanCode;
+  },
   deps: ScenarioSearchDeps,
 ): Promise<ScenarioSearchResult> {
   const logger = deps.logger ?? nullLogger;
@@ -96,6 +106,7 @@ export async function handleScenarioSearch(
   const embedded = await deps.embeddings.embed([parsed.data.query], {
     requestId: identity.requestId,
     userIdHash: identity.userIdHash,
+    plan: identity.plan,
   });
 
   const vector = embedded.ok ? embedded.data.embedded[0]?.embedding : undefined;

@@ -20,6 +20,7 @@ const IDENTITY = {
   learnerId: "11111111-1111-4111-8111-111111111111",
   userIdHash: "abcd1234",
   requestId: "req-1",
+  plan: "plus" as const,
 };
 
 const SUMMARY = {
@@ -106,6 +107,9 @@ describe("handling a search", () => {
     expect(embeddings.embed).toHaveBeenCalledWith(["ordering food"], {
       requestId: "req-1",
       userIdHash: "abcd1234",
+      // Charged to the learner's own allowance, so read against their plan's
+      // limit rather than the scope's default (billing-and-plans-spec.md S9).
+      plan: "plus",
     });
     expect(searchByVector).toHaveBeenCalledWith([0.1, 0.2], {
       types: ["dialogue"],

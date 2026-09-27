@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { UpgradePrompt } from "@/components/billing/upgrade-prompt";
 import { Companion } from "@/components/companion/companion";
 import { MasteryProgress } from "@/components/chat/mastery-progress";
 import { RichText } from "@dp/ui/rich-text";
@@ -13,7 +14,13 @@ import {
 } from "@/components/voice/speech";
 import { useReadAloud } from "@/components/voice/read-aloud";
 import { SpeakerIcon } from "@/components/voice/speaker-icon";
+import { VoicePlanNote } from "@/components/voice/voice-plan-note";
 import { splitChatStream } from "@/lib/api/chat-trailer";
+import {
+  PlanRefusalError,
+  planRefusalFrom,
+  type PlanRefusal,
+} from "@/lib/billing/refusal";
 import { masteryStripStore, useDevicePreference } from "@/lib/settings/device";
 import type { CEFRLevel } from "@dp/domain/cefr";
 import { HISTORY_WINDOW } from "@dp/domain/conversation";
@@ -129,6 +136,12 @@ function isSpeech(entry: FlowEntry): entry is ChatMessage {
  * voice second. The model sounds like a person; the browser needs no key and
  * costs nothing, which makes it the difference between a tutor that can be
  * heard and one that could have been.
+ *
+ * A refusal because of the plan — a spent daily quota, a spent allowance, a
+ * feature the plan lacks — is not a failure and is not drawn as one. The same
+ * rollback runs (the message comes back out, the sentence goes back in the
+ * box), and an upgrade prompt stands where the red alert would have, saying
+ * when it reopens and that progress is saved (billing-and-plans-spec.md S4).
  */
 export function Conversation({
   threadId,
@@ -224,12 +237,17 @@ export function Conversation({
     canSpeak,
     speakingId,
     notice: voiceNotice,
+    planRefusal: voicePlanRefusal,
+    dismissPlanRefusal,
     speak,
   } = useReadAloud({ cefr, voiceGender, playback, voice });
 
   const [draft, setDraft] = useState("");
   const [streaming, setStreaming] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // The plan's answer to the last turn, shown instead of the error: the two
+  // are never both set, because each is cleared by the next attempt.
+  const [refusal, setRefusal] = useState<PlanRefusal | null>(null);
   const [sending, setSending] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   // Counted rather than derived from the list's length, because a refused turn
@@ -243,6 +261,8 @@ export function Conversation({
   // because they fail for unrelated reasons and each is cleared by trying
   // again at the thing that raised it.
   const [micNotice, setMicNotice] = useState<string | null>(null);
+  // And its plan answer: a spent transcription allowance, said as quietly.
+  const [micRefusal, setMicRefusal] = useState<PlanRefusal | null>(null);
 
   // Constructed once, and lazily: reaching for MediaRecorder at module load
   // would break every environment that does not have one, including the
@@ -286,6 +306,8 @@ export function Conversation({
       const body = (await response.json().catch(() => null)) as
         | { message?: string }
         | null;
+      const refused = planRefusalFrom(body);
+      if (refused) throw new PlanRefusalError(refused);
       throw new Error(body?.message ?? FALLBACK_ERROR);
     }
 
@@ -384,6 +406,7 @@ export function Conversation({
     const history = recent.map(({ role, content }) => ({ role, content }));
 
     setError(null);
+    setRefusal(null);
     // A verdict about the previous turn must not sit beside a new one.
     setLastTurn(null);
     setSending(true);
@@ -405,7 +428,11 @@ export function Conversation({
       if (restoreOnFailure) {
         setDraft((current) => (current.length === 0 ? message : current));
       }
-      setError(failure instanceof Error ? failure.message : FALLBACK_ERROR);
+      if (failure instanceof PlanRefusalError) {
+        setRefusal(failure.refusal);
+      } else {
+        setError(failure instanceof Error ? failure.message : FALLBACK_ERROR);
+      }
     } finally {
       setSending(false);
       inputRef.current?.focus();
@@ -449,6 +476,13 @@ export function Conversation({
           | null;
 
         if (!response.ok || !body?.text) {
+          // A spent transcription allowance is the plan's answer, not a
+          // recording that failed; the box is left exactly as it was.
+          const refused = planRefusalFrom(body);
+          if (refused) {
+            setMicRefusal(refused);
+            return;
+          }
           throw new Error(body?.message ?? "We could not make that out.");
         }
 
@@ -470,6 +504,7 @@ export function Conversation({
     }
 
     setMicNotice(null);
+    setMicRefusal(null);
     try {
       await recorder.start();
       setRecording(true);
@@ -740,11 +775,24 @@ export function Conversation({
       {/* Voice is an addition to the conversation, not the conversation. Its
           failures are said quietly, beside the control that caused them, and
           never as the red banner that means "your turn did not happen". */}
-      {micNotice ?? voiceNotice ? (
+      {!micRefusal && (micNotice ?? voiceNotice) ? (
         <p role="status" className="px-1 text-xs text-copy/60">
           {micNotice ?? voiceNotice}
         </p>
       ) : null}
+
+      {/* What the plan said, in a polite region that is always on the page:
+          one inserted already holding its text is often never announced, so
+          this one is here first and fills when there is something to say.
+          Empty, it is taken out of the flow rather than hidden, which would
+          take it out of the accessibility tree too. */}
+      <div data-live="plan" aria-live="polite" className="flex flex-col gap-5 empty:absolute">
+        {micRefusal ? <UpgradePrompt refusal={micRefusal} variant="note" /> : null}
+        {voicePlanRefusal ? (
+          <VoicePlanNote refusal={voicePlanRefusal} onDismiss={dismissPlanRefusal} />
+        ) : null}
+        {refusal ? <UpgradePrompt refusal={refusal} /> : null}
+      </div>
 
       {error ? (
         <p

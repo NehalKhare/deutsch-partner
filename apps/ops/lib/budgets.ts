@@ -2,9 +2,11 @@ import {
   ENFORCED_BUDGET_SCOPES,
   budgetState,
   isPerUserScope,
+  planForBudgetKey,
   type BudgetState,
   type EnforcedBudgetScope,
 } from "@dp/domain/budgets";
+import { PLAN_CATALOGUE, comparePlans, type PlanCode } from "@dp/domain/plans";
 import type { BudgetLimit, BudgetOverview, LearnerSpend } from "@dp/db/budget-repository";
 
 /**
@@ -39,6 +41,12 @@ export interface BudgetBoard {
   readonly unlimited: readonly EnforcedBudgetScope[];
   /** Per-learner rows, active or paused. */
   readonly overrides: readonly BudgetLimit[];
+  /**
+   * Each plan's own default for a per-learner scope, in plan order
+   * (billing-and-plans-spec.md S9). It replaces the scope's default for the
+   * learners on that plan, when the call names the plan.
+   */
+  readonly plans: ReadonlyArray<{ readonly plan: PlanCode; readonly limit: BudgetLimit }>;
   /** Rows for a scope nothing reads from the table. Shown so nobody trusts them. */
   readonly unenforced: readonly BudgetLimit[];
 }
@@ -52,10 +60,25 @@ export function budgetBoard(overview: BudgetOverview): BudgetBoard {
     limit: activeDefault(overview.limits, scope),
   }));
 
+  const keyed = overview.limits.filter((row) => row.scopeKey !== null && isPerUserScope(row.scope));
+  const plans = keyed
+    .flatMap((limit) => {
+      const plan = planForBudgetKey(limit.scopeKey);
+      return plan === null ? [] : [{ plan, limit }];
+    })
+    .sort(
+      (a, b) =>
+        comparePlans(a.plan, b.plan) ||
+        ENFORCED_BUDGET_SCOPES.indexOf(a.limit.scope as EnforcedBudgetScope) -
+          ENFORCED_BUDGET_SCOPES.indexOf(b.limit.scope as EnforcedBudgetScope),
+    );
+
   return {
     scopes,
+    // A scope's default, not a plan's: a call that names no plan meets only it.
     unlimited: scopes.filter((row) => row.limit === null).map((row) => row.scope),
-    overrides: overview.limits.filter((row) => row.scopeKey !== null && isPerUserScope(row.scope)),
+    overrides: keyed.filter((row) => planForBudgetKey(row.scopeKey) === null),
+    plans,
     unenforced: overview.limits.filter((row) => row.scope === "per_request"),
   };
 }
@@ -98,6 +121,9 @@ export function learnerMeter(row: LearnerSpend): Meter {
       : { limitEur: row.limitEur, warnPct: row.warnPct ?? 1, degradePct: row.degradePct ?? 1 },
   );
 }
+
+/** How a plan is named on the page: as learners see it named. */
+export const planLabel = (plan: PlanCode): string => PLAN_CATALOGUE[plan].name;
 
 /** How each scope is named on the page. */
 export const SCOPE_LABELS: Readonly<Record<EnforcedBudgetScope, string>> = {

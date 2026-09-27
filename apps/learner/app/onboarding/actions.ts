@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 import { parseOnboardingForm } from "@dp/domain/onboarding/input";
 import type { OnboardingFormState } from "@/lib/onboarding/form-state";
+import { safeNextPath } from "@/lib/auth/routes";
 import { requireAuthenticatedUserId } from "@/lib/auth/current-user";
 import { createServerSupabaseClient } from "@/lib/supabase/server-client";
 import { createOnboardingRepository } from "@dp/db/onboarding-repository";
@@ -32,5 +33,7 @@ export async function completeOnboardingAction(
     return { status: "error", message: result.error.message };
   }
 
-  redirect("/dashboard");
+  // Where the learner was heading before they had an account, carried from
+  // sign-up; the dashboard otherwise. Only ever a same-site path.
+  redirect(safeNextPath(formData.get("next")?.toString()));
 }

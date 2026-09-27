@@ -499,3 +499,30 @@ describe("gateway outcomes", () => {
     expect(gatewayOk({ x: 1 })).toEqual({ ok: true, data: { x: 1 } });
   });
 });
+
+describe("a turn with no plan", () => {
+  // The routes always pass one; a turn without one — a script, a test, a
+  // caller written before plans — resolves exactly as it did before plans
+  // existed (billing-and-plans-spec.md S3).
+  it("routes, retrieves and budgets as it did before plans", async () => {
+    const { deps, gatewaySpecs, gatewayContexts, retrievalOptions } = fakeGraph();
+
+    await runTurn(INPUT, deps);
+
+    expect(gatewaySpecs[0]).toMatchObject({ tier: "strong", maxInputTokens: 5000, maxOutputTokens: 450 });
+    expect(gatewaySpecs[0]).not.toHaveProperty("plan");
+    expect(gatewayContexts[0]).not.toHaveProperty("plan");
+    expect(retrievalOptions[0]).toMatchObject({ topK: 5 });
+    expect(retrievalOptions[0]?.context).not.toHaveProperty("plan");
+  });
+
+  it("names the refusing scope when a turn is refused for the learner's own allowance", async () => {
+    const { deps } = fakeGraph({
+      generation: gatewayFail("budget_denied", "per_user_daily at 100%", "per_user_daily"),
+    });
+
+    const outcome = await runTurn(INPUT, deps);
+
+    expect(outcome).toMatchObject({ ok: false, reason: "budget_exhausted", budgetScope: "per_user_daily" });
+  });
+});

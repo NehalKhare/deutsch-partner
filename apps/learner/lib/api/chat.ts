@@ -5,14 +5,16 @@ import {
   MAX_MESSAGE_LENGTH,
   transcriptMessageSchema,
 } from "@dp/domain/conversation";
+import type { PlanCode } from "@dp/domain/plans";
 import { nonEmptyTextSchema, uuidSchema } from "@dp/domain/primitives";
 import {
   TRAILER_DELIMITER,
   encodeChatTrailer,
   type ChatTrailer,
 } from "@/lib/api/chat-trailer";
+import { allowanceRenewsAt } from "@/lib/billing/allowance";
 import type { GraphDeps } from "@/lib/graph/nodes";
-import { runTurn } from "@/lib/graph/turn";
+import { runTurn, type TurnAdmission } from "@/lib/graph/turn";
 import type { TurnInput } from "@/lib/graph/state";
 import { nullLogger, type Logger } from "@dp/observability/logger";
 
@@ -52,6 +54,11 @@ export const CHAT_ERRORS = [
   "learner_unavailable",
   "thread_unavailable",
   "generation_failed",
+  // The plan's three (lib/billing/refusal.ts). Answers rather than faults: the
+  // page shows them as an upgrade prompt, with the learner's words kept.
+  "plan_required",
+  "quota_exhausted",
+  "budget_exhausted",
 ] as const;
 
 export type ChatError = (typeof CHAT_ERRORS)[number];
@@ -80,6 +87,23 @@ const RESPONSES: Readonly<Record<ChatError, { status: number; message: string }>
   generation_failed: {
     status: 503,
     message: "Your tutor is unavailable right now. Please try again shortly.",
+  },
+  // 402 is the status that says what it is: the request is fine, the plan
+  // does not include it. No plan has a zero tutor quota today; the answer is
+  // here so that a catalogue change is not also a new failure mode.
+  plan_required: {
+    status: 402,
+    message: "Talking with the tutor needs a paid plan.",
+  },
+  quota_exhausted: {
+    status: 429,
+    message: "You've used today's tutor turns.",
+  },
+  // Never "budget": that is the operator's word for it. The learner has an
+  // allowance, and the prompt says when it renews.
+  budget_exhausted: {
+    status: 429,
+    message: "You've used your AI allowance for now.",
   },
 };
 
@@ -114,7 +138,18 @@ export interface ChatOutcome {
 
 export type ChatResult =
   | { readonly ok: true; readonly outcome: ChatOutcome }
-  | { readonly ok: false; readonly error: ChatError; readonly detail?: string };
+  | {
+      readonly ok: false;
+      readonly error: ChatError;
+      readonly detail?: string;
+      /** When a spent allowance or quota reopens, on a plan refusal only; null when nothing does. */
+      readonly resetAt?: Date | null;
+      /** A short wait worth saying, on an outage that is expected to pass. */
+      readonly retryAfterSeconds?: number;
+    };
+
+/** How long to suggest waiting when the quota store could not count: a blip, not a day. */
+export const QUOTA_OUTAGE_RETRY_SECONDS = 30;
 
 /**
  * Runs one chat turn.
@@ -124,8 +159,20 @@ export type ChatResult =
  */
 export async function handleChatTurn(
   body: unknown,
-  identity: { readonly learnerId: string; readonly userIdHash: string; readonly requestId: string },
+  identity: {
+    readonly learnerId: string;
+    readonly userIdHash: string;
+    readonly requestId: string;
+    /** Resolved by the route from entitlement rows — required, so no route forgets it. */
+    readonly plan: PlanCode;
+  },
   deps: ChatDeps,
+  /**
+   * The day's tutor turn, counted by the route for the plan it resolved.
+   * Asked by the turn itself once the body parsed, the learner loaded and
+   * the thread proved theirs (lib/graph/turn.ts); absent, nothing is counted.
+   */
+  admit?: TurnAdmission,
 ): Promise<ChatResult> {
   const parsed = chatRequestSchema.safeParse(body);
   if (!parsed.success) {
@@ -143,9 +190,21 @@ export async function handleChatTurn(
     history: parsed.data.history,
     requestId: identity.requestId,
     userIdHash: identity.userIdHash,
+    plan: identity.plan,
   };
 
-  const turn = await runTurn(input, deps);
+  const turn = await runTurn(input, deps, admit);
+
+  // The plan's answer is not a fault, and is not logged as one: the route
+  // says it to the learner, and the quota's own store has the count.
+  if (!turn.ok && turn.reason === "not_admitted" && turn.refusal) {
+    // A store that could not count is an outage like any other; only the
+    // plan's own two answers are upgrade prompts.
+    if (turn.refusal.refusal === "unavailable") {
+      return { ok: false, error: "generation_failed", retryAfterSeconds: QUOTA_OUTAGE_RETRY_SECONDS };
+    }
+    return { ok: false, error: turn.refusal.refusal, resetAt: turn.refusal.resetAt };
+  }
 
   if (!turn.ok) {
     (deps.logger ?? nullLogger).warn("chat.turn_refused", {
@@ -164,7 +223,16 @@ export async function handleChatTurn(
         .join(","),
     });
 
-    return { ok: false, error: turn.reason };
+    if (turn.reason === "budget_exhausted" && turn.budgetScope) {
+      const now = deps.now?.() ?? new Date();
+      return {
+        ok: false,
+        error: "budget_exhausted",
+        resetAt: allowanceRenewsAt(turn.budgetScope, now),
+      };
+    }
+
+    return { ok: false, error: turn.reason === "not_admitted" ? "generation_failed" : turn.reason };
   }
 
   const learner = turn.turn.state.learner;

@@ -11,11 +11,13 @@ import {
   blockCap,
   buildPrompt,
   estimateTokens,
+  fingerprint,
   messageCapFor,
   promptEntry,
   shedOne,
   type SheddableContext,
   type BuildRequest,
+  versionedText,
 } from "../src/index";
 import { ceilingsFor } from "@dp/domain/tasks";
 
@@ -176,6 +178,49 @@ describe("token budgets", () => {
       prompt.blocks.reduce((sum, block) => sum + block.tokens, 0),
     );
     expect(prompt.tokens.total).toBeGreaterThan(0);
+  });
+});
+
+describe("a plan's ceilings", () => {
+  // billing-and-plans-spec.md S3: premium widens the tutor's context, and the
+  // builder is what decides how much context a turn carries. A premium turn
+  // assembled against the level table would be premium in name only.
+  const b1 = { cefr: "B1" as const, policy: behaviorPolicyFor({ cefr: "B1" }) };
+
+  it("builds a premium turn against premium's wider context", () => {
+    const prompt = built({ ...b1, plan: "premium" });
+
+    expect(prompt.maxInputTokens).toBe(ceilingsFor("conversation.turn", "B1", "premium").maxInputTokens);
+    expect(prompt.maxOutputTokens).toBe(ceilingsFor("conversation.turn", "B1", "premium").maxOutputTokens);
+    expect(prompt.maxInputTokens).toBeGreaterThan(ceilingsFor("conversation.turn", "B1").maxInputTokens);
+  });
+
+  it("builds a free turn, and a turn with no plan, against the level table", () => {
+    expect(built({ ...b1, plan: "free" }).maxInputTokens).toBe(6000);
+    expect(built({ ...b1, plan: "free" }).maxOutputTokens).toBe(700);
+    expect(built(b1).maxInputTokens).toBe(6000);
+  });
+
+  it("says which tier the plan runs the turn on", () => {
+    expect(built({ plan: "free" }).tier).toBe("mid");
+    expect(built({ plan: "premium" }).tier).toBe("strong");
+    expect(built().tier).toBe(turn.tier);
+  });
+
+  it("refuses a plan that is not one", () => {
+    const outcome = buildPrompt(turn, request({ plan: "gold" as never }));
+
+    expect(outcome).toMatchObject({ ok: false, reason: "invalid_input" });
+    expect(!outcome.ok && outcome.detail).toContain("plan");
+  });
+
+  it("changes no versioned text, so a plan is not a new prompt version", () => {
+    // The fingerprint covers the entry's own blocks. A plan decides how much
+    // of the caller's data fits, never what the tutor is told to be.
+    const free = built({ ...b1, plan: "free" });
+    const premium = built({ ...b1, plan: "premium" });
+
+    expect(fingerprint(versionedText(premium))).toBe(fingerprint(versionedText(free)));
   });
 });
 

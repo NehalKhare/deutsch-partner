@@ -463,6 +463,56 @@ something. The page says so and points there.
 
 > `lib/settings/input.ts`, `app/(app)/settings/`
 
+### 8b. Choosing a plan, and paying for it
+
+Free is a real plan with daily limits and no card: 20 tutor turns, 15 Trainer
+requests and 5 spoken answers a day, the device's own voice for reading
+aloud, and everything that costs nothing in model spend — Catch up, the
+curriculum, the dashboard, the scenarios, moving between levels — on every
+plan, whatever happens to a payment. Plus and Premium buy a stronger tutor,
+more of each a day and the AI voice; Premium adds the voice in the Trainer and
+a wider tutor context. No plan buys a level: the evaluator, the extraction
+passes and every assessment run the same on all three.
+
+A visitor sees the plans on the landing page and in full on `/pricing`,
+monthly or yearly or as a one-off pass, every price VAT inclusive and read
+from Stripe's own Prices, never typed into code. Pressing a paid plan while
+signed out goes through sign-up and onboarding and lands on the order page,
+the chosen plan carried the whole way; signed in, it goes straight there.
+
+The order is placed on `/billing/checkout`, not on Stripe's page: above the
+button stand what is included, the total with VAT, the interval, that it
+renews until cancelled and how to cancel, and one unticked box asking for an
+immediate start (or, for a pass that stacks behind a running one, for its
+start on the date that pass ends). The button says "Order with obligation to
+pay". Pressing it records the order and the consent, then hands over to
+Stripe's hosted page, which only collects a payment method — card, Apple Pay,
+Google Pay, Klarna, SEPA Direct Debit or PayPal, whichever the Dashboard has
+switched on and suits the learner's country.
+
+Back from Stripe, `/billing/success` waits for the webhook rather than
+granting anything itself. `/billing` shows what the learner has and until
+when, warns about a failed payment while access carries on, and opens Stripe's
+Customer Portal to change plan, replace a card, download invoices or cancel.
+
+Premium's trial is seven days, once per account, with no card: it ends by
+itself and nothing renews. It has a page of its own and no order button,
+because nothing can be charged. While it runs there is no Customer Portal to
+open; keeping Premium, or choosing Plus, is an ordinary order on the order
+page.
+
+When a plan says no — a day's turns used, a feature the plan lacks, the
+month's AI allowance spent — the learner sees a quiet prompt instead of the red
+error: what happened, when it comes back in their own time zone, that their
+progress is saved, and (below Premium) where the larger plans are. The draft
+stays in the box. A Trainer session already under way is never cut off by the
+day's quota; the prompt appears before a new session, not inside one. A
+refused AI voice line is simply read by the device's voice, with a note once.
+
+> `app/pricing/`, `app/(app)/billing/`, `lib/billing/`, `lib/api/quota.ts`,
+> `components/billing/`, `components/pricing/`, `packages/billing/`,
+> `.claude/docs/billing-and-plans-spec.md`
+
 ### 9. Watching what it costs (operators only)
 
 A separate screen at `/operations/costs`, behind an explicit allowlist

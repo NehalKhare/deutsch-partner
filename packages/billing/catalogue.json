@@ -1,0 +1,16 @@
+{
+  "currency": "eur",
+  "taxBehavior": "inclusive",
+  "products": {
+    "plus": { "id": "dp_plus", "name": "Deutsch Partner Plus" },
+    "premium": { "id": "dp_premium", "name": "Deutsch Partner Premium" }
+  },
+  "prices": [
+    { "lookupKey": "dp_plus_month", "amountMinor": 999 },
+    { "lookupKey": "dp_plus_year", "amountMinor": 6999 },
+    { "lookupKey": "dp_premium_month", "amountMinor": 1999 },
+    { "lookupKey": "dp_premium_year", "amountMinor": 13999 },
+    { "lookupKey": "dp_pass_plus", "amountMinor": 4499, "passDays": 180 },
+    { "lookupKey": "dp_pass_premium", "amountMinor": 4999, "passDays": 90 }
+  ]
+}

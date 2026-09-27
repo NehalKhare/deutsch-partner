@@ -121,9 +121,11 @@ export interface OnboardingFormProps {
     formData: FormData,
   ) => Promise<OnboardingFormState>;
   readonly initialState: OnboardingFormState;
+  /** Where to go once set up, carried from sign-up. Validated again on the server. */
+  readonly next?: string;
 }
 
-export function OnboardingForm({ action, initialState }: OnboardingFormProps) {
+export function OnboardingForm({ action, initialState, next }: OnboardingFormProps) {
   const [state, formAction, pending] = useActionState(action, initialState);
   const [draft, setDraft] = useState(defaultOnboardingDraft());
 
@@ -261,6 +263,7 @@ export function OnboardingForm({ action, initialState }: OnboardingFormProps) {
         name="outputPreference"
         value={draft.outputPreference}
       />
+      {next ? <input type="hidden" name="next" value={next} /> : null}
 
       <p
         aria-live="polite"

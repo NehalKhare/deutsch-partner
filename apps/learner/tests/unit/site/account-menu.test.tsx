@@ -80,6 +80,22 @@ describe("opened", () => {
     expect(screen.getByRole("button", { name: /sign out/i })).toBeInTheDocument();
   });
 
+  it("offers the plan and its billing, which are about the account rather than about German", async () => {
+    renderMenu();
+    await openMenu();
+
+    expect(screen.getByRole("link", { name: "Plan & billing" })).toHaveAttribute("href", "/billing");
+  });
+
+  it("marks Plan & billing as current on its order and success pages too", async () => {
+    pathname.current = "/billing/checkout";
+    renderMenu();
+    await openMenu();
+
+    expect(screen.getByRole("link", { name: "Plan & billing" })).toHaveAttribute("aria-current", "page");
+    pathname.current = "/dashboard";
+  });
+
   it("shows the whole address, which the button could only abbreviate", async () => {
     // Which account, not merely that there is one. The fragment on the button
     // is exactly what is ambiguous between two logins.

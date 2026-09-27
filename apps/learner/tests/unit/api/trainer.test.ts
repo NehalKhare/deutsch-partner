@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { AIMessage } from "@langchain/core/messages";
 
 import { newLearnerVocabulary } from "@dp/learning/vocabulary-engine";
@@ -39,6 +39,7 @@ const IDENTITY = {
   learnerId: "11111111-1111-4111-8111-111111111111",
   userIdHash: "hash-alice",
   requestId: "33333333-3333-4333-8333-333333333333",
+  plan: "plus" as const,
 };
 
 const body = (over: Record<string, unknown> = {}) => ({
@@ -100,12 +101,18 @@ function fakeDeps(options: {
   personality?: "friendly" | "strict";
   /** Makes the profile unreadable, so the manner has to fall back. */
   profileFails?: boolean;
+  /** Which scope the over-limit snapshot is for; default the learner's own daily. */
+  overLimitScope?: "per_user_daily" | "per_user_monthly" | "global_daily";
 } = {}) {
   const model = new FakeToolCallingModel(options.script ?? [new AIMessage("Gern!")]);
   const upserts: unknown[] = [];
   const analyzerCalls: unknown[] = [];
   const scheduled: Array<() => Promise<void>> = [];
   const recordedErrors: unknown[] = [];
+  const modelContexts: Array<Record<string, unknown>> = [];
+  const snapshotInputs: Array<Record<string, unknown>> = [];
+  const gatewayContexts: Array<Record<string, unknown>> = [];
+  const retrievals: Array<Record<string, unknown>> = [];
 
   const record = {
     ...newLearnerVocabulary(IDENTITY.learnerId, ITEM.id),
@@ -179,8 +186,9 @@ function fakeDeps(options: {
       listUpToMiniLevel: async () => ok([]),
     } as unknown as TrainerDeps["grammar"],
     retriever: {
-      retrieve: async () =>
-        gatewayOk({
+      retrieve: async (_message: string, _learner: unknown, asked: Record<string, unknown> = {}) => {
+        retrievals.push(asked);
+        return gatewayOk({
           chunks: [
             {
               id: 1,
@@ -196,28 +204,32 @@ function fakeDeps(options: {
           considered: 1,
           costEur: 0,
           ranked: [],
-        }),
+        });
+      },
     } as unknown as TrainerDeps["retriever"],
     budgets: {
-      snapshot: async () =>
-        options.budgetsNull
+      snapshot: async (input: Record<string, unknown>) => {
+        snapshotInputs.push(input);
+        return options.budgetsNull
           ? null
           : options.overLimit
             ? [
                 {
-                  scope: "per_user_daily" as const,
-                  scopeKey: "hash-alice",
+                  scope: options.overLimitScope ?? ("per_user_daily" as const),
+                  scopeKey: options.overLimitScope === "global_daily" ? null : "hash-alice",
                   limitEur: 1,
                   spentEur: 1,
                   warnPct: 0.5,
                   degradePct: 0.8,
                 },
               ]
-            : [],
-    },
+            : [];
+      },
+    } as unknown as TrainerDeps["budgets"],
     gateway: {
-      complete: async (_spec: unknown, prompt: unknown) => {
+      complete: async (_spec: unknown, prompt: unknown, context: Record<string, unknown>) => {
         analyzerCalls.push(prompt);
+        gatewayContexts.push(context);
         if (options.analyzerFails) {
           return { ok: false as const, failure: "provider_error", detail: "scripted" };
         }
@@ -227,13 +239,15 @@ function fakeDeps(options: {
         });
       },
     } as unknown as TrainerDeps["gateway"],
-    createModels: () =>
-      (options.ladder ?? [model]).map((candidate) => ({
+    createModels: (context) => {
+      modelContexts.push(context as unknown as Record<string, unknown>);
+      return (options.ladder ?? [model]).map((candidate) => ({
         model: candidate,
         modelId: "vendor/fake",
         tier: "mid" as const,
         cacheMarks: false,
-      })),
+      }));
+    },
     loadMcp: async () => NO_MCP,
     mined: {
       claim: async () => ok(true),
@@ -245,7 +259,18 @@ function fakeDeps(options: {
     },
   };
 
-  return { deps, model, upserts, analyzerCalls, scheduled, recordedErrors };
+  return {
+    deps,
+    model,
+    upserts,
+    analyzerCalls,
+    scheduled,
+    recordedErrors,
+    modelContexts,
+    snapshotInputs,
+    gatewayContexts,
+    retrievals,
+  };
 }
 
 /** Everything the scripted model was shown on one invocation, as one string. */
@@ -353,13 +378,99 @@ describe("the budget gate", () => {
     expect(model.invocations).toBe(0);
   });
 
-  it("refuses a learner over their limit, before any model call", async () => {
+  it("refuses a learner over their own limit before any model call, and says when it renews", async () => {
+    // Their own allowance, which a larger plan answers: the page shows it as
+    // an upgrade prompt, not as "come back later".
     const { deps, model } = fakeDeps({ overLimit: true });
+    const now = new Date("2026-10-15T08:00:00.000Z");
 
-    const result = await handleTrainerTurn(body(), IDENTITY, deps);
+    const result = await handleTrainerTurn(body(), IDENTITY, { ...deps, now: () => now });
 
-    expect(result).toEqual({ ok: false, error: "budget_denied" });
+    expect(result).toEqual({
+      ok: false,
+      error: "budget_exhausted",
+      resetAt: new Date("2026-10-16T00:00:00.000Z"),
+    });
     expect(model.invocations).toBe(0);
+  });
+
+  it("renews a monthly allowance at the turn of the month", async () => {
+    const { deps } = fakeDeps({ overLimit: true, overLimitScope: "per_user_monthly" });
+
+    const result = await handleTrainerTurn(body(), IDENTITY, {
+      ...deps,
+      now: () => new Date("2026-10-15T08:00:00.000Z"),
+    });
+
+    expect(result).toMatchObject({ error: "budget_exhausted", resetAt: new Date("2026-11-01T00:00:00.000Z") });
+  });
+
+  it("keeps the product's own daily ceiling a plain refusal, which no plan answers", async () => {
+    const { deps, model } = fakeDeps({ overLimit: true, overLimitScope: "global_daily" });
+
+    expect(await handleTrainerTurn(body(), IDENTITY, deps)).toEqual({ ok: false, error: "budget_denied" });
+    expect(model.invocations).toBe(0);
+  });
+
+  it("reads the counters against the learner's plan", async () => {
+    const { deps, snapshotInputs } = fakeDeps();
+
+    await handleTrainerTurn(body(), { ...IDENTITY, plan: "free" }, deps);
+
+    expect(snapshotInputs[0]).toMatchObject({ userIdHash: "hash-alice", plan: "free" });
+  });
+});
+
+describe("a plan", () => {
+  it("builds the loop's models for the learner's plan, under that plan's per-request bound", async () => {
+    // billing-and-plans-spec.md S2: free's Trainer runs on mid with EUR 0.02 a
+    // request; the paid plans on strong with 0.05. The ladder resolves the
+    // tier from the plan; this hands it the plan, never a tier.
+    const free = fakeDeps();
+    const premium = fakeDeps();
+
+    await handleTrainerTurn(body(), { ...IDENTITY, plan: "free" }, free.deps);
+    await handleTrainerTurn(body(), { ...IDENTITY, plan: "premium" }, premium.deps);
+
+    const freeTurn = free.modelContexts[0]?.turn as { maxEur: number };
+    const premiumTurn = premium.modelContexts[0]?.turn as { maxEur: number };
+    expect(free.modelContexts[0]).toMatchObject({ plan: "free", userIdHash: "hash-alice" });
+    expect(premium.modelContexts[0]).toMatchObject({ plan: "premium" });
+    expect(freeTurn.maxEur).toBe(0.02);
+    expect(premiumTurn.maxEur).toBe(0.05);
+  });
+
+  it("budgets the answer analyzer, whose route no plan changes, as the learner's plan", async () => {
+    const { deps, gatewayContexts } = fakeDeps({ script: [new AIMessage("Fast richtig!")] });
+
+    await handleTrainerTurn(body({ message: "Ich fahre mit der Zug." }), { ...IDENTITY, plan: "free" }, deps);
+
+    expect(gatewayContexts[0]).toMatchObject({ plan: "free", userIdHash: "hash-alice" });
+  });
+
+  it("mines a finished session under the learner's plan", async () => {
+    const { deps, scheduled, gatewayContexts } = fakeDeps({
+      script: [toolCallMessage("get_review_session", {}), new AIMessage("Das war alles!")],
+    });
+
+    await handleTrainerTurn(
+      body({ message: "What is left to do today, coach?", covered: ["fahren", "Nachrichten von heute"] }),
+      { ...IDENTITY, plan: "premium" },
+      deps,
+    );
+    await Promise.all(scheduled.map((work) => work()));
+
+    expect(gatewayContexts.at(-1)).toMatchObject({ plan: "premium" });
+  });
+
+  it("searches the learning material under the learner's plan", async () => {
+    const { deps, retrievals } = fakeDeps({
+      script: [toolCallMessage("search_knowledge", { query: "Dativ" }), new AIMessage("Alles klar.")],
+    });
+
+    await handleTrainerTurn(body(), { ...IDENTITY, plan: "free" }, deps);
+
+    expect(retrievals[0]).toMatchObject({ context: { plan: "free", userIdHash: "hash-alice" } });
   });
 });
 
@@ -845,6 +956,81 @@ describe("a model that will not stop", () => {
   });
 });
 
+describe("the day's Trainer requests", () => {
+  // Counted once the request has passed every check of its own — the body
+  // parsed, the euro budget allowed it — and before the first model call. A
+  // request refused by either has used nothing of the day.
+  const RESET = new Date("2026-10-15T20:00:00.000Z");
+  const allowed = () => vi.fn(async (_session: { continuing: boolean }) => ({ allowed: true as const, remaining: 3, resetAt: RESET }));
+
+  it("is not counted for a body the schema refuses", async () => {
+    const { deps } = fakeDeps();
+    const admit = allowed();
+
+    await handleTrainerTurn({ nonsense: true }, IDENTITY, deps, admit);
+
+    expect(admit).not.toHaveBeenCalled();
+  });
+
+  it("is not counted for a request the budget refuses", async () => {
+    const { deps } = fakeDeps({ overLimit: true, overLimitScope: "global_daily" });
+    const admit = allowed();
+
+    expect(await handleTrainerTurn(body(), IDENTITY, deps, admit)).toEqual({ ok: false, error: "budget_denied" });
+    expect(admit).not.toHaveBeenCalled();
+  });
+
+  it("is counted before the first model call, told whether the request opens a session", async () => {
+    const { deps, model } = fakeDeps();
+    let invocationsWhenAdmitted = -1;
+    const admit = vi.fn(async (_session: { continuing: boolean }) => {
+      invocationsWhenAdmitted = model.invocations;
+      return { allowed: true as const, remaining: 3, resetAt: RESET };
+    });
+
+    await handleTrainerTurn(body(), IDENTITY, deps, admit);
+
+    expect(admit).toHaveBeenCalledWith({ continuing: false });
+    expect(invocationsWhenAdmitted).toBe(0);
+  });
+
+  it.each([
+    ["a pinned agenda", { agenda: [{ kind: "recall", subject: "fahren" }] }],
+    ["covered subjects", { covered: ["fahren"] }],
+  ])("tells the quota a request carrying %s continues a session", async (_label, over) => {
+    const { deps } = fakeDeps();
+    const admit = allowed();
+
+    await handleTrainerTurn(body(over), IDENTITY, deps, admit);
+
+    expect(admit).toHaveBeenCalledWith({ continuing: true });
+  });
+
+  it("refuses with the quota's answer and runs no model", async () => {
+    const { deps, model } = fakeDeps();
+    const admit = vi.fn(async () => ({ allowed: false as const, refusal: "quota_exhausted" as const, resetAt: RESET }));
+
+    expect(await handleTrainerTurn(body(), IDENTITY, deps, admit)).toEqual({
+      ok: false,
+      error: "quota_exhausted",
+      resetAt: RESET,
+    });
+    expect(model.invocations).toBe(0);
+  });
+
+  it("says a quota store that could not count is an outage, with a short wait", async () => {
+    const { deps, model } = fakeDeps();
+    const admit = vi.fn(async () => ({ allowed: false as const, refusal: "unavailable" as const, resetAt: null }));
+
+    expect(await handleTrainerTurn(body(), IDENTITY, deps, admit)).toMatchObject({
+      ok: false,
+      error: "generation_failed",
+      retryAfterSeconds: expect.any(Number),
+    });
+    expect(model.invocations).toBe(0);
+  });
+});
+
 describe("a body that is not a turn", () => {
   it("rejects it without touching the model", async () => {
     const { deps, model } = fakeDeps();
@@ -857,6 +1043,15 @@ describe("a body that is not a turn", () => {
 });
 
 describe("what a learner is told", () => {
+  it("names the three plan refusals, each with the status a client branches on", () => {
+    expect(TRAINER_ERRORS).toEqual(
+      expect.arrayContaining(["plan_required", "quota_exhausted", "budget_exhausted"]),
+    );
+    expect(trainerErrorResponse("plan_required").status).toBe(402);
+    expect(trainerErrorResponse("quota_exhausted").status).toBe(429);
+    expect(trainerErrorResponse("budget_exhausted").status).toBe(429);
+  });
+
   it.each(TRAINER_ERRORS)("gives %s a status and a plain message", (error) => {
     const response = trainerErrorResponse(error);
 

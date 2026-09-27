@@ -6,7 +6,7 @@ export { PRIVATE_PATHS } from "@/lib/seo/private-paths";
  * The site as a search engine or an answer engine meets it.
  *
  * One identity, stated once: the name, what it is in a sentence, and the
- * three pages a visitor without an account can reach. Everything that faces
+ * pages a visitor without an account can reach. Everything that faces
  * a crawler — the head of every page, robots.txt, the sitemap, the manifest,
  * the share card and llms.txt — reads from here, so the product cannot
  * describe itself one way to Google and another to a browser tab.
@@ -52,6 +52,14 @@ export const PUBLIC_PAGES: readonly PublicPage[] = [
     title: `${SITE.name} — ${SITE.tagline}`,
     description: SITE.description,
     priority: 1,
+    changeFrequency: "weekly",
+  },
+  {
+    path: "/pricing",
+    title: "Plans and prices",
+    description:
+      "Free, Plus and Premium, monthly or yearly, or a one-off pass. Prices include VAT, Free never asks for a card, and no plan changes how you are assessed.",
+    priority: 0.9,
     changeFrequency: "weekly",
   },
   {

@@ -40,6 +40,7 @@ spec:
             - { name: SEO_INDEXING, value: "${SEO_INDEXING}" }
             - { name: LANGSMITH_TRACING, value: "${LANGSMITH_TRACING}" }
             - { name: LANGSMITH_PROJECT, value: "dp-learner-${ENVIRONMENT}" }
+            - { name: STRIPE_AUTOMATIC_TAX, value: "${STRIPE_AUTOMATIC_TAX}" }
             - name: SUPABASE_SECRET_KEY
               valueFrom: { secretKeyRef: { name: dp-${ENVIRONMENT}-supabase-secret-key, key: latest } }
             - name: OPENROUTER_API_KEY
@@ -48,6 +49,11 @@ spec:
               valueFrom: { secretKeyRef: { name: dp-${ENVIRONMENT}-log-pseudonym-salt, key: latest } }
             - name: LANGSMITH_API_KEY
               valueFrom: { secretKeyRef: { name: dp-${ENVIRONMENT}-langsmith-api-key, key: latest } }
+            # Payments. This service's alone; see deploy/cloudrun/README.md.
+            - name: STRIPE_SECRET_KEY
+              valueFrom: { secretKeyRef: { name: dp-${ENVIRONMENT}-stripe-secret-key, key: latest } }
+            - name: STRIPE_WEBHOOK_SECRET
+              valueFrom: { secretKeyRef: { name: dp-${ENVIRONMENT}-stripe-webhook-secret, key: latest } }
   traffic:
     - percent: 100
       latestRevision: true

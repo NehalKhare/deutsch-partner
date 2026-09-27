@@ -206,6 +206,10 @@ export const EXPORTED_TABLES = [
   "trainer_coaching_profiles",
   "trainer_feedback",
   "trainer_mined_sessions",
+  "billing_customers",
+  "billing_checkouts",
+  "subscriptions",
+  "plan_passes",
 ] as const;
 
 const exportSchema = z.object({

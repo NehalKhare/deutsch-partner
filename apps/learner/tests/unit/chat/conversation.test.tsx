@@ -362,6 +362,109 @@ describe("a turn the server refused", () => {
   });
 });
 
+describe("a turn the plan refused", () => {
+  // billing-and-plans-spec.md S4: a refused request returns the draft, says
+  // when the window reopens, and says that progress is saved — as an upgrade
+  // prompt, never as the red alert that means the turn broke.
+  const refusal = (over: Record<string, unknown> = {}) => ({
+    error: "quota_exhausted",
+    message: "You've used today's tutor turns.",
+    resetAt: new Date(Date.now() + 3 * 3_600_000).toISOString(),
+    upgrade: true,
+    ...over,
+  });
+
+  async function sendAndRefuse(body: Record<string, unknown>, status = 429) {
+    server.use(http.post(CHAT_ENDPOINT, () => HttpResponse.json(body, { status })));
+    const user = userEvent.setup();
+    const rendered = renderConversation();
+
+    await user.type(screen.getByLabelText(/your message in german/i), "Ich möchte einen Kaffee.");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(screen.getByText(String(body.message))).toBeInTheDocument());
+
+    return { user, ...rendered };
+  }
+
+  it("shows an upgrade prompt in place of the red alert", async () => {
+    await sendAndRefuse(refusal());
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByText(/your progress is saved/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /see plans/i })).toHaveAttribute("href", "/pricing");
+  });
+
+  it("says it in a live region that was on the page before it, so a screen reader hears it", async () => {
+    // A polite region inserted already holding its text is often not
+    // announced at all; one that is there first and then fills is.
+    server.use(http.post(CHAT_ENDPOINT, () => HttpResponse.json(refusal(), { status: 429 })));
+    const user = userEvent.setup();
+    const { container } = renderConversation();
+    const region = container.querySelector("[data-live='plan']");
+    expect(region).toHaveAttribute("aria-live", "polite");
+    expect(region).toBeEmptyDOMElement();
+
+    await user.type(screen.getByLabelText(/your message in german/i), "Ich möchte einen Kaffee.");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => expect(region).toHaveTextContent("You've used today's tutor turns."));
+    expect(container.querySelector("[data-live='plan']")).toBe(region);
+  });
+
+  it("keeps the learner's sentence in the box and out of the conversation", async () => {
+    const { container } = await sendAndRefuse(refusal());
+
+    expect(screen.getByLabelText(/your message in german/i)).toHaveValue("Ich möchte einen Kaffee.");
+    expect(container.querySelectorAll("[data-role='user']")).toHaveLength(0);
+  });
+
+  it("sells a Premium learner nothing", async () => {
+    await sendAndRefuse(refusal({ upgrade: false }));
+
+    expect(screen.queryByRole("link", { name: /see plans/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/your progress is saved/i)).toBeInTheDocument();
+  });
+
+  it("says a spent allowance the same way", async () => {
+    await sendAndRefuse(
+      refusal({
+        error: "budget_exhausted",
+        message: "You've used your AI allowance for now.",
+        resetAt: "2026-11-01T00:00:00.000Z",
+      }),
+    );
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByText(/renews on/i)).toBeInTheDocument();
+  });
+
+  it("clears the prompt once a turn goes through", async () => {
+    const { user } = await sendAndRefuse(refusal());
+
+    server.use(http.post(CHAT_ENDPOINT, () => new HttpResponse("Gern geschehen!", { status: 200 })));
+    await user.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => expect(screen.getByText("Gern geschehen!")).toBeInTheDocument());
+    expect(screen.queryByText("You've used today's tutor turns.")).not.toBeInTheDocument();
+  });
+
+  it("keeps an ordinary refusal the red alert it always was", async () => {
+    server.use(
+      http.post(CHAT_ENDPOINT, () =>
+        HttpResponse.json({ error: "rate_limited", message: "Too many messages." }, { status: 429 }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderConversation();
+
+    await user.type(screen.getByLabelText(/your message in german/i), "Hallo");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Too many messages."));
+    expect(screen.queryByRole("link", { name: /see plans/i })).not.toBeInTheDocument();
+  });
+});
+
 describe("what a screen reader is told", () => {
   it("says nothing is happening when nothing is", () => {
     renderConversation();

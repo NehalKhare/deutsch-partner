@@ -106,6 +106,51 @@ describe("task router", () => {
     expect(withLevel).toEqual(without);
   });
 
+  it("resolves a call with no plan exactly as it did before plans existed", () => {
+    // billing-and-plans-spec.md S3. The table above is the pre-plan
+    // transcription and every row of it still holds with no plan named; this
+    // pins the tutor's levels as well, the one row whose maximum moved.
+    const levels = { A1: [4000, 300], A2: [5000, 450], B1: [6000, 700] } as const;
+
+    for (const [level, [input, output]] of Object.entries(levels)) {
+      const resolved = resolveTask("conversation.turn", level as "A1" | "A2" | "B1");
+      expect(resolved.ok && resolved.data, level).toMatchObject({
+        tier: "strong",
+        maxInputTokens: input,
+        maxOutputTokens: output,
+      });
+    }
+  });
+
+  it("routes a free learner's tutor to the plan's tier, not the row's", () => {
+    const resolved = resolveTask("conversation.turn", "A2", "free");
+
+    expect(resolved.ok && resolved.data).toMatchObject({
+      tier: "mid",
+      maxInputTokens: 5000,
+      maxOutputTokens: 450,
+    });
+  });
+
+  it("widens a premium learner's tutor to the plan's own ceilings", () => {
+    const resolved = resolveTask("conversation.turn", "B1", "premium");
+
+    expect(resolved.ok && resolved.data).toMatchObject({
+      tier: "strong",
+      maxInputTokens: 8000,
+      maxOutputTokens: 1000,
+    });
+  });
+
+  it("ignores a plan for a task no plan may change", () => {
+    // The evaluator grades German. A level must mean the same on every plan.
+    for (const plan of ["free", "plus", "premium"] as const) {
+      expect(resolveTask("evaluation.learner_message", undefined, plan)).toEqual(
+        resolveTask("evaluation.learner_message"),
+      );
+    }
+  });
+
   it("keeps the deterministic work out of the table entirely", () => {
     for (const name of DETERMINISTIC_ONLY) {
       expect(isDeterministicOnly(name)).toBe(true);

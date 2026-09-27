@@ -24,6 +24,8 @@ beside it. Nothing in an example file is a real value, and none should ever be.
 | `OPS_COOKIE_NAME` | — | optional | — | The operator session cookie's name, distinct from the learner's |
 | `SEO_INDEXING` | yes, production only | — | — | `true` lets search and answer engines index the public pages. Unset or `false` — every other environment — serves a robots.txt that disallows everything. The ops app is never indexable and has no switch |
 | `GOOGLE_SITE_VERIFICATION`, `BING_SITE_VERIFICATION` | optional | — | — | Search-console ownership tokens, printed into the page head. Not secrets |
+| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | optional | **never** | **never** | Payments. `sk_`/`rk_` (test or live) and `whsec_`; each requires the other. Unset is payments off. The ops app refuses to boot with either; the worker is not given them |
+| `STRIPE_AUTOMATIC_TAX` | optional | — | — | `true` once Stripe Tax is registered: Checkout computes VAT. Not a secret |
 
 The legacy Supabase JWT `anon` and `service_role` keys are **rejected at boot**.
 They are retired at the end of 2026, and validating the prefix turns two
@@ -33,6 +35,10 @@ dying key format — into a boot failure.
 Production requires the Supabase values, the salt and (for the learner and the
 worker) the model key. Development and test boot without them, so a contributor
 can run the apps and the suite without provisioning anything.
+
+Payments are not required anywhere: with no Stripe keys the learner app runs
+with payments switched off. There is no publishable Stripe key — hosted
+Checkout needs none.
 
 ## Getting a project running
 
@@ -48,6 +54,9 @@ pnpm ingest           # embeds the corpus — this one costs money (~$0.001)
 pnpm scenarios:ingest # embeds the 50-scenario corpus — also costs money (~$0.001)
 pnpm dev              # learner on :3000, ops on :3001, the worker polling
 ```
+
+To switch payments on in a test-mode Stripe account, see
+[payments with Stripe](#payments-with-stripe) below.
 
 `supabase link` runs from `packages/db`, where `supabase/config.toml` lives;
 the root `db:*` scripts change into it. See [deployment](deployment.md) for the
@@ -189,6 +198,155 @@ role's.
 the harness substitutes the embedding column and drops the HNSW index. Anything
 that depends on real vector behaviour is not covered there — a static test
 asserts the migrations declare it, and that is all.
+
+## Payments with Stripe
+
+The contract is `.claude/docs/billing-and-plans-spec.md`; this is the runbook.
+Everything below is test mode. Live mode has preconditions of its own, at the
+end, and none of them is met yet.
+
+### Keys
+
+Only the learner app holds them (`apps/learner/.env.local` locally, Secret
+Manager in a deployment — `deploy/cloudrun/README.md`). The ops app refuses to
+boot with either, and the worker is not given them.
+
+- `STRIPE_SECRET_KEY` — a test key, `sk_test_…`, or a restricted `rk_test_…`.
+  The app creates customers, Checkout and Customer Portal sessions; reads
+  subscriptions, Checkout Sessions, charges and prices; and updates a
+  subscription in one way only, setting the trial to cancel at its end. A
+  restricted key needs exactly those permissions. `stripe:bootstrap` also
+  creates Products and Prices, so run it with a full `sk_test_` key.
+- `STRIPE_WEBHOOK_SECRET` — `whsec_…`, the signing secret of the endpoint
+  below (or of `stripe listen`, locally). Each key requires the other.
+- `STRIPE_AUTOMATIC_TAX` — leave unset until Stripe Tax is registered.
+
+### The catalogue and the price mirror
+
+```bash
+pnpm --filter @dp/billing stripe:bootstrap  # Products "Deutsch Partner Plus"/"Premium" and six Prices from catalogue.json; refuses a live key
+pnpm --filter @dp/billing prices:sync       # mirrors Stripe's active Prices into billing_prices
+```
+
+Both read `apps/learner/.env.local`. `stripe:bootstrap` is idempotent: it finds
+each Price by lookup key (`dp_plus_month`, `dp_plus_year`, `dp_premium_month`,
+`dp_premium_year`, `dp_pass_plus`, `dp_pass_premium`), creates what is missing
+with `plan_code` (and, for a pass, `pass_days`) metadata, VAT inclusive, and
+never changes a Price that exists. The pricing page shows only what
+`billing_prices` holds, so run `prices:sync` after the bootstrap and after
+every price change; until it has run, every pricing card says prices are
+being set up.
+
+A price change is a new Price in the Dashboard that takes over the lookup key
+("transfer lookup key"), then `prices:sync`. Existing subscribers stay on the
+old Price, which Stripe now reports with no lookup key; the webhook still
+places them through the mirror, which keeps the old Price as an inactive row.
+Never delete `billing_prices` rows by hand for that reason.
+
+### The webhook endpoint
+
+Dashboard → Developers → Webhooks → add an endpoint at
+`<APP_URL>/api/billing/webhook` (the learner app's own origin), with these
+events and no others:
+
+```
+checkout.session.completed
+checkout.session.async_payment_succeeded
+checkout.session.async_payment_failed
+checkout.session.expired
+customer.subscription.created
+customer.subscription.updated
+customer.subscription.deleted
+customer.subscription.paused
+customer.subscription.resumed
+invoice.paid
+invoice.payment_failed
+charge.refunded
+```
+
+Anything else that arrives is recorded and acknowledged. Copy the endpoint's
+signing secret into `STRIPE_WEBHOOK_SECRET`. The route answers 503 while
+payments are off, so Stripe keeps events until the keys are configured.
+
+### Payment methods
+
+Dashboard → Settings → Payments → Payment methods. The code passes no
+`payment_method_types`: whatever is switched on here is what Checkout offers,
+filtered by Stripe to each learner's country, currency and mode. Switch on
+cards (Apple Pay and Google Pay ride on cards; hosted Checkout needs no domain
+verification for them), Klarna, SEPA Direct Debit, PayPal and Link. Klarna
+appears for passes wherever it operates and for subscriptions only where
+Stripe supports it for recurring payments. SEPA Direct Debit is a delayed
+method: a pass bought with it is granted on `async_payment_succeeded`, days
+after checkout.
+
+### The Customer Portal
+
+Dashboard → Settings → Billing → Customer portal. The app passes no portal
+configuration, so this page is the configuration. Switch on: invoice history;
+updating the payment method; cancelling, at the end of the billing period;
+switching plans between the four subscription Prices, prorated. Leave pausing
+off (a paused subscription grants nothing, and the app has nowhere to say
+so). The app does not offer the portal to a learner whose only subscription
+is the trial; the webhook sets every trial to cancel at its end, so a card
+added anywhere cannot turn it into a charge. Stripe's own trial reminder
+emails can stay off: the trial ends by itself and the app says so.
+
+Set no trial anywhere else — not on a Price, not on a promotion code. The
+Premium trial is the only one (spec S6), and the webhook treats every
+subscription it finds `trialing` as that trial: it sets it to cancel at its
+period end, which on a paid order's subscription would end it.
+
+### Local testing
+
+```bash
+stripe login
+stripe listen --forward-to localhost:3000/api/billing/webhook   # prints a whsec_ for STRIPE_WEBHOOK_SECRET
+pnpm dev:learner
+```
+
+Then order through the app — `/pricing`, a plan, the order page — and pay with
+Stripe's test card `4242 4242 4242 4242` (any future date, any CVC), or a test
+SEPA IBAN to see a delayed payment. `stripe trigger` sends fixture objects for
+customers this app never created; the webhook acknowledges them as
+`unknown_customer` and grants nothing, which is correct and not a useful test.
+`stripe events resend <evt_…>` redelivers one event.
+
+### When a payment does not arrive
+
+Every event is a row in `billing_events`: `select event_type, status,
+error_code, attempts from billing_events order by received_at desc limit 20`.
+
+- `failed` / `unknown_offer` — our customer, a Price the webhook cannot place:
+  no known lookup key, not in the mirror, no `plan_code` metadata. Fix the
+  Price (or run `prices:sync`) and let Stripe retry, or resend the event.
+- `failed` / `invalid_pass_days` — a pass Price without a whole-number
+  `pass_days` between 1 and 730 in its metadata.
+- `failed` / `stripe_*` — Stripe was unreachable, rate limited, or refused the
+  key. In live mode Stripe retries an event for up to three days (in test mode,
+  a few times over some hours); after that it is not applied, because there is
+  no reconcile job yet — resend it.
+- `ignored` / `unknown_customer` — a customer this application did not create.
+- A learner who paid and still sees Free: find their pseudonym's audit lines —
+  `billing.subscription_changed`, `billing.pass_granted` — and the event rows
+  around the time they paid.
+
+A learner told "Your trial is already waiting on Stripe's page" opened a trial
+checkout in the last 40 minutes and did not finish it: the trial's Checkout
+Session lives 35 minutes and the order record holds a second one back while
+the first could still complete.
+
+### Before a live key
+
+Spec S11, none of it optional, and none of it built: the "Cancel contracts
+here" button in every footer with its form (§312k BGB), the "Withdraw from
+contract" button (§356a BGB), text-form confirmation of both (which needs an
+email sender this product does not have), the post-first-year terms of the
+annual plan (§309 Nr. 9), the Impressum, terms, privacy policy and withdrawal
+instructions with the model form — `/legal/terms` is a stub — and the EU AI
+Act disclosures. Kleinunternehmer status, OSS registration and Stripe Tax
+versus a merchant of record are a Steuerberater's questions. Account deletion
+must cancel an active subscription first, and does not yet.
 
 ## Security posture
 

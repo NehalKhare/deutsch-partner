@@ -3,13 +3,18 @@ import Link from "next/link";
 
 import { Companion } from "@/components/companion/companion";
 import { CompanionDemo } from "@/components/landing/companion-demo";
+import { PlansSection } from "@/components/landing/plans-section";
 import { JsonLd } from "@/components/seo/json-ld";
-import { Wordmark } from "@dp/ui/wordmark";
+import { PublicFooter } from "@/components/site/public-footer";
+import { PublicHeader } from "@/components/site/public-header";
 import { TUTOR } from "@dp/domain/tutor";
 import { buttonPrimary } from "@dp/ui/styles";
 import { cn } from "@dp/ui/utils";
 import { companionStateFor, MAX_GROWTH_STAGE } from "@dp/domain/companion";
 import { MAX_MINI_LEVEL } from "@dp/domain/cefr";
+import { currentPrices } from "@/lib/billing/catalogue";
+import { offerCatalogue } from "@/lib/billing/offers";
+import { pricingViewer } from "@/lib/billing/viewer";
 import { siteEnv } from "@/lib/env/server";
 import { FAQ } from "@/lib/landing/faq";
 import { ROOMS } from "@/lib/landing/rooms";
@@ -28,29 +33,17 @@ const GROWTH_MARKERS = Array.from({ length: MAX_GROWTH_STAGE }, (_, index) => {
   return { first, last, sample: last };
 });
 
-export default function Home() {
+export default async function Home() {
   const structuredData = landingStructuredData(siteEnv().appUrl);
+  // Both are read per request and neither can fail the page: a price list
+  // that cannot be read is "See pricing", and a visitor whose session cannot
+  // be read is a visitor.
+  const [prices, viewer] = await Promise.all([currentPrices(), pricingViewer()]);
 
   return (
     <div className="flex min-h-dvh flex-col bg-ground font-body text-copy">
       <JsonLd data={structuredData} />
-      <header className="flex items-center justify-between border-b border-edge/60 px-6 py-4 md:px-10">
-        <Wordmark />
-        <nav className="flex items-center gap-5 text-sm">
-          <Link
-            href="/auth/login"
-            className="text-copy/70 underline-offset-4 hover:text-copy hover:underline"
-          >
-            Sign in
-          </Link>
-          <Link
-            href="/auth/sign-up"
-            className="rounded-full border border-brand px-4 py-1.5 font-display text-brand hover:bg-brand/10"
-          >
-            Start free
-          </Link>
-        </nav>
-      </header>
+      <PublicHeader shortcut={{ href: "#plans", label: "Plans" }} />
 
       <main className="flex-1">
         {/* Hero. German first, English underneath — the page works the way the
@@ -295,6 +288,10 @@ export default function Home() {
           </p>
         </section>
 
+        {/* What it costs, on the page where the decision is made. After the
+            timeline, because "how long" is the question a price answers. */}
+        <PlansSection catalogue={offerCatalogue(prices)} viewer={viewer} />
+
         {/* The questions a visitor asks before signing up, answered in the
             open. Plain headings and paragraphs rather than a disclosure
             widget: a reader can scan them, and so can a crawler — the same
@@ -345,9 +342,7 @@ export default function Home() {
         </section>
       </main>
 
-      <footer className="border-t border-edge/60 px-6 py-6 text-sm text-copy/40 md:px-10">
-        Deutsch Partner — an AI conversation partner for learning German.
-      </footer>
+      <PublicFooter />
     </div>
   );
 }

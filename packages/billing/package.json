@@ -1,0 +1,35 @@
+{
+  "name": "@dp/billing",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint",
+    "test": "vitest run --passWithNoTests",
+    "test:db": "vitest run --project billing:db",
+    "stripe:bootstrap": "tsx --env-file-if-exists=../../apps/learner/.env.local scripts/bootstrap.ts",
+    "prices:sync": "tsx --env-file-if-exists=../../apps/learner/.env.local scripts/sync-prices.ts"
+  },
+  "dependencies": {
+    "@dp/db": "workspace:*",
+    "@dp/domain": "workspace:*",
+    "@dp/observability": "workspace:*",
+    "stripe": "^22.6.2",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@dp/config": "workspace:*",
+    "@dp/env": "workspace:*",
+    "@supabase/supabase-js": "catalog:",
+    "@types/node": "catalog:",
+    "eslint": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

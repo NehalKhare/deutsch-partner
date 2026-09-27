@@ -63,6 +63,29 @@ const modelId = () =>
     })
     .optional();
 
+/**
+ * Stripe's server credentials. A secret key (sk_) or a restricted one (rk_),
+ * in either mode, and the signing secret of one webhook endpoint. The prefix
+ * is checked for the same reason the Supabase ones are: a publishable key
+ * pasted where the secret goes, or the two secrets swapped, becomes a boot
+ * failure instead of a checkout that fails on the first learner who pays.
+ */
+const stripeSecretKey = () =>
+  z
+    .string()
+    .min(MIN_SECRET_LENGTH)
+    .regex(/^(sk|rk)_(test|live)_[A-Za-z0-9]+$/, {
+      error: 'must be a Stripe secret or restricted key, beginning "sk_test_", "sk_live_", "rk_test_" or "rk_live_"',
+    })
+    .optional();
+
+const stripeWebhookSecret = () =>
+  z
+    .string()
+    .min(MIN_SECRET_LENGTH)
+    .regex(/^whsec_[A-Za-z0-9]+$/, { error: 'must be a Stripe webhook signing secret, beginning "whsec_"' })
+    .optional();
+
 const booleanish = z
   .enum(["true", "1", "false", "0"])
   .default("false")
@@ -189,6 +212,19 @@ const baseSchema = z.object({
       error: 'must be a repository as "owner/name"',
     })
     .optional(),
+
+  /**
+   * Payments (billing-and-plans-spec.md S12). The learner app's alone: the
+   * operator app refuses both secrets at boot, and the worker is given
+   * neither until a reconciliation job exists to need one. Absent means
+   * payments are switched off — the pricing page still renders and nothing
+   * can be bought — which is how the product ships until the consumer-law
+   * pages are live. No publishable key: hosted Checkout needs none.
+   */
+  STRIPE_SECRET_KEY: stripeSecretKey(),
+  STRIPE_WEBHOOK_SECRET: stripeWebhookSecret(),
+  /** Whether Checkout computes VAT. On once Stripe Tax is registered. Not a secret. */
+  STRIPE_AUTOMATIC_TAX: booleanish,
 });
 
 /** Keys the browser bundle is allowed to see. */
@@ -206,6 +242,8 @@ export const SERVER_ENV_KEYS = [
   "MCP_SERVER_API_KEY",
   "GITHUB_TOKEN",
   "OTEL_EXPORTER_OTLP_HEADERS",
+  "STRIPE_SECRET_KEY",
+  "STRIPE_WEBHOOK_SECRET",
 ] as const;
 
 type EnvKey = keyof z.infer<typeof baseSchema>;
@@ -276,6 +314,25 @@ const envSchemaFor = (required: readonly EnvKey[]) => baseSchema.superRefine((en
       code: "custom",
       path: ["GITHUB_REPOSITORY"],
       message: "is required when GITHUB_TOKEN is set",
+    });
+  }
+
+  // The two Stripe secrets are one configuration. A key with no webhook
+  // secret can take money and never hear that it did, so no plan is ever
+  // granted; a webhook secret with no key can hear an event and never read
+  // the subscription it announces. Either alone is a half-done setup.
+  if (env.STRIPE_SECRET_KEY !== undefined && env.STRIPE_WEBHOOK_SECRET === undefined) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["STRIPE_WEBHOOK_SECRET"],
+      message: "is required when STRIPE_SECRET_KEY is set",
+    });
+  }
+  if (env.STRIPE_WEBHOOK_SECRET !== undefined && env.STRIPE_SECRET_KEY === undefined) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["STRIPE_SECRET_KEY"],
+      message: "is required when STRIPE_WEBHOOK_SECRET is set",
     });
   }
 });

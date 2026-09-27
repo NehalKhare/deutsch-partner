@@ -27,6 +27,7 @@ describe("the convention", () => {
     expect(text).toMatch(/^## What a learner does$/m);
     expect(text).toMatch(/^## How long it takes$/m);
     expect(text).toMatch(/^## What it does not do$/m);
+    expect(text).toMatch(/^## Plans$/m);
     expect(text).toMatch(/^## Questions$/m);
     expect(text).toMatch(/^## Pages$/m);
   });
@@ -51,6 +52,20 @@ describe("what it says", () => {
     for (const entry of FAQ) {
       expect(text).toContain(`### ${entry.question}\n\n${entry.answer}`);
     }
+  });
+
+  it("describes every plan and the passes, without a price that could go stale", () => {
+    const plans = text.slice(text.indexOf("## Plans"), text.indexOf("## Questions"));
+    for (const name of ["Free", "Plus", "Premium", "Passes"]) {
+      expect(plans).toContain(`**${name}.**`);
+    }
+    expect(plans).not.toMatch(/[€$£]|\d+\.\d{2}/);
+    expect(plans).toMatch(/include VAT/);
+    expect(plans).toContain(new URL("/pricing", ORIGIN).toString());
+  });
+
+  it("still says it is free to start and asks for no card", () => {
+    expect(text).toContain("It is free to start and asks for no card.");
   });
 
   it("states the limits, not only the features", () => {

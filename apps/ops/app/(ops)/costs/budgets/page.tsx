@@ -11,7 +11,14 @@ import { BudgetMeter } from "@/components/costs/budget-meter";
 import { formatEur, formatUtc } from "@/components/costs/format";
 import { createCostAdmin } from "@/lib/api/composition";
 import { requireOperator } from "@/lib/auth/require-operator";
-import { SCOPE_LABELS, budgetBoard, globalDailyLimit, globalMeter, learnerMeter } from "@/lib/budgets";
+import {
+  SCOPE_LABELS,
+  budgetBoard,
+  globalDailyLimit,
+  globalMeter,
+  learnerMeter,
+  planLabel,
+} from "@/lib/budgets";
 import { ledgerHref } from "@/lib/ledger-query";
 
 export const metadata = { title: "Budgets — Deutsch Partner" };
@@ -28,6 +35,10 @@ export const metadata = { title: "Budgets — Deutsch Partner" };
  * Learners appear as the ledger's pseudonym and nothing else
  * (cost-dashboard-spec.md S2). The hash is what an override is keyed by, and
  * a link into the ledger is how an operator finds out what that learner did.
+ *
+ * A plan's default (billing-and-plans-spec.md S9) sits between the two: it
+ * replaces the scope's default for every learner on the plan, and a learner's
+ * own override beats it. It is edited like a default, never removed or paused.
  */
 
 const asInput = (value: number) => String(Number(value.toFixed(4)));
@@ -129,14 +140,54 @@ export default async function BudgetsPage() {
         </ul>
       </section>
 
+      {board.plans.length > 0 ? (
+        <section aria-labelledby="plans-heading" className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1">
+            <h2 id="plans-heading" className={sectionTitle}>
+              Plan defaults
+            </h2>
+            <p className="text-sm text-copy/55">
+              Each replaces the scope&apos;s default for the learners on that plan, when the call
+              names the plan; a learner&apos;s own override still beats it. Set a paid plan&apos;s
+              monthly limit below what the plan brings in, so no learner is served at a loss. Like
+              any default it can be lowered, even to zero, but not switched off.
+            </p>
+          </div>
+
+          <ul className="grid gap-4 lg:grid-cols-3">
+            {board.plans.map(({ plan, limit }) => (
+              <li key={limit.id} className={cn(card, "flex flex-col gap-4")}>
+                <div className="flex flex-col gap-1">
+                  <span className={eyebrow}>{SCOPE_LABELS[limit.scope as EnforcedBudgetScope]}</span>
+                  <h3 className="font-display font-semibold text-copy">{planLabel(plan)}</h3>
+                  <p className="text-xs text-copy/50">
+                    {`${formatEur(limit.limitEur)} · warn ${asPercent(limit.warnPct)}% · degrade ${asPercent(limit.degradePct)}% · updated ${formatUtc(limit.updatedAt)}`}
+                    {limit.active ? "" : " Inactive: the scope's default applies instead."}
+                  </p>
+                </div>
+                <BudgetLimitForm
+                  action={saveBudgetLimitAction}
+                  mode="default"
+                  scope={limit.scope as EnforcedBudgetScope}
+                  scopeKey={limit.scopeKey}
+                  limitEur={asInput(limit.limitEur)}
+                  warnPct={asPercent(limit.warnPct)}
+                  degradePct={asPercent(limit.degradePct)}
+                />
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       <section aria-labelledby="overrides-heading" className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
           <h2 id="overrides-heading" className={sectionTitle}>
             Per-learner overrides
           </h2>
           <p className="text-sm text-copy/55">
-            An active override replaces the default for one learner, higher or lower. Paused or
-            removed, the default applies to them again.
+            An active override replaces the default for one learner, higher or lower, and their
+            plan&apos;s default too. Paused or removed, the default applies to them again.
           </p>
         </div>
 
@@ -242,8 +293,9 @@ function LearnerTable({
           {rows.length < total
             ? `The ${rows.length} highest of ${total} learners with spend ${period}.`
             : `${total} learner${total === 1 ? "" : "s"} with spend ${period}.`}{" "}
-          Against the limit that applies to each: their override if they have one, otherwise the
-          default.
+          Against their override if they have one, otherwise the scope&apos;s default. The
+          counters do not record which plan a learner is on, so a plan&apos;s default is not
+          reflected here.
         </p>
       </div>
 
@@ -279,7 +331,7 @@ function LearnerTable({
                   />
                 </td>
                 <td className="py-2 text-copy/55">
-                  {row.limitEur === null ? "none" : row.overridden ? "override" : "default"}
+                  {row.limitEur === null ? "none" : row.overridden ? "override" : "scope default"}
                 </td>
               </tr>
             ))}

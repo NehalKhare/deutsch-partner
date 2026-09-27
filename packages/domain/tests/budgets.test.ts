@@ -2,11 +2,17 @@ import { describe, expect, it } from "vitest";
 
 import {
   ENFORCED_BUDGET_SCOPES,
+  PLAN_BUDGET_KEYS,
   budgetLimitInputSchema,
+  budgetScopeKeySchema,
   budgetState,
   eurAmountSchema,
+  isPlanBudgetKey,
   percentSchema,
+  planBudgetKey,
+  planForBudgetKey,
 } from "../src/budgets";
+import { PLAN_CODES } from "../src/plans";
 
 const HASH = "0123456789abcdef0123456789abcdef";
 
@@ -141,5 +147,73 @@ describe("a budget limit as an operator submits it", () => {
     expect(
       budgetLimitInputSchema.safeParse({ ...base, scopeKey: HASH, active: false }).success,
     ).toBe(true);
+  });
+});
+
+describe("a plan's own budget key", () => {
+  it("is 'plan:' and the plan's code, one per plan", () => {
+    // billing-and-plans-spec.md S9: budget_limits keyed 'plan:<code>'.
+    expect(PLAN_BUDGET_KEYS).toEqual(["plan:free", "plan:plus", "plan:premium"]);
+    expect(PLAN_CODES.map(planBudgetKey)).toEqual(PLAN_BUDGET_KEYS);
+  });
+
+  it("reads back to the plan it names, and to nothing otherwise", () => {
+    expect(planForBudgetKey("plan:premium")).toBe("premium");
+    expect(isPlanBudgetKey("plan:free")).toBe(true);
+
+    for (const key of [null, HASH, "plan:gold", "plan:", "PLAN:free", "plan:free "]) {
+      expect(planForBudgetKey(key), String(key)).toBeNull();
+      expect(isPlanBudgetKey(key), String(key)).toBe(false);
+    }
+  });
+
+  it("is, with the learner pseudonym, the only key a limit may carry", () => {
+    expect(budgetScopeKeySchema.parse("plan:plus")).toBe("plan:plus");
+    expect(budgetScopeKeySchema.parse(HASH)).toBe(HASH);
+
+    const refused = budgetScopeKeySchema.safeParse("plan:gold");
+    expect(refused.success).toBe(false);
+    // One message the form can show, not a union's list of two failures.
+    expect(refused.error?.issues).toHaveLength(1);
+    expect(refused.error?.issues[0]?.message).toBe("a learner pseudonym or a plan");
+  });
+});
+
+describe("a plan default as an operator submits it", () => {
+  const base = {
+    scope: "per_user_monthly",
+    scopeKey: "plan:free",
+    limitEur: "1.00",
+    warnPct: "70",
+    degradePct: "90",
+    active: true,
+  };
+
+  it("parses for a per-learner scope", () => {
+    expect(budgetLimitInputSchema.parse(base)).toMatchObject({
+      scope: "per_user_monthly",
+      scopeKey: "plan:free",
+      limitEur: "1.00",
+    });
+    expect(budgetLimitInputSchema.parse({ ...base, scope: "per_user_daily" }).scopeKey).toBe(
+      "plan:free",
+    );
+  });
+
+  it("refuses a plan that does not exist", () => {
+    expect(budgetLimitInputSchema.safeParse({ ...base, scopeKey: "plan:gold" }).success).toBe(false);
+  });
+
+  it("refuses a plan key on the global scope, which is nobody's plan", () => {
+    expect(budgetLimitInputSchema.safeParse({ ...base, scope: "global_daily" }).success).toBe(false);
+  });
+
+  it("refuses to switch a plan's default off, as it refuses a scope's", () => {
+    // Paused, every learner on the plan would fall through to the scope's
+    // default — or to no limit at all where the scope has none.
+    const result = budgetLimitInputSchema.safeParse({ ...base, active: false });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.path).toEqual(["active"]);
   });
 });

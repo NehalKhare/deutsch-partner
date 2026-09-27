@@ -45,6 +45,7 @@ import {
 } from "@/lib/trainer/news";
 import { DEFAULT_INTENT, classifyIntent } from "@/lib/graph/intent";
 import type { GermanLearningRetriever } from "@/lib/retrieval/retriever";
+import type { PlanCode } from "@dp/domain/plans";
 import { nullLogger, type Logger } from "@dp/observability/logger";
 import type { GrammarRepository } from "@dp/db/grammar-repository";
 import type { LearnerErrorRepository } from "@dp/db/learner-error-repository";
@@ -92,6 +93,11 @@ export interface TrainerToolDeps {
   readonly pinned?: readonly string[];
   readonly userIdHash: string;
   readonly requestId: string;
+  /**
+   * The learner's plan, so a search spends from the same allowance as the
+   * loop that asked for it. Absent reads the default, as before plans.
+   */
+  readonly plan?: PlanCode;
   readonly vocabulary: VocabularyRepository;
   readonly errors: LearnerErrorRepository;
   readonly performance: PerformanceRepository;
@@ -853,7 +859,11 @@ export function createTrainerTools(deps: TrainerToolDeps): TrainerTools {
           },
           {
             topK: topK ?? 4,
-            context: { requestId: deps.requestId, userIdHash: deps.userIdHash },
+            context: {
+              requestId: deps.requestId,
+              userIdHash: deps.userIdHash,
+              ...(deps.plan ? { plan: deps.plan } : {}),
+            },
           },
         );
         if (!outcome.ok) return UNAVAILABLE;

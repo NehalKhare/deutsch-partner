@@ -12,12 +12,13 @@ import {
   type GraphDeps,
 } from "@/lib/graph/nodes";
 import { initialState, ran, type TurnInput, type TurnState } from "@/lib/graph/state";
+import type { BudgetScope } from "@dp/domain/budgets";
 import { nullLogger } from "@dp/observability/logger";
 
 /**
  * One learner turn, start to end.
  *
- *   load state → verify thread → return to the thread's place →
+ *   load state → verify thread → (admission) → return to the thread's place →
  *   move on if asked → retrieve → generate → (stream) → evaluate
  *                                            → persist evaluation
  *                                            → record vocabulary
@@ -47,7 +48,28 @@ import { nullLogger } from "@dp/observability/logger";
 export type TurnFailure =
   | "learner_unavailable"
   | "thread_unavailable"
-  | "generation_failed";
+  | "generation_failed"
+  /** The learner's own euro allowance is spent (billing-and-plans-spec.md S9). */
+  | "budget_exhausted"
+  /** The admission said no: a plan's daily quota, or its store being down. */
+  | "not_admitted";
+
+/**
+ * The plan's say on a turn that is otherwise going ahead — its daily quota,
+ * counted by the caller. Asked once the learner is loaded and the thread is
+ * theirs, and before anything is moved, retrieved or generated, so a turn
+ * that could never have happened has used nothing.
+ */
+export type TurnAdmission = () => Promise<
+  | { readonly allowed: true }
+  | {
+      readonly allowed: false;
+      readonly refusal: "plan_required" | "quota_exhausted" | "unavailable";
+      readonly resetAt: Date | null;
+    }
+>;
+
+export type TurnRefusal = Extract<Awaited<ReturnType<TurnAdmission>>, { allowed: false }>;
 
 export interface OpenedTurn {
   readonly state: TurnState;
@@ -67,49 +89,74 @@ export type TurnOutcome =
       readonly ok: false;
       readonly reason: TurnFailure;
       readonly state: TurnState;
+      /** Which of the learner's scopes was spent, on a budget_exhausted only. */
+      readonly budgetScope?: BudgetScope;
+      /** What the admission answered, on a not_admitted only. */
+      readonly refusal?: TurnRefusal;
     };
+
+/** The two reads a turn cannot go ahead without: the learner, and a thread that is theirs. */
+async function openTurn(input: TurnInput, deps: GraphDeps): Promise<TurnState> {
+  const state = await loadState(initialState(input), deps);
+  if (!ran(state, "load_state")) return state;
+  return loadThread(state, deps);
+}
+
+/** Everything after the two reads that still comes before the first word. */
+async function readyTurn(opened: TurnState, deps: GraphDeps): Promise<TurnState> {
+  // Both moves run before retrieval, so a learner who moves this turn is
+  // retrieved for and answered at the level they arrive at, not the one they
+  // left. The place comes first: a fresh visit to a thread returns to the
+  // level it was opened at, and a "weiter" said into that visit advances
+  // from there rather than from wherever the learner last stood.
+  let state = await standAtThreadPlace(opened, deps);
+  state = await honourAdvanceRequest(state, deps);
+
+  return retrieve(state, deps);
+}
 
 /** What has to succeed before the learner sees anything. */
 export async function prepareTurn(
   input: TurnInput,
   deps: GraphDeps,
 ): Promise<TurnState> {
-  let state = initialState(input);
-
-  state = await loadState(state, deps);
-  if (!ran(state, "load_state")) return state;
-
-  state = await loadThread(state, deps);
-  if (!ran(state, "load_thread")) return state;
-
-  // Both moves run before retrieval, so a learner who moves this turn is
-  // retrieved for and answered at the level they arrive at, not the one they
-  // left. The place comes first: a fresh visit to a thread returns to the
-  // level it was opened at, and a "weiter" said into that visit advances
-  // from there rather than from wherever the learner last stood.
-  state = await standAtThreadPlace(state, deps);
-  state = await honourAdvanceRequest(state, deps);
-
-  return retrieve(state, deps);
+  const opened = await openTurn(input, deps);
+  if (!ran(opened, "load_state") || !ran(opened, "load_thread")) return opened;
+  return readyTurn(opened, deps);
 }
 
 export async function runTurn(
   input: TurnInput,
   deps: GraphDeps,
+  admit?: TurnAdmission,
 ): Promise<TurnOutcome> {
   const logger = deps.logger ?? nullLogger;
-  const prepared = await prepareTurn(input, deps);
+  const loaded = await openTurn(input, deps);
 
-  if (!ran(prepared, "load_state")) {
-    return { ok: false, reason: "learner_unavailable", state: prepared };
+  if (!ran(loaded, "load_state")) {
+    return { ok: false, reason: "learner_unavailable", state: loaded };
   }
-  if (!ran(prepared, "load_thread")) {
-    return { ok: false, reason: "thread_unavailable", state: prepared };
+  if (!ran(loaded, "load_thread")) {
+    return { ok: false, reason: "thread_unavailable", state: loaded };
   }
+
+  if (admit) {
+    const admission = await admit();
+    if (!admission.allowed) return { ok: false, reason: "not_admitted", refusal: admission, state: loaded };
+  }
+
+  const prepared = await readyTurn(loaded, deps);
 
   const opened = await generate(prepared, deps);
   if (!opened.turn) {
-    return { ok: false, reason: "generation_failed", state: opened.state };
+    return opened.allowanceSpent
+      ? {
+          ok: false,
+          reason: "budget_exhausted",
+          budgetScope: opened.allowanceSpent,
+          state: opened.state,
+        }
+      : { ok: false, reason: "generation_failed", state: opened.state };
   }
 
   const turn = opened.turn;

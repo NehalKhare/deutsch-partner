@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import type { BudgetScope } from "@dp/domain/budgets";
+
 /**
  * How a call can fail, and what the ledger calls it.
  *
@@ -38,6 +40,14 @@ export type GatewayResult<T> =
       readonly ok: false;
       readonly failure: GatewayFailure;
       readonly detail: string;
+      /**
+       * On a budget_denied only: the scope that refused, or null when the
+       * counters could not be read at all. A caller branches on it rather than
+       * on the detail's wording, because the difference matters to a learner:
+       * their own allowance running out is something a larger plan answers,
+       * and an unreadable counter or the product's daily ceiling is not.
+       */
+      readonly budgetScope?: BudgetScope | null;
     };
 
 export const gatewayOk = <T>(data: T): GatewayResult<T> => ({ ok: true, data });
@@ -45,7 +55,11 @@ export const gatewayOk = <T>(data: T): GatewayResult<T> => ({ ok: true, data });
 export const gatewayFail = <T = never>(
   failure: GatewayFailure,
   detail: string,
-): GatewayResult<T> => ({ ok: false, failure, detail });
+  budgetScope?: BudgetScope | null,
+): GatewayResult<T> =>
+  budgetScope === undefined
+    ? { ok: false, failure, detail }
+    : { ok: false, failure, detail, budgetScope };
 
 /**
  * The ledger status a failure is recorded under.

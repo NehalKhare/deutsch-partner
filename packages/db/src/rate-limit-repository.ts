@@ -20,6 +20,12 @@ export interface RateLimitDecision {
   readonly remaining: number;
   /** When the current window ends, for a Retry-After header. */
   readonly resetAt: Date;
+  /**
+   * Set when the refusal is the store's, not the limit's: nothing was
+   * counted, and the window's end is a guess. A caller that shows a learner
+   * "come back tomorrow" must not show it for an outage.
+   */
+  readonly unavailable?: true;
 }
 
 export interface RateLimiter {
@@ -52,10 +58,12 @@ export function createPostgresRateLimiter(
   const now = options.now ?? (() => Date.now());
   const windowSeconds = Math.max(1, Math.round(rule.windowMs / 1000));
 
+  // Closed, and marked as the store's refusal rather than the limit's.
   const denied = (): RateLimitDecision => ({
     allowed: false,
     remaining: 0,
     resetAt: new Date(now() + rule.windowMs),
+    unavailable: true,
   });
 
   return {

@@ -14,6 +14,9 @@ import { REPO_ROOT, absolute, sourceFiles, under } from "../src/roots";
  * over the committed templates, manifests and source.
  */
 
+/** Stripe's two secrets and the tax flag: the learner app's, and nobody else's. */
+const STRIPE_KEYS = ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_AUTOMATIC_TAX"] as const;
+
 function envKeys(examplePath: string): string[] {
   return readFileSync(absolute(examplePath), "utf8")
     .split("\n")
@@ -72,10 +75,16 @@ describe("the operator app", () => {
     }
   });
 
-  it("names the model key nowhere in its source", () => {
+  it("holds no payment secret", () => {
+    // An operator sees payments as rows the webhook mirrored, never through
+    // a key of its own (billing-and-plans-spec.md S12).
+    for (const key of STRIPE_KEYS) expect(keys).not.toContain(key);
+  });
+
+  it("names the model key and the payment secrets nowhere in its source", () => {
     const offenders = sourceFiles()
       .filter((file) => under(file.path, "apps/ops"))
-      .filter((file) => /OPENROUTER_API_KEY|GITHUB_TOKEN/.test(file.source))
+      .filter((file) => /OPENROUTER_API_KEY|GITHUB_TOKEN|STRIPE_/.test(file.source))
       // The boot-time guard names them in order to refuse them.
       .filter((file) => file.path !== "apps/ops/lib/env/server.ts")
       .map((file) => file.path);
@@ -85,6 +94,16 @@ describe("the operator app", () => {
 });
 
 describe("the learner app", () => {
+  it("is the one deployable that takes payments", () => {
+    const keys = envKeys("apps/learner/.env.example");
+    for (const key of STRIPE_KEYS) expect(keys, key).toContain(key);
+  });
+
+  it("holds no publishable Stripe key, because hosted Checkout needs none", () => {
+    const keys = envKeys("apps/learner/.env.example");
+    expect(keys.filter((key) => /STRIPE/.test(key) && /PUBLISHABLE|NEXT_PUBLIC/.test(key))).toEqual([]);
+  });
+
   it("holds no repository token and no allowlist", () => {
     const keys = envKeys("apps/learner/.env.example");
     expect(keys).not.toContain("GITHUB_TOKEN");
@@ -115,6 +134,17 @@ describe("the worker", () => {
   it("serves no browser, so carries no publishable key", () => {
     expect(envKeys("apps/worker/.env.example")).not.toContain("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY");
   });
+
+  it("holds no payment secret until a reconciliation job needs one", () => {
+    const keys = envKeys("apps/worker/.env.example");
+    for (const key of STRIPE_KEYS) expect(keys, key).not.toContain(key);
+
+    const offenders = sourceFiles()
+      .filter((file) => under(file.path, "apps/worker"))
+      .filter((file) => /STRIPE_/.test(file.source))
+      .map((file) => file.path);
+    expect(offenders).toEqual([]);
+  });
 });
 
 describe("the salt", () => {
@@ -122,6 +152,20 @@ describe("the salt", () => {
     for (const app of ["learner", "ops", "worker"]) {
       expect(envKeys(`apps/${app}/.env.example`), app).toContain("LOG_PSEUDONYM_SALT");
     }
+  });
+});
+
+describe("the platform's secret bindings", () => {
+  const manifestText = (service: string) => readFileSync(join(REPO_ROOT, "deploy/cloudrun", `${service}.yaml`), "utf8");
+
+  it("give the learner service both Stripe secrets, from Secret Manager", () => {
+    const learner = manifestText("learner");
+    expect(learner).toMatch(/name: STRIPE_SECRET_KEY\s+valueFrom: \{ secretKeyRef: \{ name: dp-\$\{ENVIRONMENT\}-stripe-secret-key/);
+    expect(learner).toMatch(/name: STRIPE_WEBHOOK_SECRET\s+valueFrom: \{ secretKeyRef: \{ name: dp-\$\{ENVIRONMENT\}-stripe-webhook-secret/);
+  });
+
+  it.each(["ops", "worker", "worker-coder"])("give %s no Stripe secret at all", (service) => {
+    expect(manifestText(service)).not.toMatch(/STRIPE_|stripe-/);
   });
 });
 

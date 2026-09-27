@@ -38,3 +38,17 @@ export const voiceEngineStore = createDevicePreference<VoiceEngine>(
   VOICE_ENGINES,
   "ai",
 );
+
+/**
+ * Whether the note about the AI voice is still wanted on this device.
+ *
+ * Said once when the server declines to speak — the plan has no AI voice, or
+ * today's voice lines are spent — and the device's own voice reads instead.
+ * Put away, it stays away here: a line nobody lost anything to is not worth
+ * repeating on every visit (billing-and-plans-spec.md S4).
+ */
+export const voicePlanNoteStore = createDevicePreference(
+  "deutsch-partner.voice-plan-note",
+  ["shown", "dismissed"] as const,
+  "shown",
+);

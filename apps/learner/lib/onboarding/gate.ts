@@ -36,10 +36,14 @@ export async function requireOnboarded(learnerId: string): Promise<void> {
  *
  * The mirror of the rule above: on a failed read the learner stays on the
  * form, because bouncing them away from the one page that could repair their
- * state would strand them.
+ * state would strand them. A finished learner goes where they were heading,
+ * if the caller knows — a validated same-site path — or to the dashboard.
  */
-export async function redirectIfOnboarded(learnerId: string): Promise<void> {
+export async function redirectIfOnboarded(
+  learnerId: string,
+  destination: string = DASHBOARD_PATH,
+): Promise<void> {
   const status = await onboardingStatus(learnerId);
 
-  if (status.ok && status.data.onboarded) redirect(DASHBOARD_PATH);
+  if (status.ok && status.data.onboarded) redirect(destination);
 }

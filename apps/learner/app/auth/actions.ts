@@ -5,8 +5,9 @@ import { redirect } from "next/navigation";
 import { signUpSchema } from "@dp/auth/credentials";
 import type { AuthFormState } from "@dp/auth/form-state";
 import { AUTH_ERROR_MESSAGES } from "@dp/auth/errors";
-import { LOGIN_PATH, safeNextPath } from "@/lib/auth/routes";
+import { DEFAULT_SIGNED_IN_PATH, LOGIN_PATH, safeNextPath } from "@/lib/auth/routes";
 import { createAuthService, type AuthClient } from "@dp/auth/service";
+import { ONBOARDING_PATH } from "@/lib/onboarding/gate";
 import { createServerSupabaseClient } from "@/lib/supabase/server-client";
 
 async function authService() {
@@ -64,7 +65,15 @@ export async function signUpAction(
     };
   }
 
-  redirect(safeNextPath(null));
+  // A new account is set up before it reaches any room, so a destination —
+  // the plan chosen on the pricing page, say — is carried through
+  // onboarding rather than dropped at its door. Validated: a same-site path.
+  const next = safeNextPath(formData.get("next")?.toString());
+  redirect(
+    next === DEFAULT_SIGNED_IN_PATH
+      ? DEFAULT_SIGNED_IN_PATH
+      : `${ONBOARDING_PATH}?next=${encodeURIComponent(next)}`,
+  );
 }
 
 export async function signOutAction(): Promise<never> {

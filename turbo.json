@@ -74,6 +74,7 @@
         "OTEL_*",
         "MCP_SERVER_*",
         "GITHUB_*",
+        "STRIPE_*",
         "APP_*",
         "SEO_*",
         "GOOGLE_SITE_VERIFICATION",

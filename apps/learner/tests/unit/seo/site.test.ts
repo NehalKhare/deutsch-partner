@@ -9,8 +9,13 @@ import { absoluteUrl, PRIVATE_PATHS, PUBLIC_PAGES, publicPage, SITE } from "@/li
  */
 
 describe("the public pages", () => {
-  it("are the landing page and the two ways in, and nothing behind sign-in", () => {
-    expect(PUBLIC_PAGES.map((page) => page.path)).toEqual(["/", SIGN_UP_PATH, LOGIN_PATH]);
+  it("are the landing page, the prices and the two ways in, and nothing behind sign-in", () => {
+    expect(PUBLIC_PAGES.map((page) => page.path)).toEqual(["/", "/pricing", SIGN_UP_PATH, LOGIN_PATH]);
+  });
+
+  it("rank the prices just below the landing page: it is the second question a visitor asks", () => {
+    expect(publicPage("/pricing").priority).toBeLessThan(publicPage("/").priority);
+    expect(publicPage("/pricing").priority).toBeGreaterThanOrEqual(publicPage(SIGN_UP_PATH).priority);
   });
 
   it("never overlap the private paths", () => {
@@ -45,6 +50,10 @@ describe("the private paths", () => {
 
   it("cover the route handlers", () => {
     expect(PRIVATE_PATHS).toContain("/api");
+  });
+
+  it("cover a learner's plan and orders", () => {
+    expect(PRIVATE_PATHS).toContain("/billing");
   });
 });
 

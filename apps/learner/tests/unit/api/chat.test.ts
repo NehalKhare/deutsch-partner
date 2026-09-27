@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   CHAT_ERRORS,
@@ -20,6 +20,7 @@ const IDENTITY = {
   learnerId: INPUT.learnerId,
   userIdHash: INPUT.userIdHash,
   requestId: INPUT.requestId,
+  plan: "plus" as const,
 };
 
 const body = (over: Record<string, unknown> = {}) => ({
@@ -293,6 +294,152 @@ describe("a turn that cannot happen", () => {
   });
 });
 
+describe("the day's tutor turns", () => {
+  // The quota is counted as late as the turn allows: once the body parsed,
+  // the learner loaded and the thread proved theirs, and before anything is
+  // retrieved or generated. A turn that was never going to happen has used
+  // nothing, which matters most on Free's twenty.
+  const RESET = new Date("2026-08-22T09:00:00.000Z");
+  const allowed = () => vi.fn(async () => ({ allowed: true as const, remaining: 3, resetAt: RESET }));
+
+  it("is not counted for a body the schema refuses", async () => {
+    const { deps } = fakeGraph();
+    const admit = allowed();
+
+    await handleChatTurn({ message: "x".repeat(10_000), threadId: INPUT.threadId }, IDENTITY, deps, admit);
+
+    expect(admit).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["a learner who could not be loaded", { learnerMissing: true }, "learner_unavailable"],
+    ["a thread that is not the learner's", { threadMissing: true }, "thread_unavailable"],
+  ])("is not counted for %s", async (_label, options, error) => {
+    const { deps } = fakeGraph(options);
+    const admit = allowed();
+
+    expect(await handleChatTurn(body(), IDENTITY, deps, admit)).toMatchObject({ ok: false, error });
+    expect(admit).not.toHaveBeenCalled();
+  });
+
+  it("is counted once for a turn that goes ahead, before anything is retrieved or generated", async () => {
+    const graph = fakeGraph();
+    let retrievedBeforeAdmission = -1;
+    const admit = vi.fn(async () => {
+      retrievedBeforeAdmission = graph.retrievalContexts.length + graph.gatewaySpecs.length;
+      return { allowed: true as const, remaining: 3, resetAt: RESET };
+    });
+
+    const result = await handleChatTurn(body(), IDENTITY, graph.deps, admit);
+
+    expect(result.ok).toBe(true);
+    expect(admit).toHaveBeenCalledTimes(1);
+    expect(retrievedBeforeAdmission).toBe(0);
+  });
+
+  it("refuses with the quota's answer and when it reopens, and opens no turn", async () => {
+    const graph = fakeGraph();
+    const admit = vi.fn(async () => ({ allowed: false as const, refusal: "quota_exhausted" as const, resetAt: RESET }));
+
+    const result = await handleChatTurn(body(), IDENTITY, graph.deps, admit);
+
+    expect(result).toEqual({ ok: false, error: "quota_exhausted", resetAt: RESET });
+    expect(graph.gatewaySpecs).toEqual([]);
+    expect(graph.upsertedStates).toEqual([]);
+  });
+
+  it("says a quota store that could not count is an outage, with a short wait", async () => {
+    const graph = fakeGraph();
+    const admit = vi.fn(async () => ({ allowed: false as const, refusal: "unavailable" as const, resetAt: null }));
+
+    const result = await handleChatTurn(body(), IDENTITY, graph.deps, admit);
+
+    expect(result).toMatchObject({ ok: false, error: "generation_failed", retryAfterSeconds: expect.any(Number) });
+    expect(graph.gatewaySpecs).toEqual([]);
+  });
+});
+
+describe("a plan", () => {
+  // billing-and-plans-spec.md S3. The plan arrives resolved on the server and
+  // selects a route the table already holds; the handler threads it through
+  // routing, context size, retrieval and the budget gate alike.
+
+  it("runs a free turn on the mid tier and a paid turn on strong", async () => {
+    const free = fakeGraph();
+    const plus = fakeGraph();
+
+    await handleChatTurn(body(), { ...IDENTITY, plan: "free" }, free.deps);
+    await handleChatTurn(body(), { ...IDENTITY, plan: "plus" }, plus.deps);
+
+    expect(free.gatewaySpecs[0]).toMatchObject({ task: "conversation.turn", tier: "mid", plan: "free" });
+    expect(plus.gatewaySpecs[0]).toMatchObject({ task: "conversation.turn", tier: "strong", plan: "plus" });
+  });
+
+  it("gives a premium turn premium's wider context at the learner's level", async () => {
+    // The fixture learner is at A2: 5000/450 on the level table, 6500/600 on premium's.
+    const premium = fakeGraph();
+    const plus = fakeGraph();
+
+    await handleChatTurn(body(), { ...IDENTITY, plan: "premium" }, premium.deps);
+    await handleChatTurn(body(), { ...IDENTITY, plan: "plus" }, plus.deps);
+
+    expect(premium.gatewaySpecs[0]).toMatchObject({ maxInputTokens: 6500, maxOutputTokens: 600 });
+    expect(plus.gatewaySpecs[0]).toMatchObject({ maxInputTokens: 5000, maxOutputTokens: 450 });
+  });
+
+  it("budgets the reply and its evaluation as the learner's plan", async () => {
+    // The evaluator's route is the same on every plan (spec S4) — a level
+    // means the same thing whoever pays — but its spend is the learner's.
+    const { deps, gatewayContexts, evaluationContexts } = fakeGraph();
+
+    const result = await handleChatTurn(body(), { ...IDENTITY, plan: "free" }, deps);
+    if (result.ok) await drain(toReadableStream(result.outcome));
+
+    expect(gatewayContexts[0]).toMatchObject({ plan: "free", userIdHash: INPUT.userIdHash });
+    expect(evaluationContexts[0]).toMatchObject({ plan: "free", userIdHash: INPUT.userIdHash });
+  });
+
+  it("gives a free turn three knowledge snippets and a paid one five, embedded under the plan", async () => {
+    const free = fakeGraph();
+    const premium = fakeGraph();
+
+    await handleChatTurn(body(), { ...IDENTITY, plan: "free" }, free.deps);
+    await handleChatTurn(body(), { ...IDENTITY, plan: "premium" }, premium.deps);
+
+    expect(free.retrievalOptions[0]).toMatchObject({ topK: 3, context: { plan: "free" } });
+    expect(premium.retrievalOptions[0]).toMatchObject({ topK: 5, context: { plan: "premium" } });
+  });
+
+  it("tells a learner who spent their own allowance so, with when it renews", async () => {
+    // The fixture's clock is 2026-08-21, so a monthly allowance renews on the
+    // first of September.
+    const { deps, recordedTurns } = fakeGraph({
+      generation: gatewayFail("budget_denied", "per_user_monthly at 100%", "per_user_monthly"),
+    });
+
+    const result = await handleChatTurn(body(), IDENTITY, deps);
+
+    expect(result).toEqual({
+      ok: false,
+      error: "budget_exhausted",
+      resetAt: new Date("2026-09-01T00:00:00.000Z"),
+    });
+    expect(recordedTurns).toEqual([]);
+  });
+
+  it.each([
+    ["the counters could not be read", null],
+    ["the product's own daily ceiling was reached", "global_daily" as const],
+  ])("keeps it a plain failure when %s, which no plan answers", async (_label, scope) => {
+    const { deps } = fakeGraph({ generation: gatewayFail("budget_denied", "denied", scope) });
+
+    expect(await handleChatTurn(body(), IDENTITY, deps)).toMatchObject({
+      ok: false,
+      error: "generation_failed",
+    });
+  });
+});
+
 describe("what a learner is told", () => {
   it.each(CHAT_ERRORS)("gives %s a status and a plain message", (error) => {
     const response = chatErrorResponse(error);
@@ -312,6 +459,15 @@ describe("what a learner is told", () => {
 
   it("sends an unauthenticated caller to sign in rather than to a 500", () => {
     expect(chatErrorResponse("unauthenticated").status).toBe(401);
+  });
+
+  it("names the three plan refusals, each with the status a client branches on", () => {
+    expect(CHAT_ERRORS).toEqual(
+      expect.arrayContaining(["plan_required", "quota_exhausted", "budget_exhausted"]),
+    );
+    expect(chatErrorResponse("plan_required").status).toBe(402);
+    expect(chatErrorResponse("quota_exhausted").status).toBe(429);
+    expect(chatErrorResponse("budget_exhausted").status).toBe(429);
   });
 });
 

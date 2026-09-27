@@ -95,6 +95,58 @@ async function sendAndWaitForReply(text = "Lass uns üben!") {
   return user;
 }
 
+describe("a plan without the AI voice", () => {
+  it("reads the reply in the device's voice and says why, once, quietly", async () => {
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (key: string) => (key === "deutsch-partner.voice-plan-note" ? "shown" : null),
+        setItem: () => undefined,
+        removeItem: () => undefined,
+        clear: () => undefined,
+      },
+    });
+    const voice = fakeVoice();
+    server.use(
+      http.post(TRAINER_ENDPOINT, () => HttpResponse.json(REPLY)),
+      http.post(SPEAK, () =>
+        HttpResponse.json(
+          { error: "plan_required", message: "The AI voice comes with a paid plan.", resetAt: null, upgrade: true },
+          { status: 402 },
+        ),
+      ),
+    );
+    renderSession({ playback: fakePlayback(), voice });
+
+    const user = await sendAndWaitForReply();
+    await user.click(screen.getByRole("button", { name: /read this reply aloud/i }));
+
+    await waitFor(() => expect(voice.spoken).toHaveLength(1));
+    expect(screen.getByText(/your device's voice/i)).toBeInTheDocument();
+    // The Trainer's AI voice is Premium's, whatever the conversation's is.
+    expect(screen.getByText(/in the Trainer comes with Premium/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /see plans/i })).toHaveAttribute("href", "/pricing");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("asks for the Trainer's line as the Trainer's", async () => {
+    let body: unknown = null;
+    server.use(
+      http.post(TRAINER_ENDPOINT, () => HttpResponse.json(REPLY)),
+      http.post(SPEAK, async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.arrayBuffer(new ArrayBuffer(8), { headers: { "content-type": "audio/mpeg" } });
+      }),
+    );
+    renderSession({ playback: fakePlayback() });
+
+    const user = await sendAndWaitForReply();
+    await user.click(screen.getByRole("button", { name: /read this reply aloud/i }));
+
+    await waitFor(() => expect(body).toMatchObject({ text: REPLY.reply, surface: "trainer" }));
+  });
+});
+
 describe("reading the trainer aloud", () => {
   it("offers a speaker on each reply and plays the model's voice", async () => {
     const playback = fakePlayback();

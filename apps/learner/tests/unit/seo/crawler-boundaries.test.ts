@@ -28,7 +28,11 @@ describe("the proxy matcher", () => {
     expect(matcher.test(path)).toBe(false);
   });
 
-  it.each(["/", "/dashboard", "/auth/login", "/chat/abc", "/iconography"])(
+  it("lets Stripe's webhook through: a server-to-server call has no session to refresh", () => {
+    expect(matcher.test("/api/billing/webhook")).toBe(false);
+  });
+
+  it.each(["/", "/dashboard", "/auth/login", "/chat/abc", "/iconography", "/pricing", "/billing", "/billing/checkout", "/api/billing/other"])(
     "still refreshes the session on %s",
     (path) => {
       expect(matcher.test(path)).toBe(true);

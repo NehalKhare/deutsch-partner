@@ -80,7 +80,9 @@ TIER: reasoning
 TIER: strong
   Purpose: the German conversation turn. The learner-facing voice.
   Frequency: once per learner message.
-  This is the ONLY tier permitted on the streaming hot path.
+  This is the ONLY tier permitted on the streaming hot path, with two
+  exceptions, both downward: budget degradation (S9), and the free plan's
+  mid-tier tutor (billing-and-plans-spec.md S3).
 
 TIER: mid
   Purpose: structured extraction that needs real language understanding.
@@ -167,6 +169,15 @@ retrieval.embedding             embedding    Direct provider. Cache aggressively
 voice.transcribe                stt          Direct provider.
 voice.synthesize                tts          Direct provider.
 
+Plan variants. conversation.turn, conversation.repair and trainer.session may
+carry a byPlan entry (billing-and-plans-spec.md S3). A plan entry may only move
+the tier down the chat ladder from the row above and may only narrow its
+ceilings; the row is the maximum any plan reaches. The plan is resolved on the
+server from entitlement rows and is never a caller's input, so "callers cannot
+override the tier for a task" (S12) still holds. Every other task, and in
+particular everything that writes learner state or grades German, has one
+route for every plan.
+
 Explicitly NOT model calls:
 
 mini-level progression        -> pure functions over learner state
@@ -250,6 +261,9 @@ TASK                            MAX INPUT   MAX OUTPUT
 conversation.turn (A1)              4000         300
 conversation.turn (A2)              5000         450
 conversation.turn (B1)              6000         700
+conversation.turn premium (A1)      5000         400
+conversation.turn premium (A2)      6500         600
+conversation.turn premium (B1)      8000        1000
 conversation.repair                 6000         700
 evaluation.learner_message          3000         800
 assessment.milestone                8000        1500

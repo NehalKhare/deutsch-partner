@@ -1,6 +1,7 @@
 import { z, type ZodType } from "zod";
 
 import { cefrLevelSchema, type CEFRLevel } from "@dp/domain/cefr";
+import { planCodeSchema, type PlanCode } from "@dp/domain/plans";
 import { gatewayFail, gatewayOk, type GatewayResult } from "./errors";
 import { resolveTask } from "./router";
 import { ceilingsFor, taskIdSchema, tierSchema, type TaskId } from "@dp/domain/tasks";
@@ -16,6 +17,11 @@ import { ceilingsFor, taskIdSchema, tierSchema, type TaskId } from "@dp/domain/t
  * The tier is on the spec but is not the caller's to choose. It is written
  * here so the dispatcher and the ledger can read it without re-deriving it,
  * and validation rejects any value that disagrees with the routing table.
+ *
+ * So is the plan. It is on the spec because the plan decides the tier, and a
+ * spec validated without it could only be checked against the row: a free
+ * learner's mid-tier spec would look like a caller choosing mid. With it, the
+ * tier must be the plan's own and the ceilings must fit the plan's.
  */
 
 /** The only tasks allowed to return free text. Everything else is schema-bound. */
@@ -40,22 +46,27 @@ export const modelCallSpecSchema = z
      * opaque Zod type: the gateway validates with it, and never serialises it.
      */
     outputSchema: z.custom<ZodType>((value) => value instanceof z.ZodType).optional(),
+    /** Absent for a call with no plan, which then validates exactly as before plans. */
+    plan: planCodeSchema.optional(),
   })
   .superRefine((spec, ctx) => {
-    const route = resolveTask(spec.task);
+    const route = resolveTask(spec.task, undefined, spec.plan);
     if (!route.ok) return;
 
     if (spec.tier !== route.data.tier) {
+      const on = spec.plan ? ` on the ${spec.plan} plan` : "";
       ctx.addIssue({
         code: "custom",
         path: ["tier"],
-        message: `${spec.task} routes to ${route.data.tier}; the tier is derived from the task, not chosen`,
+        message: `${spec.task} routes to ${route.data.tier}${on}; the tier is derived from the task, not chosen`,
       });
     }
 
-    // The unnarrowed ceilings: a level narrows conversation.turn downward, so
-    // the table's own figure is the true maximum for any level.
-    const table = ceilingsFor(spec.task);
+    // Unnarrowed by level: the largest this plan reaches at any level, which a
+    // domain test holds at or under the row. Not the row itself — the row is
+    // premium's maximum, and a spec with no plan, or a free one, carrying
+    // premium's context is exactly what this check exists to refuse.
+    const table = ceilingsFor(spec.task, undefined, spec.plan);
 
     if (spec.maxOutputTokens > table.maxOutputTokens) {
       ctx.addIssue({
@@ -86,12 +97,19 @@ export type ModelCallSpec = z.infer<typeof modelCallSpecSchema>;
 
 const callSpecOptionsSchema = z.strictObject({
   level: cefrLevelSchema.optional(),
+  plan: planCodeSchema.optional(),
   timeoutMs: z.number().int().positive().max(MAX_TIMEOUT_MS),
   outputSchema: z.custom<ZodType>((value) => value instanceof z.ZodType).optional(),
 });
 
 export interface CallSpecOptions {
   readonly level?: CEFRLevel;
+  /**
+   * The learner's plan, resolved on the server from entitlement rows. Never
+   * read from a request body, a header or a cookie. It selects a route the
+   * table already holds; it is not a way to ask for a better one.
+   */
+  readonly plan?: PlanCode;
   readonly timeoutMs: number;
   readonly outputSchema?: ZodType;
 }
@@ -108,10 +126,14 @@ export function callSpecFor(
   task: unknown,
   options: CallSpecOptions,
 ): GatewayResult<ModelCallSpec> {
-  const route = resolveTask(task, (options as CallSpecOptions | undefined)?.level);
+  // Parsed before the lookup so that only a validated level and plan reach
+  // it, and reported after it so an unknown task still fails as one.
+  const parsedOptions = callSpecOptionsSchema.safeParse(options);
+  const valid = parsedOptions.success ? parsedOptions.data : undefined;
+
+  const route = resolveTask(task, valid?.level, valid?.plan);
   if (!route.ok) return route;
 
-  const parsedOptions = callSpecOptionsSchema.safeParse(options);
   if (!parsedOptions.success) {
     return gatewayFail(
       "invalid_spec",
@@ -128,6 +150,9 @@ export function callSpecFor(
     maxOutputTokens: route.data.maxOutputTokens,
     timeoutMs: parsedOptions.data.timeoutMs,
     outputSchema: parsedOptions.data.outputSchema,
+    // Only when there is one, so a spec with no plan is the same object it
+    // was before plans existed.
+    ...(parsedOptions.data.plan ? { plan: parsedOptions.data.plan } : {}),
   });
 
   return parsed.success

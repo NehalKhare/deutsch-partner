@@ -62,6 +62,41 @@ describe("sign-in form", () => {
   });
 });
 
+describe("a destination picked before there was an account", () => {
+  const next = "/billing/checkout?offer=dp_plus_month";
+
+  it("rides along on sign-up as a hidden field", () => {
+    const { container } = render(
+      <CredentialsForm mode="sign-up" action={noop} initialState={idle} next={next} />,
+    );
+
+    expect(container.querySelector('input[name="next"]')).toHaveValue(next);
+  });
+
+  it("is kept when the visitor switches between signing up and signing in", () => {
+    const { unmount } = render(
+      <CredentialsForm mode="sign-up" action={noop} initialState={idle} next={next} />,
+    );
+    expect(screen.getByRole("link", { name: "Sign in" })).toHaveAttribute(
+      "href",
+      `/auth/login?next=${encodeURIComponent(next)}`,
+    );
+    unmount();
+
+    render(<CredentialsForm mode="sign-in" action={noop} initialState={idle} next={next} />);
+    expect(screen.getByRole("link", { name: "Create an account" })).toHaveAttribute(
+      "href",
+      `/auth/sign-up?next=${encodeURIComponent(next)}`,
+    );
+  });
+
+  it("is left off the links when it is only the default", () => {
+    render(<CredentialsForm mode="sign-in" action={noop} initialState={idle} next="/dashboard" />);
+
+    expect(screen.getByRole("link", { name: "Create an account" })).toHaveAttribute("href", "/auth/sign-up");
+  });
+});
+
 describe("sign-up form", () => {
   it("asks for a password confirmation", () => {
     render(

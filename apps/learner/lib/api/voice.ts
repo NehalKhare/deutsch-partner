@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { SPEECH_RATES, speechRateFor } from "@dp/domain/speech";
+import type { QuotaDecision } from "@/lib/api/quota";
 import {
   MAX_AUDIO_BYTES,
   audioFormatSchema,
@@ -18,10 +19,11 @@ import {
  *
  * One thing is deliberately missing and worth saying out loud: voice calls do
  * not write a ledger row and are not counted against the euro budgets. That
- * was a decision, not an oversight, and it leaves the bounds below as the only
- * thing between a learner and unbounded spend — so they are tighter than the
- * provider's own limits rather than equal to them. Whisper is billed by the
- * minute, so the minute is what has to be bounded.
+ * was a decision, not an oversight, and it leaves the bounds below, the
+ * per-minute limits and the plan's daily voice quotas as the only things
+ * between a learner and unbounded spend (billing-and-plans-spec.md S9) — so
+ * they are tighter than the provider's own limits rather than equal to them.
+ * Whisper is billed by the minute, so the minute is what has to be bounded.
  */
 
 /**
@@ -46,6 +48,10 @@ export const VOICE_FAILURES = [
   "no_audio",
   "voice_unavailable",
   "provider_error",
+  // The plan's (lib/billing/refusal.ts): a feature the plan does not include,
+  // and a daily voice allowance used up.
+  "plan_required",
+  "quota_exhausted",
 ] as const;
 
 export type VoiceFailure = (typeof VOICE_FAILURES)[number];
@@ -85,6 +91,14 @@ const RESPONSES: Readonly<Record<VoiceFailure, { status: number; message: string
     status: 502,
     message: "We could not make that out. Please try again.",
   },
+  plan_required: {
+    status: 402,
+    message: "The AI voice comes with a paid plan.",
+  },
+  quota_exhausted: {
+    status: 429,
+    message: "You've used today's voice allowance.",
+  },
 };
 
 export function voiceErrorResponse(failure: VoiceFailure): {
@@ -111,10 +125,34 @@ export function audioFormatFromMimeType(mimeType: string): string {
 
 export type VoiceResult<T> =
   | { readonly ok: true; readonly data: T }
-  | { readonly ok: false; readonly error: VoiceFailure };
+  | {
+      readonly ok: false;
+      readonly error: VoiceFailure;
+      /** When a spent allowance reopens, on a plan refusal only; null when nothing does. */
+      readonly resetAt?: Date | null;
+    };
 
 const fail = <T = never>(error: VoiceFailure): VoiceResult<T> => ({ ok: false, error });
 const ok = <T>(data: T): VoiceResult<T> => ({ ok: true, data });
+
+/**
+ * The plan's say, asked last: once the request has passed every check of its
+ * own and just before a provider is contacted. A clip in a format nobody reads
+ * or a line that does not parse has used nothing, which matters most on Free,
+ * where there are five spoken answers a day. The route supplies it, bound to
+ * the plan it resolved; absent, nothing is counted.
+ */
+export type VoiceAdmission = () => Promise<QuotaDecision>;
+
+async function admitted(admit: VoiceAdmission | undefined): Promise<VoiceResult<null>> {
+  if (!admit) return ok(null);
+  const decision = await admit();
+  if (decision.allowed) return ok(null);
+  // A quota store that could not count is an outage, said as one: no spent
+  // allowance, no upgrade prompt, and the page falls back for this line.
+  if (decision.refusal === "unavailable") return fail("voice_unavailable");
+  return { ok: false, error: decision.refusal, resetAt: decision.resetAt };
+}
 
 // --- transcription ----------------------------------------------------------
 
@@ -138,6 +176,7 @@ export interface Transcribed {
 export async function handleTranscription(
   submission: TranscriptionSubmission,
   provider: SpeechToTextProvider | null,
+  admit?: VoiceAdmission,
 ): Promise<VoiceResult<Transcribed>> {
   if (!provider) return fail("voice_unavailable");
 
@@ -162,6 +201,9 @@ export async function handleTranscription(
   // The turn's own bound, tighter than the provider's.
   if (submission.durationMs > MAX_TURN_AUDIO_MS) return fail("audio_too_long");
 
+  const admission = await admitted(admit);
+  if (!admission.ok) return admission;
+
   try {
     const result = await provider.transcribe({
       audio: submission.audio,
@@ -180,6 +222,14 @@ export async function handleTranscription(
 
 // --- synthesis --------------------------------------------------------------
 
+/**
+ * Where a line is being read. The AI voice in the conversation and in the
+ * Trainer are separate features (billing-and-plans-spec.md S2): Plus has the
+ * first, Premium both.
+ */
+export const SPOKEN_SURFACES = ["chat", "trainer"] as const;
+export type SpokenSurface = (typeof SPOKEN_SURFACES)[number];
+
 export const spokenRequestSchema = z.strictObject({
   text: z.string().trim().min(1).max(MAX_SPOKEN_CHARACTERS),
   /** The learner's level decides the pace. A1 is spoken more slowly than B1. */
@@ -190,6 +240,12 @@ export const spokenRequestSchema = z.strictObject({
    * lookup — and a wrong claim can only change which voice speaks.
    */
   voice: z.enum(["male", "female"]).default("male"),
+  /**
+   * The page the line is read on, told by the client for the same reason the
+   * voice is. A wrong claim can only spend voice lines the plan already has:
+   * the daily quota, counted on the server, is what bounds the cost.
+   */
+  surface: z.enum(SPOKEN_SURFACES).default("chat"),
 });
 
 export type SpokenRequest = z.input<typeof spokenRequestSchema>;
@@ -202,14 +258,22 @@ export interface Spoken {
 /** Which named voice the tutor uses. Never a vendor's name. */
 const TUTOR_VOICE: SpeechVoice = "tutor_warm";
 
+/** Synthesis's admission, told where the line is read so the plan can decide by feature. */
+export type SynthesisAdmission = (line: { readonly surface: SpokenSurface }) => Promise<QuotaDecision>;
+
 export async function handleSynthesis(
   body: unknown,
   provider: TextToSpeechProvider | null,
+  admit?: SynthesisAdmission,
 ): Promise<VoiceResult<Spoken>> {
   if (!provider) return fail("voice_unavailable");
 
   const parsed = spokenRequestSchema.safeParse(body);
   if (!parsed.success) return fail("invalid_body");
+
+  const { surface } = parsed.data;
+  const admission = await admitted(admit && (() => admit({ surface })));
+  if (!admission.ok) return admission;
 
   try {
     const result = await provider.synthesize({

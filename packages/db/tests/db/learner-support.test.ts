@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import { createLearnerAdminRepository } from "../../src/learner-admin-repository";
+import { EXPORTED_TABLES, createLearnerAdminRepository } from "../../src/learner-admin-repository";
 import { ALICE, BOB, createTestDatabase, type TestDatabase } from "../../src/testing/harness";
 import type { DatabaseClient } from "../../src/types";
 
@@ -233,6 +233,58 @@ describe("ops_learner_export", () => {
 
   it("is null for somebody with no profile", async () => {
     expect(await call(`public.ops_learner_export($1)`, [CAROL])).toBeNull();
+  });
+
+  it("is what the repository expects, table for table", async () => {
+    // EXPORTED_TABLES is what the repository's schema requires of the export.
+    // Held to the foreign keys too, so neither can gain a table the other lacks.
+    const owned = await database.db.query<{ table_name: string }>(
+      `select distinct c.conrelid::regclass::text as table_name
+         from pg_constraint c
+        where c.contype = 'f'
+          and c.confrelid = 'public.profiles'::regclass`,
+    );
+    const tables = owned.rows.map((row) => row.table_name.replace(/^public\./, ""));
+
+    expect([...EXPORTED_TABLES].sort()).toEqual([...tables, "profiles"].sort());
+  });
+
+  it("carries the learner's billing rows, and not another learner's", async () => {
+    // What they bought and the consent they gave are theirs to see (spec S10).
+    for (const [learner, tag] of [[ALICE, "Alice"], [BOB, "Bob0"]] as const) {
+      await database.db.query(
+        `insert into public.billing_customers (learner_id, stripe_customer_id) values ($1, $2)`,
+        [learner, `cus_${tag}`],
+      );
+      await database.db.query(
+        `insert into public.billing_checkouts
+           (learner_id, offer_key, kind, terms_version, early_start_consent_at)
+         values ($1, 'dp_pass_plus', 'order', '2026-09-25', now())`,
+        [learner],
+      );
+      await database.db.query(
+        `insert into public.subscriptions
+           (learner_id, stripe_subscription_id, stripe_price_id, plan_code, status, stripe_synced_at)
+         values ($1, $2, 'price_Plus', 'plus', 'active', now())`,
+        [learner, `sub_${tag}`],
+      );
+      await database.db.query(
+        `insert into public.plan_passes
+           (learner_id, plan_code, starts_at, ends_at, stripe_checkout_session_id, amount_minor, currency)
+         values ($1, 'plus', now(), now() + interval '180 days', $2, 4499, 'eur')`,
+        [learner, `cs_test_${tag}`],
+      );
+    }
+
+    const exported = await call<Record<string, Array<{ learner_id: string }>>>(
+      `public.ops_learner_export($1)`,
+      [ALICE],
+    );
+
+    for (const table of ["billing_customers", "billing_checkouts", "subscriptions", "plan_passes"]) {
+      expect(exported[table]?.map((row) => row.learner_id), table).toEqual([ALICE]);
+    }
+    expect(exported.billing_customers?.[0]).toMatchObject({ stripe_customer_id: "cus_Alice" });
   });
 });
 

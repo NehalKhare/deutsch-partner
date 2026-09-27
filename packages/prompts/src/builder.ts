@@ -1,7 +1,9 @@
 import { z } from "zod";
 
 import { cefrLevelSchema, type CEFRLevel } from "@dp/domain/cefr";
+import { planCodeSchema } from "@dp/domain/plans";
 import { nonEmptyTextSchema } from "@dp/domain/primitives";
+import { tierFor } from "@dp/domain/tasks";
 import {
   MIN_RECENT_MESSAGES,
   SHEDDING_ORDER,
@@ -58,6 +60,12 @@ export const buildRequestSchema = z.strictObject({
   memories: z.array(learnerMemorySchema).max(20).default([]),
   recentMessages: z.array(promptMessageSchema).max(40).default([]),
   userMessage: nonEmptyTextSchema(4000),
+  /**
+   * The learner's plan, resolved on the server. It widens or keeps the input
+   * and output ceilings the prompt is shed against, and nothing else: no block
+   * reads it, so no plan is a different prompt version.
+   */
+  plan: planCodeSchema.optional(),
 });
 
 export type BuildRequest = z.input<typeof buildRequestSchema>;
@@ -336,7 +344,7 @@ export function buildPrompt(
   }
 
   const input = parsed.data;
-  const { maxInputTokens, maxOutputTokens } = entryCeilings(entry, input.cefr);
+  const { maxInputTokens, maxOutputTokens } = entryCeilings(entry, input.cefr, input.plan);
 
   const messageCap = messageCapFor(entry, maxInputTokens);
   if (messageCap <= 0) {
@@ -414,7 +422,9 @@ export function buildPrompt(
       name: entry.name,
       version: entry.version,
       task: entry.task,
-      tier: entry.tier,
+      // The tier this call is routed to: the entry's own, or the plan's where
+      // the plan moves it down.
+      tier: input.plan ? tierFor(entry.task, input.plan) : entry.tier,
       system: systemBlocks.map((block) => block.text).join("\n\n"),
       systemStable: systemBlocks
         .slice(0, stableCount)

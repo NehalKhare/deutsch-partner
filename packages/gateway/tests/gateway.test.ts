@@ -377,6 +377,146 @@ describe("layer 4 — the budget gate", () => {
     expect(rows[0].budgetScopeHit).toBe("per_request");
     expect(sentRequests(transport)).toHaveLength(0);
   });
+
+  it("names the scope that refused, so a caller can tell an allowance from an outage", async () => {
+    // A learner who spent their own allowance can be told so and shown a plan
+    // with a larger one; a learner refused because the counters could not be
+    // read, or because the whole product hit its daily ceiling, must not be.
+    const { gateway } = harness({ budgets: budgetsAt({ "hash-alice": 1 }) });
+    const global = harness({ budgets: budgetsAt({ global: 100 }) }).gateway;
+    const unreadable = harness({ budgets: { async snapshot() { return null; } } }).gateway;
+    const turn = createTurnBudget(0.0001);
+    turn.record(0.0001);
+
+    expect(await gateway.complete(spec, PROMPT, CONTEXT)).toMatchObject({
+      failure: "budget_denied",
+      budgetScope: "per_user_daily",
+    });
+    expect(await global.stream(spec, PROMPT, CONTEXT)).toMatchObject({
+      failure: "budget_denied",
+      budgetScope: "global_daily",
+    });
+    expect(await unreadable.complete(spec, PROMPT, CONTEXT)).toMatchObject({
+      failure: "budget_denied",
+      budgetScope: null,
+    });
+    expect(await harness().gateway.complete(spec, PROMPT, { ...CONTEXT, turn })).toMatchObject({
+      failure: "budget_denied",
+      budgetScope: "per_request",
+    });
+  });
+
+  it("names no scope on a refusal that was not about money", async () => {
+    const { gateway } = harness();
+
+    const outcome = await gateway.complete(spec, { ...PROMPT, inputTokens: 100_000 }, CONTEXT);
+
+    expect(outcome).toMatchObject({ ok: false, failure: "ceiling_denied" });
+    expect(outcome).not.toHaveProperty("budgetScope");
+  });
+});
+
+describe("a plan", () => {
+  function freeTurnSpec() {
+    const built = callSpecFor("conversation.turn", { level: "A1", plan: "free", timeoutMs: 5_000 });
+    if (!built.ok) throw new Error("fixture spec did not build");
+    return built.data;
+  }
+
+  /** A budget source that remembers what it was asked, and spends nothing. */
+  function askedBudgets() {
+    const asked: Array<Parameters<BudgetSource["snapshot"]>[0]> = [];
+    const budgets: BudgetSource = {
+      async snapshot(input) {
+        asked.push(input);
+        return [];
+      },
+    };
+    return { budgets, asked };
+  }
+
+  it("runs a free learner's turn on the plan's tier", async () => {
+    const { gateway, rows, transport } = harness();
+
+    const outcome = await gateway.complete(freeTurnSpec(), PROMPT, { ...CONTEXT, plan: "free" });
+
+    expect(outcome.ok && outcome.data.tier).toBe("mid");
+    expect(rows[0]).toMatchObject({ tier: "mid", degraded: false });
+    expect(sentRequests(transport)[0]?.modelId).toBe(createModelRegistry().forTier("mid").modelId);
+  });
+
+  it("degrades from the plan's tier, not the table's: a free turn under pressure runs on cheap", async () => {
+    // billing-and-plans-spec.md S3: one rung down from where the plan put it.
+    const { gateway, rows } = harness({ budgets: budgetsAt({ "hash-alice": 0.9 }) });
+
+    const outcome = await gateway.complete(freeTurnSpec(), PROMPT, { ...CONTEXT, plan: "free" });
+
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.data).toMatchObject({ tier: "cheap", degraded: true });
+    expect(rows[0]).toMatchObject({ tier: "cheap", degraded: true, maxOutputTokens: 150 });
+  });
+
+  it("degrades a streamed free turn the same way", async () => {
+    const { gateway } = harness({ budgets: budgetsAt({ "hash-alice": 0.9 }) });
+
+    const opened = await gateway.stream(freeTurnSpec(), PROMPT, { ...CONTEXT, plan: "free" });
+
+    expect(opened.ok && opened.data).toMatchObject({ tier: "cheap", degraded: true });
+  });
+
+  it("hands the budget source the learner's plan, so the plan's euro bound applies", async () => {
+    const { budgets, asked } = askedBudgets();
+    const { gateway } = harness({ budgets });
+
+    // A plan-invariant task still spends from the plan's budget.
+    await gateway.complete(spec, PROMPT, { ...CONTEXT, plan: "plus" });
+
+    expect(asked).toEqual([{ userIdHash: "hash-alice", now: NOW, plan: "plus" }]);
+  });
+
+  it("budgets by the spec's plan when the context names none", async () => {
+    const { budgets, asked } = askedBudgets();
+    const { gateway } = harness({ budgets });
+
+    await gateway.complete(freeTurnSpec(), PROMPT, CONTEXT);
+
+    expect(asked[0]?.plan).toBe("free");
+  });
+
+  it("asks for no plan when neither the spec nor the context has one", async () => {
+    const { budgets, asked } = askedBudgets();
+    const { gateway } = harness({ budgets });
+
+    await gateway.complete(spec, PROMPT, CONTEXT);
+
+    expect(asked).toEqual([{ userIdHash: "hash-alice", now: NOW }]);
+  });
+
+  it("refuses a spec routed for one plan and budgeted as another", async () => {
+    // A free spec on premium's budget is a bug in the caller, and a free
+    // learner spending premium's allowance is what it would cost.
+    const { gateway, rows, transport } = harness();
+
+    const outcome = await gateway.complete(freeTurnSpec(), PROMPT, { ...CONTEXT, plan: "premium" });
+
+    expect(outcome).toMatchObject({ ok: false, failure: "invalid_spec" });
+    expect(sentRequests(transport)).toHaveLength(0);
+    expect(rows).toHaveLength(0);
+  });
+
+  it("refuses a free spec that has been edited onto the paid tier", async () => {
+    const { gateway, transport } = harness();
+
+    const outcome = await gateway.complete(
+      { ...freeTurnSpec(), tier: "strong" },
+      PROMPT,
+      { ...CONTEXT, plan: "free" },
+    );
+
+    expect(outcome).toMatchObject({ ok: false, failure: "invalid_spec" });
+    expect(sentRequests(transport)).toHaveLength(0);
+  });
 });
 
 describe("failures", () => {

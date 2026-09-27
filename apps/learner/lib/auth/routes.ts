@@ -18,6 +18,7 @@ export const PROTECTED_PREFIXES = [
   "/chat",
   "/review",
   "/settings",
+  "/billing",
 ] as const;
 
 /** Pages that exist to get a session, so a signed-in learner is sent onward. */
@@ -46,29 +47,58 @@ export function isAuthPath(pathname: string): boolean {
 }
 
 /**
- * Builds the sign-in URL, remembering where the learner was heading.
+ * ASCII control characters and the backslash. The WHATWG URL parser removes
+ * tab, CR and LF before it resolves a URL and reads a backslash as "/" in
+ * a path, so "/\t/evil.example" — which starts with exactly one slash — reaches
+ * a browser as "//evil.example", another origin.
+ */
+const UNSAFE_PATH_CHARACTERS = /[\\\u0000-\u001F\u007F]/;
+
+/** A same-site path by the naive rules and by the parser's, or null. */
+function sameSitePath(value: string): string | null {
+  if (!value.startsWith("/") || value.startsWith("//")) return null;
+  if (UNSAFE_PATH_CHARACTERS.test(value)) return null;
+
+  // Resolve against a placeholder origin and keep the result only when it
+  // stayed there, so what is returned is what a browser would request.
+  const base = new URL("https://same-origin.invalid");
+  let resolved: URL;
+  try {
+    resolved = new URL(value, base);
+  } catch {
+    return null;
+  }
+  if (resolved.origin !== base.origin) return null;
+
+  const path = `${resolved.pathname}${resolved.search}${resolved.hash}`;
+  // "/a/../..//x" normalises to "//x": same origin to the parser here, a
+  // protocol-relative URL once it is a Location header.
+  return path.startsWith("//") ? null : path;
+}
+
+/**
+ * Builds the sign-in URL, remembering where the learner was heading — the
+ * path and its query, so an order link such as
+ * /billing/checkout?offer=… survives the trip.
  *
  * The destination is only ever a same-site path. Anything that could point at
  * another origin is dropped rather than sanitised, because a redirect target
  * taken from a URL is a classic open-redirect vector.
  */
-export function signInRedirectTarget(pathname: string): string {
-  const isSafeInternalPath =
-    pathname.startsWith("/") &&
-    !pathname.startsWith("//") &&
-    pathname !== "/" &&
-    !pathname.includes("\\");
+export function signInRedirectTarget(pathWithQuery: string): string {
+  const path = pathWithQuery === "/" ? null : sameSitePath(pathWithQuery);
 
-  return isSafeInternalPath
-    ? `${LOGIN_PATH}?next=${encodeURIComponent(pathname)}`
-    : LOGIN_PATH;
+  return path ? `${LOGIN_PATH}?next=${encodeURIComponent(path)}` : LOGIN_PATH;
 }
 
-/** Validates a `next` parameter before it is used as a redirect destination. */
-export function safeNextPath(next: string | null | undefined): string {
-  if (!next) return DEFAULT_SIGNED_IN_PATH;
+/**
+ * Validates a `next` parameter before it is used as a redirect destination.
+ *
+ * Typed `unknown` on purpose: a query parameter that repeats reaches a page
+ * as a string[], and a form field may be a File. Neither is a path.
+ */
+export function safeNextPath(next: unknown): string {
+  if (typeof next !== "string" || next === "") return DEFAULT_SIGNED_IN_PATH;
 
-  return next.startsWith("/") && !next.startsWith("//") && !next.includes("\\")
-    ? next
-    : DEFAULT_SIGNED_IN_PATH;
+  return sameSitePath(next) ?? DEFAULT_SIGNED_IN_PATH;
 }

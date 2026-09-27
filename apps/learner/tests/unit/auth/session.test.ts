@@ -57,6 +57,21 @@ describe("unauthenticated visitor", () => {
     );
   });
 
+  it("remembers the query too, so a chosen plan survives sign-in", async () => {
+    const response = await updateSession(requestFor("/billing/checkout?offer=dp_plus_month"));
+
+    expect(response.headers.get("location")).toContain(
+      `next=${encodeURIComponent("/billing/checkout?offer=dp_plus_month")}`,
+    );
+  });
+
+  it("still matches protection on the path alone", async () => {
+    // A query cannot make a public page protected, or a protected one public.
+    const response = await updateSession(requestFor("/pricing?next=/dashboard"));
+
+    expect(response.status).toBe(200);
+  });
+
   it("passes through a public page untouched", async () => {
     const response = await updateSession(requestFor("/"));
 

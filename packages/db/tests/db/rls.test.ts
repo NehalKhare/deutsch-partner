@@ -45,6 +45,16 @@ const OPERATOR_TABLES = [
   "embedding_cache",
   "ops_jobs",
   "rate_limit_buckets",
+  "billing_prices",
+  "billing_events",
+] as const;
+
+/** A learner's billing rows: theirs to read, never theirs to write. */
+const BILLING_TABLES = [
+  "billing_customers",
+  "billing_checkouts",
+  "subscriptions",
+  "plan_passes",
 ] as const;
 
 beforeAll(async () => {
@@ -71,6 +81,32 @@ beforeAll(async () => {
          (learner_id, mini_level, turns, strong_turns)
        values ($1, 1, 2, 1)`,
       [learner],
+    );
+  }
+
+  // And one of each billing row, written as the webhook writes them: with the
+  // secret key, which bypasses RLS. The harness runs as the table owner.
+  for (const [learner, tag] of [[ALICE, "Alice"], [BOB, "Bob0"]] as const) {
+    await database.db.query(
+      `insert into public.billing_customers (learner_id, stripe_customer_id) values ($1, $2)`,
+      [learner, `cus_${tag}`],
+    );
+    await database.db.query(
+      `insert into public.billing_checkouts (learner_id, offer_key, kind, terms_version, early_start_consent_at)
+       values ($1, 'dp_plus_month', 'order', '2026-09-25', now())`,
+      [learner],
+    );
+    await database.db.query(
+      `insert into public.subscriptions
+         (learner_id, stripe_subscription_id, stripe_price_id, plan_code, status, stripe_synced_at)
+       values ($1, $2, 'price_Plus', 'plus', 'active', now())`,
+      [learner, `sub_${tag}`],
+    );
+    await database.db.query(
+      `insert into public.plan_passes
+         (learner_id, plan_code, starts_at, ends_at, stripe_checkout_session_id, amount_minor, currency)
+       values ($1, 'plus', now(), now() + interval '180 days', $2, 100, 'eur')`,
+      [learner, `cs_test_${tag}`],
     );
   }
 });
@@ -267,6 +303,80 @@ describe.each(OPERATOR_TABLES)("%s", (table) => {
         database.db.query(`select 1 from public.${table} limit 1`),
       ),
     ).rejects.toThrow();
+  });
+});
+
+describe.each(BILLING_TABLES)("%s", (table) => {
+  it("shows a learner their own row and nobody else's", async () => {
+    const rows = await database.asLearner(ALICE, async () =>
+      (await database.db.query(`select learner_id from public.${table}`)).rows,
+    );
+
+    expect(rows).toEqual([{ learner_id: ALICE }]);
+  });
+
+  it("returns nothing at all to an unauthenticated visitor", async () => {
+    await expect(
+      database.asAnon(() => database.db.query(`select * from public.${table}`)),
+    ).rejects.toThrow(/permission denied/i);
+  });
+
+  it("refuses a learner's insert, even of their own row", async () => {
+    // Refused by privilege, before any policy: a learner who could write here
+    // could grant themselves a plan. The webhook is the only writer.
+    await expect(
+      database.asLearner(ALICE, () =>
+        database.db.query(`insert into public.${table} select * from public.${table} limit 0`),
+      ),
+    ).rejects.toThrow(/permission denied/i);
+  });
+
+  it("refuses a learner's update of their own row", async () => {
+    await expect(
+      database.asLearner(ALICE, () =>
+        database.db.query(`update public.${table} set learner_id = learner_id where learner_id = $1`, [
+          ALICE,
+        ]),
+      ),
+    ).rejects.toThrow(/permission denied/i);
+  });
+
+  it("refuses a learner's delete of their own row", async () => {
+    await expect(
+      database.asLearner(ALICE, () =>
+        database.db.query(`delete from public.${table} where learner_id = $1`, [ALICE]),
+      ),
+    ).rejects.toThrow(/permission denied/i);
+  });
+});
+
+describe("a learner granting themselves a plan", () => {
+  it("cannot extend their own subscription", async () => {
+    await expect(
+      database.asLearner(ALICE, () =>
+        database.db.query(
+          `update public.subscriptions set plan_code = 'premium', status = 'active',
+                  current_period_end = now() + interval '100 years'
+            where learner_id = $1`,
+          [ALICE],
+        ),
+      ),
+    ).rejects.toThrow(/permission denied/i);
+  });
+
+  it("cannot call the functions the webhook writes through", async () => {
+    for (const sql of [
+      `select public.billing_upsert_subscription('{}'::jsonb)`,
+      `select public.billing_grant_pass('{}'::jsonb)`,
+      `select public.billing_revoke_pass('pi_x', now())`,
+      `select public.billing_claim_event('evt_x', 'invoice.paid', now())`,
+      `select public.billing_replace_prices('[]'::jsonb, now())`,
+    ]) {
+      await expect(
+        database.asLearner(ALICE, () => database.db.query(sql)),
+        sql,
+      ).rejects.toThrow(/permission denied/i);
+    }
   });
 });
 

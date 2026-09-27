@@ -5,12 +5,20 @@ import { EnvValidationError, parseEnv, type AppEnv } from "@dp/env/schema";
 let cached: AppEnv | undefined;
 
 /**
- * Keys this app must never be given. The operator app makes no model call and
- * touches no repository; a deployment that hands it either key has crossed a
- * boundary the split exists to draw, and refusing to boot is the loud failure
- * the guardrails ask for.
+ * Keys this app must never be given. The operator app makes no model call,
+ * touches no repository and takes no money; a deployment that hands it any
+ * of these keys has crossed a boundary the split exists to draw, and refusing
+ * to boot is the loud failure the guardrails ask for. Payments reach an
+ * operator as the rows the learner app's webhook mirrored
+ * (billing-and-plans-spec.md S12).
  */
-export const FORBIDDEN_IN_OPS = ["OPENROUTER_API_KEY", "GITHUB_TOKEN", "MCP_SERVER_API_KEY"] as const;
+export const FORBIDDEN_IN_OPS = [
+  "OPENROUTER_API_KEY",
+  "GITHUB_TOKEN",
+  "MCP_SERVER_API_KEY",
+  "STRIPE_SECRET_KEY",
+  "STRIPE_WEBHOOK_SECRET",
+] as const;
 
 /**
  * The validated server environment, including secrets. Importing this module

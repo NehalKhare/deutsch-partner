@@ -380,3 +380,19 @@ describe("when the server refuses", () => {
     ).toBeChecked();
   });
 });
+
+describe("a destination carried from sign-up", () => {
+  it("rides along as a hidden field", () => {
+    const { container } = render(
+      <OnboardingForm action={noop} initialState={idle} next="/billing/checkout?offer=dp_plus_month" />,
+    );
+
+    expect(container.querySelector('input[name="next"]')).toHaveValue("/billing/checkout?offer=dp_plus_month");
+  });
+
+  it("is absent when there is none", () => {
+    const { container } = renderForm();
+
+    expect(container.querySelector('input[name="next"]')).toBeNull();
+  });
+});

@@ -11,7 +11,7 @@ export const metadata = publicPageMetadata(LOGIN_PATH);
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string }>;
+  searchParams: Promise<{ next?: string | string[] }>;
 }) {
   const { next } = await searchParams;
 

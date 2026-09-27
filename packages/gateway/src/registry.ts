@@ -1,5 +1,5 @@
 import type { AppEnv } from "@dp/env/schema";
-import { TIERS, type Tier } from "@dp/domain/tasks";
+import { CHAT_TIER_LADDER, TIERS, type Tier } from "@dp/domain/tasks";
 
 /**
  * The model registry.
@@ -66,11 +66,14 @@ export interface ModelEntry {
 }
 
 /**
- * The tiers that carry chat traffic. OpenRouter serves these and the
- * embedding tier; only speech-to-text and speech go direct to their own
- * provider behind their own interfaces.
+ * The tiers that carry chat traffic, strongest first. OpenRouter serves these
+ * and the embedding tier; only speech-to-text and speech go direct to their
+ * own provider behind their own interfaces.
+ *
+ * The domain's ladder, not a copy of it: the routing table's rule that a plan
+ * may only move a task down is measured on the same rungs degradation walks.
  */
-export const CHAT_TIERS = ["reasoning", "strong", "mid", "cheap", "nano"] as const;
+export const CHAT_TIERS = CHAT_TIER_LADDER;
 
 const DEFAULTS: Readonly<Record<Tier, ModelEntry>> = {
   reasoning: {

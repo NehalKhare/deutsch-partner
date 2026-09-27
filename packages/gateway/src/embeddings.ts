@@ -15,6 +15,7 @@ import {
   type GatewayResult,
 } from "./errors";
 import type { LedgerRow } from "./ledger";
+import type { PlanCode } from "@dp/domain/plans";
 import type { ModelRegistry } from "./registry";
 import { resolveTask } from "./router";
 import { estimateTokens } from "@dp/prompts/tokens";
@@ -128,6 +129,12 @@ export interface EmbeddingContext {
   readonly traceId?: string | null;
   readonly spanId?: string | null;
   readonly userIdHash?: string | null;
+  /**
+   * The learner's plan, so the query a turn embeds spends from the same
+   * per-user allowance as the turn itself (billing-and-plans-spec.md S9).
+   * Absent — ingestion, a shared search — reads the default, as before plans.
+   */
+  readonly plan?: PlanCode;
 }
 
 export interface EmbeddingOutcome {
@@ -255,6 +262,7 @@ export function createEmbeddingGateway(
         snapshots = await deps.budgets.snapshot({
           userIdHash: context.userIdHash ?? null,
           now: now(),
+          ...(context.plan ? { plan: context.plan } : {}),
         });
       } catch (error) {
         logger.error("budget.snapshot_failed", { errorCode: errorCodeFor(error) });
@@ -276,7 +284,7 @@ export function createEmbeddingGateway(
           scope: decision.scope,
           detail: decision.detail,
         });
-        return gatewayFail("budget_denied", decision.detail);
+        return gatewayFail("budget_denied", decision.detail, decision.scope);
       }
 
       const entry = deps.registry.forTier("embedding");

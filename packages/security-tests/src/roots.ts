@@ -39,6 +39,7 @@ const WORKER = "apps/worker";
 const GATEWAY = "packages/gateway/src";
 const VOICE = `${GATEWAY}/voice`;
 const PROMPTS = "packages/prompts/src";
+const BILLING = "packages/billing/src";
 
 export const ROOTS = {
   /** Directories whose TypeScript every boundary rule applies to. */
@@ -73,6 +74,14 @@ export const ROOTS = {
   voiceMock: `${VOICE}/mock.ts`,
   /** Rule 4: prompt text lives here and nowhere else. */
   prompts: PROMPTS,
+
+  /** The only directory that may reach Stripe (billing-and-plans-spec.md S6, S8). */
+  billing: BILLING,
+  /**
+   * The billing doubles: a provider that takes no money and a store that
+   * keeps nothing. Reachable by tests only.
+   */
+  billingDoubles: [`${BILLING}/mock.ts`, `${BILLING}/testing`],
 
   /** The pure layer: Zod schemas and rules, no I/O. */
   domain: "packages/domain/src",

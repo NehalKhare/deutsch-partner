@@ -34,6 +34,7 @@ import type {
   ProviderUsage,
   StreamResponse,
 } from "./transport";
+import type { PlanCode } from "@dp/domain/plans";
 import { webSearchFor, type Tier } from "@dp/domain/tasks";
 import { nullLogger, type Logger } from "@dp/observability/logger";
 
@@ -88,6 +89,14 @@ export interface CallContext {
   /** The per-request euro accumulator for the turn this call belongs to. */
   readonly turn?: TurnBudget;
   readonly prompt?: PromptIdentity;
+  /**
+   * The learner's plan, resolved on the server from entitlement rows. It
+   * decides which euro limit the budget gate reads; routing is the spec's
+   * business. Carried here as well as on the spec because a plan-invariant
+   * task — the evaluator, an extractor — still spends from the plan's budget
+   * while running on the one route every plan shares.
+   */
+  readonly plan?: PlanCode;
 }
 
 export interface CompletionOutcome {
@@ -224,7 +233,12 @@ export function createModelGateway(deps: GatewayDeps): ModelGateway {
         readonly degraded: boolean;
         readonly scopeHit: BudgetScope | null;
       }
-    | { readonly ok: false; readonly failure: GatewayFailure; readonly detail: string }
+    | {
+        readonly ok: false;
+        readonly failure: GatewayFailure;
+        readonly detail: string;
+        readonly budgetScope?: BudgetScope | null;
+      }
   > {
     const parsed = modelCallSpecSchema.safeParse(spec);
     if (!parsed.success) {
@@ -240,6 +254,18 @@ export function createModelGateway(deps: GatewayDeps): ModelGateway {
     }
 
     const valid = parsed.data;
+
+    // A spec routed for one plan and budgeted as another is a bug in the
+    // caller, and what it would cost is a free learner spending premium's
+    // allowance. Refused like any other malformed spec: before anything runs.
+    if (valid.plan && context.plan && valid.plan !== context.plan) {
+      return {
+        ok: false,
+        failure: "invalid_spec",
+        detail: `the spec is routed for the ${valid.plan} plan and the call is budgeted as ${context.plan}`,
+      };
+    }
+    const plan = context.plan ?? valid.plan;
 
     const withinCeiling = preflight(valid, prompt.inputTokens);
     if (!withinCeiling.ok) {
@@ -262,6 +288,7 @@ export function createModelGateway(deps: GatewayDeps): ModelGateway {
       snapshots = await deps.budgets.snapshot({
         userIdHash: context.userIdHash,
         now: now(),
+        ...(plan ? { plan } : {}),
       });
     } catch (error) {
       logger.error("budget.snapshot_failed", { errorCode: errorCodeFor(error) });
@@ -280,11 +307,17 @@ export function createModelGateway(deps: GatewayDeps): ModelGateway {
         audit: true,
         task: valid.task,
         scope: decision.scope,
+        plan: plan ?? null,
         userIdHash: context.userIdHash,
         requestId: context.requestId,
         detail: decision.detail,
       });
-      return { ok: false, failure: "budget_denied", detail: decision.detail };
+      return {
+        ok: false,
+        failure: "budget_denied",
+        detail: decision.detail,
+        budgetScope: decision.scope,
+      };
     }
 
     if (context.turn && (context.turn.remainingEur() <= 0 || context.turn.wouldExceed(projectedEur))) {
@@ -302,6 +335,7 @@ export function createModelGateway(deps: GatewayDeps): ModelGateway {
         ok: false,
         failure: "budget_denied",
         detail: "this turn has spent its per-request budget",
+        budgetScope: "per_request",
       };
     }
 
@@ -316,7 +350,8 @@ export function createModelGateway(deps: GatewayDeps): ModelGateway {
     const degraded = decision.state === "degrade";
     // Downward only, and only one step. Under budget pressure the cheaper
     // model with a shorter reply is the graceful answer; a silent upgrade
-    // would be the opposite.
+    // would be the opposite. The step is from the spec's tier, which is
+    // already the plan's: a free turn under pressure runs on cheap, not mid.
     const tier = degraded ? (downgradeTier(spec.tier) ?? spec.tier) : spec.tier;
     const effective = degraded
       ? withLoweredOutputCeiling(
@@ -333,6 +368,7 @@ export function createModelGateway(deps: GatewayDeps): ModelGateway {
         scope: decision.scope,
         fromTier: valid.tier,
         toTier: tier,
+        plan: plan ?? null,
         maxOutputTokens: effective.maxOutputTokens,
         detail: decision.detail,
       });
@@ -482,7 +518,9 @@ export function createModelGateway(deps: GatewayDeps): ModelGateway {
   return {
     async complete(spec, prompt, context) {
       const admitted = await admit(spec, prompt, context);
-      if (!admitted.ok) return gatewayFail(admitted.failure, admitted.detail);
+      if (!admitted.ok) {
+        return gatewayFail(admitted.failure, admitted.detail, admitted.budgetScope);
+      }
 
       let lastFailure: GatewayFailure = "provider_error";
       let lastDetail = "no provider attempt was made";
@@ -552,7 +590,9 @@ export function createModelGateway(deps: GatewayDeps): ModelGateway {
 
     async stream(spec, prompt, context) {
       const admitted = await admit(spec, prompt, context);
-      if (!admitted.ok) return gatewayFail(admitted.failure, admitted.detail);
+      if (!admitted.ok) {
+        return gatewayFail(admitted.failure, admitted.detail, admitted.budgetScope);
+      }
 
       const plan = admitted;
 

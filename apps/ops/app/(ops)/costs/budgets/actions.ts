@@ -91,7 +91,8 @@ export async function saveBudgetLimitAction(
     audit: true,
     userIdHash: operator,
     scope: saved.data.after.scope,
-    // A learner's pseudonym when this is an override. Never an id.
+    // A learner's pseudonym for an override, 'plan:<code>' for a plan's
+    // default, null for a scope's. Never an id.
     scopeKey: saved.data.after.scopeKey,
     before: auditable(saved.data.before),
     after: auditable(saved.data.after),

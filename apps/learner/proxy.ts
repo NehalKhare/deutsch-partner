@@ -23,7 +23,9 @@ export const config = {
   // asks for. Without this the guard would also intercept CSS, JS and images;
   // and a session refresh — a round trip to Supabase — on every robots.txt
   // fetch is a round trip spent on a visitor who has no session to refresh.
+  // Stripe's webhook is the same case: a server calling a server, whose
+  // signature is its authentication, with no cookie to refresh or write.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|api/health|(?:robots\\.txt|sitemap\\.xml|manifest\\.webmanifest|llms\\.txt|opengraph-image|twitter-image|apple-icon|icon)$|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|woff2?)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/health|api/billing/webhook$|(?:robots\\.txt|sitemap\\.xml|manifest\\.webmanifest|llms\\.txt|opengraph-image|twitter-image|apple-icon|icon)$|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|woff2?)$).*)",
   ],
 };

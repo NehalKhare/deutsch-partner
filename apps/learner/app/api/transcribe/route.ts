@@ -1,5 +1,6 @@
 import { getAuthenticatedUserId } from "@/lib/auth/current-user";
 import { createVoiceProviders, pseudonymFor } from "@/lib/api/composition";
+import { consumeQuota } from "@/lib/api/quota";
 import { limiterFor } from "@/lib/api/rate-limit";
 import {
   MAX_AUDIO_BYTES,
@@ -8,6 +9,8 @@ import {
   voiceErrorResponse,
   type VoiceFailure,
 } from "@/lib/api/voice";
+import { planForRequest } from "@/lib/billing/entitlement";
+import { planRefusalBody, retryAfterSeconds, upgradeOffered } from "@/lib/billing/refusal";
 
 /**
  * POST /api/transcribe
@@ -34,11 +37,26 @@ function refuse(failure: VoiceFailure, headers: HeadersInit = {}): Response {
   return json({ error: failure, message }, status, headers);
 }
 
+/** A plan's refusal: the upgrade prompt's body, and when the window reopens. */
+function refuseForPlan(
+  failure: "plan_required" | "quota_exhausted",
+  resetAt: Date | null,
+  upgrade: boolean,
+): Response {
+  const { status, message } = voiceErrorResponse(failure);
+  return json(
+    planRefusalBody(failure, message, { resetAt, upgrade }),
+    status,
+    resetAt ? { "retry-after": retryAfterSeconds(resetAt) } : {},
+  );
+}
+
 export async function POST(request: Request): Promise<Response> {
   const learnerId = await getAuthenticatedUserId();
   if (!learnerId) return refuse("unauthenticated");
 
-  const decision = await limiterFor("transcribe").check(pseudonymFor(learnerId));
+  const userIdHash = pseudonymFor(learnerId);
+  const decision = await limiterFor("transcribe").check(userIdHash);
   if (!decision.allowed) {
     return refuse("rate_limited", {
       "retry-after": String(
@@ -66,6 +84,11 @@ export async function POST(request: Request): Promise<Response> {
   }
   if (file.size > MAX_AUDIO_BYTES) return refuse("audio_too_large");
 
+  // The plan, from the learner's own rows. One transcription is counted
+  // against its daily allowance, and only once the clip has passed every
+  // check of its own: a recording in a format nobody reads has used nothing.
+  const { plan, readable } = await planForRequest(learnerId);
+
   const result = await handleTranscription(
     {
       audio: new Uint8Array(await file.arrayBuffer()),
@@ -73,9 +96,12 @@ export async function POST(request: Request): Promise<Response> {
       durationMs: Math.round(durationMs),
     },
     createVoiceProviders()?.speechToText ?? null,
+    () => consumeQuota(plan, "transcriptions", userIdHash),
   );
 
-  return result.ok
-    ? json({ text: result.data.text }, 200, { "cache-control": "no-store" })
-    : refuse(result.error);
+  if (result.ok) return json({ text: result.data.text }, 200, { "cache-control": "no-store" });
+  if (result.error === "plan_required" || result.error === "quota_exhausted") {
+    return refuseForPlan(result.error, result.resetAt ?? null, upgradeOffered(plan, readable));
+  }
+  return refuse(result.error);
 }

@@ -31,7 +31,9 @@ test("sitemap.xml lists the public pages and nothing behind sign-in", async ({ r
   const body = await response.text();
   expect(body).toContain(`<loc>${baseURL}/</loc>`);
   expect(body).toContain(`<loc>${baseURL}/auth/sign-up</loc>`);
+  expect(body).toContain(`<loc>${baseURL}/pricing</loc>`);
   expect(body).not.toContain("/dashboard");
+  expect(body).not.toContain("/billing");
   expect(body).not.toContain("/chat");
 });
 

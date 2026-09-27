@@ -4,6 +4,7 @@ import {
   resetTrainerCoachingAction,
   updateSettingsAction,
 } from "@/app/(app)/settings/actions";
+import { PlanStrip } from "@/components/settings/plan-strip";
 import { SettingsForm } from "@/components/settings/settings-form";
 import { TrainerCoachingSettings } from "@/components/settings/trainer-coaching";
 import { VoiceSourceSetting } from "@/components/settings/voice-source";
@@ -12,6 +13,7 @@ import { TUTOR } from "@dp/domain/tutor";
 import { INITIAL_SETTINGS_STATE } from "@/lib/settings/input";
 import { getMiniLevel } from "@dp/learning/mini-levels";
 import { requireAuthenticatedUserId } from "@/lib/auth/current-user";
+import { currentBilling } from "@/lib/billing/entitlement";
 import { cn } from "@dp/ui/utils";
 import { createLearnerRepository } from "@dp/db/learner-repository";
 import { createTrainerCoachingRepository } from "@dp/db/trainer-coaching-repository";
@@ -31,8 +33,9 @@ const panel = "flex flex-col gap-2.5 rounded-2xl border border-edge/70 bg-panel/
  *
  * Everything the tutor is told about this learner, editable in one place —
  * plus the doors that belong near it: the level (which lives on the
- * curriculum page, where moving means something), and for operators, the AI
- * spend dashboard.
+ * curriculum page, where moving means something), the plan (which lives on
+ * Plan & billing, where it is paid for), and for operators, the AI spend
+ * dashboard.
  *
  * The operator section renders only for operators. A locked door with a label
  * on it tells everyone else there is a room worth finding.
@@ -43,10 +46,12 @@ export default async function SettingsPage() {
   const learners = createLearnerRepository(supabase);
   const coaching = createTrainerCoachingRepository(supabase);
 
-  const [profile, state, coached] = await Promise.all([
+  const [profile, state, coached, billing] = await Promise.all([
     learners.getProfile(learnerId),
     learners.getState(learnerId),
     coaching.getProfile(learnerId),
+    // Never fails: an unreadable plan is stated as unreadable, not as Free.
+    currentBilling(learnerId),
   ]);
 
   if (!profile.ok) {
@@ -99,6 +104,8 @@ export default async function SettingsPage() {
           Change on the curriculum →
         </Link>
       </section>
+
+      <PlanStrip standing={billing} />
 
       <section aria-labelledby="profile-heading" className="flex flex-col gap-2">
         <h2 id="profile-heading" className={sectionLabel}>

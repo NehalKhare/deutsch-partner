@@ -66,6 +66,18 @@ export const RATE_LIMITS = {
   // reconnects on its own when one closes. A read of two small tables a
   // second, so the quota is about a misbehaving client and not about cost.
   product_ops_events: { limit: 30, windowMs: 60_000 },
+  // Placing an order, starting the trial, opening the Customer Portal: each
+  // is a call to Stripe with a customer behind it. Five a minute is more
+  // than anyone paying needs and fewer than a script testing stolen cards
+  // would like (billing-and-plans-spec.md S6).
+  billing: { limit: 5, windowMs: 60_000 },
+  // Trial starts, per day. What holds the trial to one is the order record
+  // (billing_open_trial_checkout, under a per-learner lock): one trial
+  // checkout open at a time, for the 35 minutes its session lives, and none
+  // once one completed. This only bounds how many Stripe sessions a learner
+  // who keeps abandoning Stripe's page can open in a day — three rather than
+  // one, so abandoning it once is not a day-long lockout.
+  billing_trial: { limit: 3, windowMs: 86_400_000 },
 } as const satisfies Record<string, RateLimitRule>;
 
 export type RateLimitScope = keyof typeof RATE_LIMITS;
@@ -79,8 +91,11 @@ const limiters = new Map<RateLimitScope, RateLimiter>();
  * deployment. The in-memory window is for a process that has none — a
  * laptop with no project linked, the unit tests — and production refuses it
  * outright rather than quietly running with a quota that is per instance.
+ *
+ * Exported for the daily plan quotas (lib/api/quota.ts), which are the same
+ * mechanism over a longer window and must get exactly the same backing.
  */
-function createLimiter(scope: RateLimitScope, rule: RateLimitRule): RateLimiter {
+export function createLimiter(scope: string, rule: RateLimitRule): RateLimiter {
   const env = serverEnv();
   if (env.SUPABASE_SECRET_KEY === undefined) {
     if (env.NODE_ENV === "production") {

@@ -297,6 +297,88 @@ describe("parseEnv", () => {
     });
   });
 
+  describe("Stripe", () => {
+    // Hosted Checkout needs no publishable key, so there are two secrets and
+    // a flag, and all three are the learner app's alone
+    // (billing-and-plans-spec.md S12).
+    const SECRET_KEY = "sk_test_51AbcDEFghiJKLmno";
+    const WEBHOOK_SECRET = "whsec_AbcDEFghiJKLmno123";
+
+    it("is off by default, which is payments switched off rather than an error", () => {
+      const env = parseEnv({});
+
+      expect(env.STRIPE_SECRET_KEY).toBeUndefined();
+      expect(env.STRIPE_WEBHOOK_SECRET).toBeUndefined();
+      expect(env.STRIPE_AUTOMATIC_TAX).toBe(false);
+    });
+
+    it("is not required in production, because payments ship switched off", () => {
+      expect(() => parseEnv(productionEnv())).not.toThrow();
+    });
+
+    it.each([
+      ["a test secret key", "sk_test_51AbcDEFghiJKLmno"],
+      ["a live secret key", "sk_live_51AbcDEFghiJKLmno"],
+      ["a restricted test key", "rk_test_51AbcDEFghiJKLmno"],
+      ["a restricted live key", "rk_live_51AbcDEFghiJKLmno"],
+    ])("accepts %s with its webhook secret", (_label, key) => {
+      const env = parseEnv({ STRIPE_SECRET_KEY: key, STRIPE_WEBHOOK_SECRET: WEBHOOK_SECRET });
+
+      expect(env.STRIPE_SECRET_KEY).toBe(key);
+      expect(env.STRIPE_WEBHOOK_SECRET).toBe(WEBHOOK_SECRET);
+    });
+
+    it.each([
+      ["a publishable key", "pk_test_51AbcDEFghiJKLmno"],
+      ["a webhook secret", "whsec_AbcDEFghiJKLmno123"],
+      ["a key with no mode", "sk_51AbcDEFghiJKLmno"],
+      ["something else entirely", "not-a-stripe-key-at-all"],
+    ])("rejects %s in the secret key slot, without echoing it", (_label, value) => {
+      const source = { STRIPE_SECRET_KEY: value, STRIPE_WEBHOOK_SECRET: WEBHOOK_SECRET };
+
+      expect(() => parseEnv(source)).toThrow(/STRIPE_SECRET_KEY/);
+      try {
+        parseEnv(source);
+      } catch (error) {
+        expect((error as EnvValidationError).message).not.toContain(value);
+      }
+    });
+
+    it("rejects anything but a webhook secret in the webhook slot, without echoing it", () => {
+      const source = { STRIPE_SECRET_KEY: SECRET_KEY, STRIPE_WEBHOOK_SECRET: SECRET_KEY };
+
+      expect(() => parseEnv(source)).toThrow(/STRIPE_WEBHOOK_SECRET/);
+      try {
+        parseEnv(source);
+      } catch (error) {
+        expect((error as EnvValidationError).message).not.toContain(SECRET_KEY);
+      }
+    });
+
+    it("refuses a secret key with no webhook secret, because nothing could grant a plan", () => {
+      expect(() => parseEnv({ STRIPE_SECRET_KEY: SECRET_KEY })).toThrow(/STRIPE_WEBHOOK_SECRET/);
+    });
+
+    it("refuses a webhook secret with no secret key, because nothing could read what it announces", () => {
+      expect(() => parseEnv({ STRIPE_WEBHOOK_SECRET: WEBHOOK_SECRET })).toThrow(/STRIPE_SECRET_KEY/);
+    });
+
+    it.each(["true", "1"])("reads automatic tax %s as on", (value) => {
+      expect(parseEnv({ STRIPE_AUTOMATIC_TAX: value }).STRIPE_AUTOMATIC_TAX).toBe(true);
+    });
+
+    it("rejects an automatic-tax value that is not a boolean word", () => {
+      expect(() => parseEnv({ STRIPE_AUTOMATIC_TAX: "yes" })).toThrow(/STRIPE_AUTOMATIC_TAX/);
+    });
+
+    it("counts both secrets among the server-only keys, and the flag among neither", () => {
+      expect(SERVER_ENV_KEYS).toContain("STRIPE_SECRET_KEY");
+      expect(SERVER_ENV_KEYS).toContain("STRIPE_WEBHOOK_SECRET");
+      expect(SERVER_ENV_KEYS).not.toContain("STRIPE_AUTOMATIC_TAX");
+      expect(PUBLIC_ENV_KEYS.some((key) => key.includes("STRIPE"))).toBe(false);
+    });
+  });
+
   describe("blank values", () => {
     // A `KEY=` line in a .env file arrives as "", and it means "not set" —
     // a placeholder must never validate as content or fail as too short.

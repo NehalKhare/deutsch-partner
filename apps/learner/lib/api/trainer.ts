@@ -10,6 +10,7 @@ import {
   coveredSubjectsSchema,
   pinnedAgendaSchema,
 } from "@dp/domain/trainer-session";
+import { PLAN_CATALOGUE, type PlanCode } from "@dp/domain/plans";
 import { createTurnBudget } from "@dp/gateway/budgeter";
 import { evaluateBudgets, type BudgetSource } from "@dp/gateway/budget-gate";
 import type { ModelGateway } from "@dp/gateway/gateway";
@@ -33,6 +34,7 @@ import {
 } from "@dp/domain/trainer-coaching";
 import { trainerCoachingBlock, trainerPersonalityBlock } from "@dp/prompts/trainer";
 import type { TrainerPersonality } from "@dp/domain/learner";
+import { allowanceRenewsAt, isAllowanceScope } from "@/lib/billing/allowance";
 import type { TrainerAgendaItem } from "@/lib/trainer/agenda";
 import { runTrainerTurn } from "@/lib/trainer/agent";
 import {
@@ -87,6 +89,11 @@ export const TRAINER_ERRORS = [
   "rate_limited",
   "budget_denied",
   "generation_failed",
+  // The plan's three (lib/billing/refusal.ts). Answers rather than faults:
+  // the page shows them as an upgrade prompt and the session stays open.
+  "plan_required",
+  "quota_exhausted",
+  "budget_exhausted",
 ] as const;
 
 export type TrainerError = (typeof TRAINER_ERRORS)[number];
@@ -106,12 +113,21 @@ const RESPONSES: Readonly<Record<TrainerError, { status: number; message: string
     status: 503,
     message: "Your trainer is unavailable right now. Please try again shortly.",
   },
+  plan_required: {
+    status: 402,
+    message: "The Trainer needs a paid plan.",
+  },
+  quota_exhausted: {
+    status: 429,
+    message: "You've used today's Trainer requests.",
+  },
+  budget_exhausted: {
+    status: 429,
+    message: "You've used your AI allowance for now.",
+  },
 };
 
 export const trainerErrorResponse = (error: TrainerError) => RESPONSES[error];
-
-/** The per-request euro ceiling for the whole loop. A bound, not a price. */
-export const TRAINER_MAX_TURN_EUR = 0.05;
 
 /** The post-session miner's own ceiling: the request's budget is already spent. */
 export const TRAINER_MINER_MAX_EUR = 0.01;
@@ -228,7 +244,41 @@ async function readPersonality(
 
 export type TrainerResult =
   | { readonly ok: true; readonly payload: TrainerTurnPayload }
-  | { readonly ok: false; readonly error: TrainerError };
+  | {
+      readonly ok: false;
+      readonly error: TrainerError;
+      /** When a spent allowance or quota reopens, on a plan refusal only; null when nothing does. */
+      readonly resetAt?: Date | null;
+      /** A short wait worth saying, on an outage that is expected to pass. */
+      readonly retryAfterSeconds?: number;
+    };
+
+/**
+ * The day's Trainer request, counted by the route for the plan it resolved,
+ * told whether this request continues a session already under way — which
+ * a quota lets finish rather than cutting off midway (spec S4).
+ */
+export type TrainerAdmission = (session: { readonly continuing: boolean }) => Promise<
+  | { readonly allowed: true }
+  | {
+      readonly allowed: false;
+      readonly refusal: "plan_required" | "quota_exhausted" | "unavailable";
+      readonly resetAt: Date | null;
+    }
+>;
+
+/** How long to suggest waiting when the quota store could not count: a blip, not a day. */
+export const QUOTA_OUTAGE_RETRY_SECONDS = 30;
+
+/**
+ * The per-request euro ceiling for the whole loop — the analyzer, every
+ * invocation and every fallback it walks — from the learner's plan
+ * (billing-and-plans-spec.md S2). A bound, not a price: free's is smaller
+ * because free's loop runs on the mid tier and needs less room.
+ */
+export function trainerTurnBoundFor(plan: PlanCode): number {
+  return PLAN_CATALOGUE[plan].trainerTurnBoundEur;
+}
 
 export async function handleTrainerTurn(
   body: unknown,
@@ -236,8 +286,12 @@ export async function handleTrainerTurn(
     readonly learnerId: string;
     readonly userIdHash: string;
     readonly requestId: string;
+    /** Resolved by the route from entitlement rows — required, so no route forgets it. */
+    readonly plan: PlanCode;
   },
   deps: TrainerDeps,
+  /** Asked once the body parsed and the budget allowed it, before any model call; absent, nothing is counted. */
+  admit?: TrainerAdmission,
 ): Promise<TrainerResult> {
   const logger = deps.logger ?? nullLogger;
   const now = deps.now ?? (() => new Date());
@@ -245,9 +299,12 @@ export async function handleTrainerTurn(
   const parsed = trainerRequestSchema.safeParse(body);
   if (!parsed.success) return { ok: false, error: "invalid_body" };
 
-  // Fail closed before the first model call, not after the sixth.
+  // Fail closed before the first model call, not after the sixth. Read as
+  // the learner's plan, so a per-user scope with no override of its own is
+  // the plan's limit (spec S9).
+  const plan = identity.plan;
   const snapshots = await deps.budgets
-    .snapshot({ userIdHash: identity.userIdHash, now: now() })
+    .snapshot({ userIdHash: identity.userIdHash, now: now(), plan })
     .catch(() => null);
   const decision = evaluateBudgets(snapshots);
   if (decision.state === "deny") {
@@ -256,8 +313,14 @@ export async function handleTrainerTurn(
       requestId: identity.requestId,
       userIdHash: identity.userIdHash,
       scope: decision.scope,
+      plan,
     });
-    return { ok: false, error: "budget_denied" };
+    // The learner's own allowance is told as such, with when it renews. An
+    // unreadable counter or the product's daily ceiling stays the plain
+    // "come back later": no plan answers either.
+    return isAllowanceScope(decision.scope)
+      ? { ok: false, error: "budget_exhausted", resetAt: allowanceRenewsAt(decision.scope, now()) }
+      : { ok: false, error: "budget_denied" };
   }
   if (decision.state !== "allow") {
     logger.warn("trainer.budget_pressure", {
@@ -268,10 +331,27 @@ export async function handleTrainerTurn(
     });
   }
 
-  const turn = createTurnBudget(TRAINER_MAX_TURN_EUR);
+  // The day's quota, last of the checks and before the first call. A request
+  // carrying the agenda the session opened with, or what it has covered,
+  // continues a session, and a spent day does not cut that session off.
+  if (admit) {
+    const continuing = parsed.data.agenda !== undefined || parsed.data.covered.length > 0;
+    const admission = await admit({ continuing });
+    if (!admission.allowed) {
+      if (admission.refusal === "unavailable") {
+        return { ok: false, error: "generation_failed", retryAfterSeconds: QUOTA_OUTAGE_RETRY_SECONDS };
+      }
+      return { ok: false, error: admission.refusal, resetAt: admission.resetAt };
+    }
+  }
+
+  const turn = createTurnBudget(trainerTurnBoundFor(plan));
+  // The plan, never a tier: the ladder resolves trainer.session's tier and
+  // ceilings for it from the routing table.
   const ladder = deps.createModels({
     requestId: identity.requestId,
     userIdHash: identity.userIdHash,
+    plan,
     turn,
     prompt: {
       name: TRAINER_PROMPT_NAME,
@@ -301,6 +381,7 @@ export async function handleTrainerTurn(
     pinned: parsed.data.agenda?.map((item) => item.subject),
     userIdHash: identity.userIdHash,
     requestId: identity.requestId,
+    plan,
     vocabulary: deps.vocabulary,
     errors: deps.errors,
     performance: deps.performance,
@@ -341,6 +422,9 @@ export async function handleTrainerTurn(
         requestId: identity.requestId,
         userIdHash: identity.userIdHash,
         turn,
+        // The analyzer's route is the same on every plan (spec S4); its
+        // spend is read against the learner's allowance like the loop's.
+        plan,
       },
     );
     if (analyzed.status === "analyzed") {
@@ -422,6 +506,7 @@ export async function handleTrainerTurn(
             learnerId: identity.learnerId,
             requestId: identity.requestId,
             userIdHash: identity.userIdHash,
+            plan,
             budget: createTurnBudget(TRAINER_MINER_MAX_EUR),
             logger,
             now,

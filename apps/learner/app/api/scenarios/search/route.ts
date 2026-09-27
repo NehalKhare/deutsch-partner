@@ -7,6 +7,7 @@ import {
 } from "@/lib/api/scenarios";
 import { createScenarioSearch, pseudonymFor } from "@/lib/api/composition";
 import { limiterFor } from "@/lib/api/rate-limit";
+import { planForRequest } from "@/lib/billing/entitlement";
 
 /**
  * POST /api/scenarios/search
@@ -61,8 +62,13 @@ export async function POST(request: Request): Promise<Response> {
     return json({ error: "invalid_body", message }, status);
   }
 
+  // 3. The plan, from the learner's own entitlement rows: the embedding is
+  //    charged to their allowance, which their plan sets. Nothing is gated
+  //    by it — searching comprehension scenarios is open on every plan.
+  const { plan } = await planForRequest(learnerId);
+
   const { deps } = await createScenarioSearch();
-  const result = await handleScenarioSearch(body, { userIdHash, requestId }, deps);
+  const result = await handleScenarioSearch(body, { userIdHash, requestId, plan }, deps);
 
   if (!result.ok) {
     const { status, message } = scenarioErrorResponse(result.error);

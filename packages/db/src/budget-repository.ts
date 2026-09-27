@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import {
+  budgetScopeKeySchema,
   budgetScopeSchema,
   enforcedBudgetScopeSchema,
   eurAmountSchema,
@@ -108,6 +109,7 @@ const changeSchema = z.object({
   after: limitRowSchema,
 });
 
+/** Only a learner's override is removed; a plan's default is lowered, never removed. */
 const overrideKeySchema = z.object({
   scope: z.enum(PER_USER_BUDGET_SCOPES),
   scopeKey: userIdHashSchema,
@@ -147,7 +149,8 @@ export function createBudgetRepository(client: DatabaseClient): BudgetRepository
         input,
         z.object({
           scope: enforcedBudgetScopeSchema,
-          scopeKey: userIdHashSchema.nullable(),
+          // A learner's pseudonym or a plan; set_budget_limit checks both again.
+          scopeKey: budgetScopeKeySchema.nullable(),
           limitEur: eurAmountSchema,
           warnPct: z.string().regex(/^(0\.\d{1,3}|1(\.0{1,3})?)$/),
           degradePct: z.string().regex(/^(0\.\d{1,3}|1(\.0{1,3})?)$/),

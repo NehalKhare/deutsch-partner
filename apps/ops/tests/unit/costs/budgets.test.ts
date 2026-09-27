@@ -59,6 +59,40 @@ describe("the budget board", () => {
     expect(board.overrides.map((row) => row.id)).toEqual([3]);
   });
 
+  it("sets a plan's default apart from learners' overrides, in plan order", () => {
+    // billing-and-plans-spec.md S9: a plan's row is keyed 'plan:<code>' in the
+    // same column as a learner's pseudonym. It is a default for everyone on
+    // the plan, not one learner's override.
+    const board = budgetBoard(
+      overview({
+        limits: [
+          limit({ id: 2, scope: "per_user_monthly", limitEur: 10 }),
+          limit({ id: 3, scope: "per_user_monthly", scopeKey: HASH, limitEur: 20 }),
+          limit({ id: 4, scope: "per_user_monthly", scopeKey: "plan:premium", limitEur: 9 }),
+          limit({ id: 5, scope: "per_user_monthly", scopeKey: "plan:free", limitEur: 1 }),
+          limit({ id: 6, scope: "per_user_daily", scopeKey: "plan:free", limitEur: 0.1 }),
+        ],
+      }),
+    );
+
+    expect(board.overrides.map((row) => row.id)).toEqual([3]);
+    expect(board.plans.map((row) => [row.plan, row.limit.scope, row.limit.id])).toEqual([
+      ["free", "per_user_daily", 6],
+      ["free", "per_user_monthly", 5],
+      ["premium", "per_user_monthly", 4],
+    ]);
+    expect(board.scopes[2]?.limit?.id).toBe(2);
+  });
+
+  it("still calls a scope unlimited when only plans have rows there", () => {
+    // A call that names no plan meets the scope's default and nothing else.
+    const board = budgetBoard(
+      overview({ limits: [limit({ id: 5, scope: "per_user_monthly", scopeKey: "plan:free", limitEur: 1 })] }),
+    );
+
+    expect(board.unlimited).toContain("per_user_monthly");
+  });
+
   it("does not count an inactive default as a limit", () => {
     // Written before this page existed, perhaps; the gate ignores it all the same.
     const board = budgetBoard(overview({ limits: [limit({ active: false })] }));

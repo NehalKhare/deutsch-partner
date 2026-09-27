@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { PLAN_CODES, planCodeSchema, type PlanCode } from "./plans";
+
 /**
  * The euro budgets, as the gateway enforces them and an operator sets them.
  *
@@ -125,6 +127,44 @@ export const percentSchema = z
 /** The ledger's pseudonym for a learner. Never an id, never an email. */
 export const userIdHashSchema = z.string().regex(/^[0-9a-f]{32}$/, "a learner pseudonym");
 
+// --- a plan's own default ------------------------------------------------------
+
+/**
+ * The key of a plan's default for a per-learner scope (billing-and-plans-spec.md
+ * S9). `budget_snapshot` resolves a learner's limit as their own override, then
+ * this row for the plan the call names, then the scope's default.
+ *
+ * A key in the same column as a learner's pseudonym, rather than a scope of its
+ * own, so the gate stays one query and the counters stay keyed by the learner:
+ * a plan bounds each of its learners, not the plan's learners together.
+ */
+export const planBudgetKeySchema = z.templateLiteral(["plan:", planCodeSchema]);
+export type PlanBudgetKey = z.infer<typeof planBudgetKeySchema>;
+
+export const planBudgetKey = (plan: PlanCode): PlanBudgetKey => `plan:${plan}`;
+
+export const PLAN_BUDGET_KEYS: readonly PlanBudgetKey[] = PLAN_CODES.map(planBudgetKey);
+
+export const isPlanBudgetKey = (key: string | null): key is PlanBudgetKey =>
+  planBudgetKeySchema.safeParse(key).success;
+
+/** The plan a key names, or null for a scope's default or a learner's override. */
+export function planForBudgetKey(key: string | null): PlanCode | null {
+  return isPlanBudgetKey(key) ? planCodeSchema.parse(key.slice("plan:".length)) : null;
+}
+
+/**
+ * Everything a limit row may be keyed by: one learner, or one plan. A refined
+ * string rather than a union, so a refusal carries one message the form can
+ * show as it stands instead of whichever branch came closest.
+ */
+export const budgetScopeKeySchema = z
+  .string()
+  .refine(
+    (key) => userIdHashSchema.safeParse(key).success || isPlanBudgetKey(key),
+    "a learner pseudonym or a plan",
+  );
+
 export const budgetLimitInputSchema = z
   .object({
     scope: enforcedBudgetScopeSchema,
@@ -133,7 +173,7 @@ export const budgetLimitInputSchema = z
       .trim()
       .nullable()
       .transform((value) => (value === null || value === "" ? null : value))
-      .pipe(userIdHashSchema.nullable()),
+      .pipe(budgetScopeKeySchema.nullable()),
     limitEur: eurAmountSchema,
     warnPct: percentSchema,
     degradePct: percentSchema,
@@ -144,14 +184,21 @@ export const budgetLimitInputSchema = z
     path: ["warnPct"],
   })
   .refine((input) => input.scopeKey === null || isPerUserScope(input.scope), {
-    // budget_snapshot only ever matches a key against a learner's hash.
-    message: "only a per-learner scope can be overridden for one learner",
+    // budget_snapshot only ever matches a key against a learner's hash or the
+    // plan they are on, and the global scope is nobody's.
+    message: "only a per-learner scope can be overridden for one learner or one plan",
     path: ["scopeKey"],
   })
   .refine((input) => input.active || input.scopeKey !== null, {
     // No row for a scope is no limit at all. Fail closed means a default can be
     // lowered, even to zero, but not switched off from a form.
     message: "a scope's default cannot be switched off; set its limit instead",
+    path: ["active"],
+  })
+  .refine((input) => input.active || !isPlanBudgetKey(input.scopeKey), {
+    // A plan's default is a default too: paused, every learner on the plan
+    // falls through to the scope's default, or to none where it has none.
+    message: "a plan's default cannot be switched off; set its limit instead",
     path: ["active"],
   });
 

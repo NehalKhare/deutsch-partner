@@ -121,6 +121,8 @@ jobs:
           SEO_INDEXING: ${{ env.ENVIRONMENT == 'production' && 'true' || 'false' }}
           SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
           LANGSMITH_TRACING: ${{ vars.LANGSMITH_TRACING || 'false' }}
+          # On once Stripe Tax is registered for this environment. Not a secret.
+          STRIPE_AUTOMATIC_TAX: ${{ vars.STRIPE_AUTOMATIC_TAX || 'false' }}
           GITHUB_REPOSITORY_TARGET: ${{ github.repository }}
         run: |
           set -eu

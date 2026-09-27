@@ -22,6 +22,10 @@ const EXPECTED_TABLES = [
   "ai_run_events",
   "ai_runs",
   "assessments",
+  "billing_checkouts",
+  "billing_customers",
+  "billing_events",
+  "billing_prices",
   "budget_counters",
   "budget_limits",
   "code_changes",
@@ -43,6 +47,7 @@ const EXPECTED_TABLES = [
   "model_invocations",
   "model_pricing_snapshots",
   "ops_jobs",
+  "plan_passes",
   "product_prds",
   "product_proposals",
   "profiles",
@@ -51,6 +56,7 @@ const EXPECTED_TABLES = [
   "rate_limit_buckets",
   "recommendations",
   "scenarios",
+  "subscriptions",
   "trainer_coaching_profiles",
   "trainer_feedback",
   "trainer_mined_sessions",
@@ -144,6 +150,10 @@ describe("indexes", () => {
       "assessments",
       "conversation_threads",
       "level_performances",
+      "billing_customers",
+      "billing_checkouts",
+      "subscriptions",
+      "plan_passes",
     ];
 
     for (const table of owned) {

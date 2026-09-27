@@ -10,6 +10,7 @@ import type {
   GatewayPrompt,
   ModelGateway,
 } from "@dp/gateway/gateway";
+import type { PlanCode } from "@dp/domain/plans";
 import type { TurnBudget } from "@dp/gateway/budgeter";
 import {
   behaviorPolicyFor,
@@ -141,6 +142,11 @@ export interface MineDeps {
   readonly learnerId: string;
   readonly requestId: string;
   readonly userIdHash: string;
+  /**
+   * The learner's plan. Mining's route is the same on every plan (spec S4);
+   * the plan only decides which allowance its spend is read against.
+   */
+  readonly plan?: PlanCode;
   /** A fresh budget of its own: the request's is spent by the time this runs. */
   readonly budget: TurnBudget;
   readonly logger?: Logger;
@@ -251,6 +257,7 @@ export async function mineSession(
       requestId: deps.requestId,
       userIdHash: deps.userIdHash,
       turn: deps.budget,
+      ...(deps.plan ? { plan: deps.plan } : {}),
       prompt: {
         name: entry.name,
         version: entry.version,
