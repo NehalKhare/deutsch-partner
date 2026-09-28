@@ -212,12 +212,17 @@ const ENTRIES: readonly PromptCatalogEntry[] = [
   {
     name: "conversation.turn",
     register: "learner_facing",
-    // Version 6: the tutor is whoever the learner's voice says — Jonas with
-    // the male voice, Alex with the female — and the identity states the
-    // gender outright, so German's Lehrer/Lehrerin comes out right. (Version
-    // 5 marked the reply's teaching: the wrong form in backticks, the
-    // corrected form or a suggested line in bold, at most one bolded line.)
-    version: 6,
+    // Version 7: the conversation is scoped to the current mini-level. The
+    // identity used to say the tutor talks "about what they want to talk
+    // about", which is an instruction to follow the learner off the syllabus;
+    // it now names the mini-level's theme, the purpose lock makes that level
+    // the whole syllabus, the behaviour block carries a redirection protocol
+    // (acknowledge briefly, never scold, bring them back with an easy
+    // question on the theme), and the learner state renders the level's
+    // can-do goals. (Version 6 made the tutor whoever the learner's voice
+    // says — Jonas or Alex — with the gender stated outright; version 5
+    // marked the reply's teaching in backticks and bold.)
+    version: 7,
     task: "conversation.turn",
     tier: routeFor("conversation.turn").tier,
     purpose: "The learner-facing German conversation turn.",
@@ -230,7 +235,7 @@ const ENTRIES: readonly PromptCatalogEntry[] = [
   {
     name: "conversation.repair",
     register: "learner_facing",
-    version: 6,
+    version: 7,
     task: "conversation.repair",
     tier: routeFor("conversation.repair").tier,
     purpose:

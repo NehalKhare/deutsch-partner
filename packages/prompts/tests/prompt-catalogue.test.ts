@@ -339,6 +339,29 @@ describe("the standing safety clauses", () => {
     expect(learnerFacing).toMatch(pattern);
   });
 
+  it("scopes the conversation to the current mini-level, not to whatever the learner raises", () => {
+    // The version-6 identity said the tutor talks "about what they want to
+    // talk about", which is an instruction to follow the learner off the
+    // syllabus. The lesson is the mini-level; this is the sentence-level
+    // guard behind that promise.
+    expect(learnerFacing).not.toMatch(/what they want to talk about/i);
+    expect(learnerFacing).toMatch(/about the theme of their current mini-level/i);
+    expect(learnerFacing).toMatch(/whole syllabus for this conversation/i);
+  });
+
+  it("carries the redirection protocol for anything off the theme", () => {
+    // Acknowledge briefly, never scold, bring them back with an easy
+    // question. Slang is mirrored back clean rather than corrected.
+    for (const cefr of CEFR_LEVELS) {
+      const rendered = buildSystemPrompt(behaviorPolicyFor({ cefr }));
+
+      expect(rendered, cefr).toMatch(/acknowledge it in a few warm words/i);
+      expect(rendered, cefr).toMatch(/bring them back with an easy question on the theme/i);
+      expect(rendered, cefr).toMatch(/never scold/i);
+      expect(rendered, cefr).toMatch(/interests are colour for the theme, not a second topic/i);
+    }
+  });
+
   it("fits in a prefix small enough to pay for on every single turn", () => {
     const prefix = buildSystemPrompt(behaviorPolicyFor({ cefr: "B1" }));
 

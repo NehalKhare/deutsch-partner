@@ -112,6 +112,7 @@ export function learnerContextFor(
     targetGrammar: level.targetGrammar
       .map((key) => GRAMMAR_LABELS[key] ?? key)
       .slice(0, 6),
+    targetFunctions: [...level.conversationFunctions].slice(0, 10),
     dueVocabulary: [...extras.dueVocabulary].slice(0, 12),
     recurringErrors: [...extras.recurringErrors].slice(0, 5),
     justMoved: null,
@@ -332,6 +333,7 @@ async function applyMove(
       targetGrammar: moved.level.targetGrammar
         .map((key) => GRAMMAR_LABELS[key] ?? key)
         .slice(0, 6),
+      targetFunctions: [...moved.level.conversationFunctions].slice(0, 10),
       justMoved: because,
     },
   };

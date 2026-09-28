@@ -63,6 +63,12 @@ const RECORDED: Readonly<Record<string, string>> = {
   // the fingerprints — a promise about the entry's own blocks — are inherited
   // unchanged. That is exactly why the versions had to move by hand: these
   // are behaviour changes the lock cannot see.
+  // Version 7: the conversation is scoped to the current mini-level. The
+  // identity names the level's theme instead of "what they want to talk
+  // about", the purpose lock makes the level the whole syllabus, and the
+  // behaviour block carries the redirection protocol — all three in versioned
+  // blocks, so every one of the twelve hashes moved. The can-do goals that
+  // joined the learner-state block are caller data and outside the lock.
   // Version 6: the tutor is whoever the learner's voice says — Jonas with
   // the male voice, Alex with the female — and the identity block states the
   // gender so German's Lehrer/Lehrerin comes out right. The name is in the
@@ -71,18 +77,18 @@ const RECORDED: Readonly<Record<string, string>> = {
   // 5 marked the reply's teaching — the wrong form in backticks, the
   // corrected form or one suggested line in bold — so mistakes and
   // suggestions render in colour.)
-  "conversation.turn@6/A1/male": "b08fd997",
-  "conversation.turn@6/A1/female": "fc42c153",
-  "conversation.turn@6/A2/male": "17286650",
-  "conversation.turn@6/A2/female": "61397ac4",
-  "conversation.turn@6/B1/male": "2fefb3ef",
-  "conversation.turn@6/B1/female": "c057bee3",
-  "conversation.repair@6/A1/male": "b08fd997",
-  "conversation.repair@6/A1/female": "fc42c153",
-  "conversation.repair@6/A2/male": "17286650",
-  "conversation.repair@6/A2/female": "61397ac4",
-  "conversation.repair@6/B1/male": "2fefb3ef",
-  "conversation.repair@6/B1/female": "c057bee3",
+  "conversation.turn@7/A1/male": "6d0fb761",
+  "conversation.turn@7/A1/female": "d2e542fb",
+  "conversation.turn@7/A2/male": "7f4a81ba",
+  "conversation.turn@7/A2/female": "a0f1fde4",
+  "conversation.turn@7/B1/male": "1f5f4e95",
+  "conversation.turn@7/B1/female": "ec473ab7",
+  "conversation.repair@7/A1/male": "6d0fb761",
+  "conversation.repair@7/A1/female": "d2e542fb",
+  "conversation.repair@7/A2/male": "7f4a81ba",
+  "conversation.repair@7/A2/female": "a0f1fde4",
+  "conversation.repair@7/B1/male": "1f5f4e95",
+  "conversation.repair@7/B1/female": "ec473ab7",
   // Version 5 (evaluation) / version 3 (extraction.errors): the closed error
   // taxonomy gained register_formality — du/Sie and register slips — and the
   // taxonomy renders into both output contracts. (Version 4 fixed the

@@ -71,7 +71,10 @@ const LEARNER_FACING_CAPS: Readonly<Record<BlockId, number>> = {
   safety: 340,
   data_boundary: 140,
   output_contract: 600,
-  behavior_policy: 250,
+  // Raised from 250 when the block gained the redirection protocol: the
+  // level text alone was 150, and a cap that truncates the last rule of a
+  // policy on every call is a behaviour change nobody can see.
+  behavior_policy: 350,
   correction_policy: 200,
   response_policy: 200,
   learner_state: 350,

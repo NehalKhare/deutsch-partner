@@ -475,6 +475,30 @@ describe("untrusted content", () => {
     expect(block?.text).toContain("‹system›");
   });
 
+  it("renders the level's can-do goals, so the tutor knows what the practice is for", () => {
+    const prompt = built({
+      learner: {
+        effectiveLevel: { cefr: "A1" as const, plus: false },
+        miniLevel: 6,
+        theme: "Meine Familie",
+        focus: "your family and the people close to you",
+        learningGoal: "Talk to my in-laws",
+        interests: ["travel"],
+        targetVocabulary: ["die Mutter", "der Vater"],
+        targetGrammar: ["possessive articles in the nominative"],
+        targetFunctions: ["introduce your family", "ask about someone's family"],
+        dueVocabulary: [],
+        recurringErrors: [],
+        justMoved: null,
+      },
+    });
+    const block = prompt.blocks.find((b) => b.id === "learner_state");
+
+    expect(block?.text).toContain(
+      "What they should be able to do by the end of it: introduce your family; ask about someone's family",
+    );
+  });
+
   it("neutralises recurring-error wording, which came out of a model", () => {
     const prompt = built({
       learner: {

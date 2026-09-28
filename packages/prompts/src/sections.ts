@@ -44,7 +44,7 @@ const GENDER_CLAUSE: Readonly<Record<VoiceGender, string>> = {
 function identityFor(tutor: TutorPersona): string {
   return `You are ${tutor.name}, the German tutor in Deutsch Partner, an app
 for English speakers working towards B1. You talk with one learner at a time,
-in German, about what they want to talk about. Your name is ${tutor.name};
+in German, about the theme of their current mini-level. Your name is ${tutor.name};
 never give another. ${GENDER_CLAUSE[tutor.voice]} You are not a general
 assistant and take on no other role.`.replace(/\n/gu, " ");
 }
@@ -149,6 +149,27 @@ const JARGON_TEXT: Readonly<Record<BehaviorPolicy["grammarJargon"], string>> = {
   as_needed: "Use grammatical terms freely where they are the clearest way to say it.",
 };
 
+/**
+ * The scope lock and the redirection protocol.
+ *
+ * The identity says the conversation is about the current mini-level; this
+ * says that level is the whole syllabus and what to do when the learner goes
+ * somewhere else. It lives here and not in the shared safety block because
+ * the Trainer renders that block too, and a review session that walks items
+ * from earlier levels is not scoped to one. Level-independent on purpose: a B1
+ * friend and an A1 parent both bring the learner back, and the sentence cap
+ * in the response policy already decides how long the bringing-back may be.
+ * Nothing here is data — the theme it refers to is rendered in the learner
+ * state block — so the text is versioned with the rest of the policy.
+ */
+const SCOPE = [
+  "Scope:",
+  "- The current mini-level, described below, is the whole syllabus for this conversation. Practise its theme, words and grammar; teach nothing beyond them.",
+  "- Off the theme — another topic, slang, a debate — acknowledge it in a few warm words, do not take it up, and bring them back with an easy question on the theme.",
+  "- Never scold; if their wording was rough, simply use the clean form yourself.",
+  "- Their interests are colour for the theme, not a second topic. A word or rule from this level is on topic.",
+].join("\n");
+
 export function buildBehaviorPolicyBlock(policy: BehaviorPolicy): string {
   return [
     `Level: ${policy.cefr}. Behave as ${policy.persona}.`,
@@ -156,6 +177,7 @@ export function buildBehaviorPolicyBlock(policy: BehaviorPolicy): string {
     ...policy.priorities.map((priority) => `- ${priority}`),
     ENGLISH_SUPPORT_TEXT[policy.englishSupport],
     JARGON_TEXT[policy.grammarJargon],
+    SCOPE,
   ].join("\n");
 }
 
@@ -200,6 +222,14 @@ export const learnerContextSchema = z.strictObject({
   targetVocabulary: z.array(nonEmptyTextSchema(60)).max(12),
   /** Readable grammar labels, not slugs: the model is not joining tables. */
   targetGrammar: z.array(nonEmptyTextSchema(120)).max(6),
+  /**
+   * What the learner should be able to do by the end of this level, as verb
+   * phrases: the curriculum's conversation functions. Words and grammar say
+   * what to practise; these say what the practice is for, which is what the
+   * tutor steers a conversation towards. Optional because the machine-register
+   * callers that borrow this projection have no conversation to steer.
+   */
+  targetFunctions: z.array(nonEmptyTextSchema(120)).max(10).optional(),
   /** Words due for review, worth working in naturally. */
   dueVocabulary: z.array(nonEmptyTextSchema(60)).max(12),
   /** Recurring mistakes, phrased as what to watch for. */
@@ -248,6 +278,7 @@ export function buildLearnerContext(context: LearnerContext): string {
     line("Interested in", context.interests),
     line("Words this level teaches", context.targetVocabulary),
     line("Grammar this level teaches", context.targetGrammar),
+    line("What they should be able to do by the end of it", context.targetFunctions ?? []),
     line("Due for review, work in naturally if you can", context.dueVocabulary),
     line(
       "Keeps getting wrong, watch for these",
