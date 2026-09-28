@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { eyebrow } from "@dp/ui/styles";
+import { betaPill, eyebrow } from "@dp/ui/styles";
 
 import { AlwaysFree } from "@/components/pricing/always-free";
 import { ComparisonTable } from "@/components/pricing/comparison-table";
@@ -51,12 +51,15 @@ export default async function PricingPage() {
         >
           <div className="flex max-w-2xl flex-col gap-3">
             <p className={eyebrow}>Start free. Pay when it earns it.</p>
-            <h1
-              id="pricing-heading"
-              className="font-display text-4xl font-semibold leading-tight tracking-tight md:text-5xl"
-            >
-              Plans and prices
-            </h1>
+            <div className="flex flex-wrap items-center gap-3">
+              <h1
+                id="pricing-heading"
+                className="font-display text-4xl font-semibold leading-tight tracking-tight md:text-5xl"
+              >
+                Plans and prices
+              </h1>
+              <span className={betaPill}>Beta</span>
+            </div>
             <p className="text-lg leading-relaxed text-copy/70">
               Free is a real plan with daily limits, and it never asks for a
               card. Plus and Premium add a stronger tutor, more conversation

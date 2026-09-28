@@ -1,3 +1,4 @@
+import { betaPill } from "@dp/ui/styles";
 import { Wordmark } from "@dp/ui/wordmark";
 import { accountLabel } from "@dp/auth/account";
 
@@ -13,8 +14,11 @@ import { OpsNav, tabBarSpace } from "@/components/ops-nav";
  * spare, which is what the rail was for; the rail had stopped earning the
  * 15rem of width it took from a ten-screen proposal.
  *
- * Mobile first. On a phone the header holds the wordmark and the account, and
- * the rooms move to a tab bar at the foot (OpsNav pins itself there). From
+ * Mobile first. On a phone the header holds the wordmark, the beta pill and
+ * the account, and the rooms move to a tab bar at the foot (OpsNav pins
+ * itself there). The pill stays at every size: "Operations" is a label the
+ * operator can do without on a small screen, whereas that the whole product
+ * is still in beta is worth the room. From
  * `md` up the header is three columns with the outer two equal, so the rooms
  * sit on the true centre however long the account name is. No
  * backdrop-filter or transform on the header: either would become the
@@ -44,6 +48,7 @@ export function OpsShell({ email, signOut, children }: OpsShellProps) {
           <span className="hidden rounded-full border border-brand/40 px-2 py-0.5 font-display text-xs uppercase tracking-wide text-brand sm:inline">
             Operations
           </span>
+          <span className={betaPill}>Beta</span>
         </div>
 
         <OpsNav />

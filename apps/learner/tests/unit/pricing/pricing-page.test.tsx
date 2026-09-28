@@ -45,6 +45,14 @@ describe("/pricing", () => {
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
   });
 
+  it("marks the prices as a beta beside the heading, leaving the heading's name alone", async () => {
+    await renderPage();
+
+    const heading = screen.getByRole("heading", { level: 1 });
+    expect(heading).toHaveAccessibleName("Plans and prices");
+    expect(heading.nextElementSibling).toHaveTextContent("Beta");
+  });
+
   it("never skips a heading level on the way down to a plan's name", async () => {
     await renderPage();
 

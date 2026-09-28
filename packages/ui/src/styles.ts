@@ -76,6 +76,18 @@ export const statPillValue =
   "font-display text-sm font-semibold tabular-nums text-copy";
 
 /**
+ * "Beta", beside the name of something still settling.
+ *
+ * A sibling of the thing it marks rather than a child of it, so a link or a
+ * heading keeps its own name and the pill is read after it. Filled rather than
+ * drawn, so it does not pass for a button, and small enough that it qualifies
+ * a name without competing with it.
+ */
+export const betaPill =
+  "inline-flex shrink-0 items-center rounded-full bg-brand/15 px-2 py-0.5 font-display " +
+  "text-[0.65rem] font-semibold uppercase leading-none tracking-[0.12em] text-brand";
+
+/**
  * A section the reader can fold away.
  *
  * The proposal page carries the whole audit trail — the proposal, its

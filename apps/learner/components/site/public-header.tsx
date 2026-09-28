@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { betaPill } from "@dp/ui/styles";
 import { Wordmark } from "@dp/ui/wordmark";
 
 /**
@@ -11,20 +12,28 @@ import { Wordmark } from "@dp/ui/wordmark";
  * shortcut — the landing page's to its plans, the terms' to the prices — and
  * is left out where it would point at the page it sits on. From `sm` up
  * only: on a phone the wordmark and the two ways in already fill the row,
- * and the plans are a scroll away.
+ * and the plans are a scroll away. A shortcut to something still in beta
+ * says so beside it, as every other link to it does.
  */
-export function PublicHeader({ shortcut }: { shortcut?: { readonly href: string; readonly label: string } }) {
+export function PublicHeader({
+  shortcut,
+}: {
+  shortcut?: { readonly href: string; readonly label: string; readonly beta?: boolean };
+}) {
   return (
     <header className="flex items-center justify-between gap-4 border-b border-edge/60 px-6 py-4 md:px-10">
       <Wordmark />
       <nav className="flex items-center gap-4 text-sm sm:gap-5">
         {shortcut ? (
-          <Link
-            href={shortcut.href}
-            className="hidden text-copy/70 underline-offset-4 hover:text-copy hover:underline sm:inline"
-          >
-            {shortcut.label}
-          </Link>
+          <span className="hidden items-center gap-2 sm:flex">
+            <Link
+              href={shortcut.href}
+              className="text-copy/70 underline-offset-4 hover:text-copy hover:underline"
+            >
+              {shortcut.label}
+            </Link>
+            {shortcut.beta ? <span className={betaPill}>Beta</span> : null}
+          </span>
         ) : null}
         <Link
           href="/auth/login"

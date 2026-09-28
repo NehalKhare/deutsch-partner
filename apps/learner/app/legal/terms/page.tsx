@@ -32,7 +32,7 @@ export const metadata: Metadata = {
 export default function TermsPage() {
   return (
     <div className="flex min-h-dvh flex-col bg-ground font-body text-copy">
-      <PublicHeader shortcut={{ href: PRICING_PATH, label: "Pricing" }} />
+      <PublicHeader shortcut={{ href: PRICING_PATH, label: "Pricing", beta: true }} />
 
       <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 px-6 py-12 md:px-10 md:py-16">
         <div className="flex flex-col gap-2">
