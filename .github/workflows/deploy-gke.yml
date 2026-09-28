@@ -1,4 +1,4 @@
-# Build the three containers and deploy them to a GKE Autopilot cluster.
+# Build the two containers and deploy them to a GKE Autopilot cluster.
 #
 # Manual only for now, so it never races deploy-apps.yml, which deploys the
 # same images to Cloud Run. Secrets are never touched here: they are created
@@ -9,7 +9,7 @@
 #   GCP_PROJECT, GCP_REGION                           (Artifact Registry lives here)
 #   GKE_CLUSTER (default dp), GKE_LOCATION (default GCP_REGION)
 #   GKE_STATIC_IP_NAME (default dp-ip)
-#   LEARNER_HOST, OPS_HOST
+#   LEARNER_HOST
 #   NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 #
 # The deployer service account needs roles/artifactregistry.writer on the
@@ -45,7 +45,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        app: [learner, ops, worker]
+        app: [learner, worker]
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -94,7 +94,6 @@ jobs:
         # The same file a person writes by hand from site.env.example.
         env:
           LEARNER_HOST: ${{ vars.LEARNER_HOST }}
-          OPS_HOST: ${{ vars.OPS_HOST }}
           STATIC_IP_NAME: ${{ vars.GKE_STATIC_IP_NAME || 'dp-ip' }}
           SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
@@ -103,10 +102,8 @@ jobs:
           set -eu
           cat > deploy/k8s/overlays/gke/site.env <<EOF
           LEARNER_HOST=${LEARNER_HOST}
-          OPS_HOST=${OPS_HOST}
           STATIC_IP_NAME=${STATIC_IP_NAME}
           LEARNER_IMAGE=${REGISTRY}/dp-learner:${TAG}
-          OPS_IMAGE=${REGISTRY}/dp-ops:${TAG}
           WORKER_IMAGE=${REGISTRY}/dp-worker:${TAG}
           SUPABASE_URL=${SUPABASE_URL}
           SUPABASE_PUBLISHABLE_KEY=${SUPABASE_PUBLISHABLE_KEY}

@@ -1,7 +1,7 @@
-# The three deployables, with nothing cloud-specific in them.
+# The two deployables, with nothing cloud-specific in them.
 #
-# Not applied on its own: an overlay supplies the images, the hostnames and
-# the way traffic reaches the two web apps. See ../README.md.
+# Not applied on its own: an overlay supplies the images, the hostname and
+# the way traffic reaches the learner app. See ../README.md.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
@@ -15,7 +15,6 @@ labels:
 resources:
   - namespace.yaml
   - learner.yaml
-  - ops.yaml
   - worker.yaml
   - hpa.yaml
 
@@ -25,7 +24,5 @@ resources:
 configMapGenerator:
   - name: learner-config
     envs: [config/learner.env]
-  - name: ops-config
-    envs: [config/ops.env]
   - name: worker-config
     envs: [config/worker.env]

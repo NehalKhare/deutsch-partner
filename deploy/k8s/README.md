@@ -7,7 +7,6 @@ Commands are run from the repository root on your Mac.
 ## What you end up with
 
 - **`https://learner.<your-domain>`**: the learner app, which is what your friends use.
-- **`https://ops.<your-domain>`**: the operator app, which only accounts on the allowlist can sign in to.
 - **A worker** running inside the cluster with no public address. It processes background jobs.
 - **Your existing Supabase project** stays the database. Nothing about it moves.
 
@@ -31,11 +30,10 @@ machine: you say what each program needs, and Google finds room for it.
 
 ```
 deploy/k8s/
-├── base/                 the three programs, with nothing Google-specific
+├── base/                 the two programs, with nothing Google-specific
 │   ├── learner.yaml      Deployment + Service for the learner app
-│   ├── ops.yaml          Deployment + Service for the operator app
 │   ├── worker.yaml       Deployment for the queue worker
-│   ├── hpa.yaml          autoscaling for the two web apps
+│   ├── hpa.yaml          autoscaling for the learner app
 │   └── config/*.env      non-secret settings, one file per program
 ├── components/coder/     the optional coding worker, off by default
 └── overlays/gke/         the Google pieces: load balancer, HTTPS, timeouts
@@ -49,10 +47,10 @@ get committed.
 ## What it costs
 
 Kubernetes on Google is billed every hour it runs, whether or not anyone uses
-the app. With the defaults here expect **roughly $80 to $100 a month**:
+the app. With the defaults here expect **roughly $55 to $65 a month**:
 
 - Autopilot bills for the CPU and memory each pod asks for. The defaults ask
-  for about 1.75 vCPU and 4 GiB in total, which is around $70 a month.
+  for about 1 vCPU and 2 GiB in total, which is around $40 a month.
 - The load balancer is around $18 a month.
 - The cluster's own management fee is covered by Google's free tier for one
   Autopilot cluster per billing account.
@@ -154,24 +152,22 @@ Write down the address the second command prints.
 
 ## Step 6. Point your domain at it
 
-At your domain provider, create two **A records** pointing at that address:
+At your domain provider, create one **A record** pointing at that address:
 
 | Name | Type | Value |
 | --- | --- | --- |
 | `learner` | A | the IP from step 5 |
-| `ops` | A | the IP from step 5 |
 
-Check them. It can take a few minutes, and occasionally hours, before both
-answer with your IP:
+Check it. It can take a few minutes, and occasionally hours, before it
+answers with your IP:
 
 ```sh
 dig +short learner.$DOMAIN
-dig +short ops.$DOMAIN
 ```
 
-Google will not issue the HTTPS certificate until both names resolve to the IP.
+Google will not issue the HTTPS certificate until the name resolves to the IP.
 
-> **No domain?** You can use `learner.<ip>.sslip.io` and `ops.<ip>.sslip.io`,
+> **No domain?** You can use `learner.<ip>.sslip.io`,
 > which resolve to the IP without any setup. Google's certificate issuance for
 > shared domains like this is not guaranteed, so treat it as a stopgap and buy
 > a domain for anything you share widely.
@@ -180,19 +176,16 @@ Google will not issue the HTTPS certificate until both names resolve to the IP.
 
 In the Supabase dashboard for your project:
 
-1. **Authentication → URL Configuration.** Set **Site URL** to
-   `https://learner.<your-domain>`. Under **Redirect URLs**, add
-   `https://learner.<your-domain>/**` and `https://ops.<your-domain>/**`.
-2. **Authentication → Multi-Factor.** Make sure **TOTP** is enabled. The
-   operator app requires it.
+**Authentication → URL Configuration.** Set **Site URL** to
+`https://learner.<your-domain>`. Under **Redirect URLs**, add
+`https://learner.<your-domain>/**`.
 
-Without the first step, sign-in emails and redirects send people to the wrong
-place.
+Without this, sign-in emails and redirects send people to the wrong place.
 
 ## Step 8. Build and upload the images
 
-The two web apps have your **public** Supabase URL and publishable key baked in
-when they are built. Both values are safe to share, and they are the same ones in
+The learner app has your **public** Supabase URL and publishable key baked in
+when it is built. Both values are safe to share, and they are the same ones in
 your `apps/learner/.env.local`.
 
 ```sh
@@ -202,14 +195,12 @@ export TAG=v1
 
 gcloud auth configure-docker $REGION-docker.pkg.dev
 
-for APP in learner ops; do
-  docker buildx build --platform linux/amd64 \
-    -f docker/next-app.Dockerfile \
-    --build-arg APP=$APP \
-    --build-arg NEXT_PUBLIC_SUPABASE_URL \
-    --build-arg NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY \
-    -t $REGISTRY/dp-$APP:$TAG --push .
-done
+docker buildx build --platform linux/amd64 \
+  -f docker/next-app.Dockerfile \
+  --build-arg APP=learner \
+  --build-arg NEXT_PUBLIC_SUPABASE_URL \
+  --build-arg NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY \
+  -t $REGISTRY/dp-learner:$TAG --push .
 
 docker buildx build --platform linux/amd64 \
   -f docker/worker.Dockerfile \
@@ -231,8 +222,8 @@ cp deploy/k8s/overlays/gke/site.env.example deploy/k8s/overlays/gke/site.env
 
 Open `deploy/k8s/overlays/gke/site.env` and set:
 
-- `LEARNER_HOST` and `OPS_HOST` to `learner.<your-domain>` and `ops.<your-domain>`.
-- The three `*_IMAGE` lines to what you pushed, for example
+- `LEARNER_HOST` to `learner.<your-domain>`.
+- The two `*_IMAGE` lines to what you pushed, for example
   `europe-west1-docker.pkg.dev/your-project-id/dp/dp-learner:v1`.
 - `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` to the same two values as in
   step 8. The apps check them again when they start.
@@ -241,34 +232,29 @@ Leave `STATIC_IP_NAME=dp-ip` unless you chose a different name in step 5.
 
 ## Step 10. Create the secrets
 
-Each program gets its own secrets and nothing else's. In particular, the
-operator app never receives the AI model key: it would refuse to start if it
-did.
+Each program gets its own secrets and nothing else's.
 
 ```sh
 cd deploy/k8s/overlays/gke/secrets
 cp learner.env.example learner.env
-cp ops.env.example ops.env
 cp worker.env.example worker.env
 cd -
 ```
 
-Fill in the three `.env` files, using the same values as your local
+Fill in the two `.env` files, using the same values as your local
 `.env.local` files:
 
 - `SUPABASE_SECRET_KEY` starts `sb_secret_`.
-- `OPENROUTER_API_KEY` goes in the learner and worker files only.
-- `LOG_PSEUDONYM_SALT` must be **identical in all three**. If you do not have
+- `OPENROUTER_API_KEY` goes in both.
+- `LOG_PSEUDONYM_SALT` must be **identical in both**. If you do not have
   one yet, make one with `openssl rand -hex 32`.
-- `OPERATOR_USER_IDS` goes in the ops file only. It is a comma-separated list
-  of the Supabase user ids allowed into the operator app.
 
 Then create the namespace and hand the secrets to the cluster:
 
 ```sh
 kubectl apply -f deploy/k8s/base/namespace.yaml
 
-for APP in learner ops worker; do
+for APP in learner worker; do
   kubectl -n deutsch-partner create secret generic $APP-secrets \
     --from-env-file=deploy/k8s/overlays/gke/secrets/$APP.env
 done
@@ -303,10 +289,9 @@ When it is active:
 
 ```sh
 curl https://learner.$DOMAIN/api/health
-curl https://ops.$DOMAIN/api/health
 ```
 
-Both should answer `{"ok":true,...}`.
+It should answer `{"ok":true,...}`.
 
 ## Step 13. Check it end to end, then share it
 
@@ -314,9 +299,7 @@ Both should answer `{"ok":true,...}`.
    proves it is reachable from outside your network.
 2. Sign in and have a conversation with the trainer that runs past a minute,
    to confirm long replies are not cut off.
-3. Sign in to `https://ops.<your-domain>` with an allowlisted account and your
-   authenticator app.
-4. Currency conversion starts from a scheduled job in the database that runs
+3. Currency conversion starts from a scheduled job in the database that runs
    every hour. To run it right away:
 
    ```sh
@@ -338,7 +321,7 @@ kubectl -n deutsch-partner get pods
 **Read a program's logs**
 
 ```sh
-kubectl -n deutsch-partner logs deploy/learner -f     # or ops, worker
+kubectl -n deutsch-partner logs deploy/learner -f     # or worker
 ```
 
 **Ship a new version**
@@ -382,11 +365,10 @@ the program that uses it automatically.
 
 **Scaling**
 
-The learner app runs 2 to 10 copies and the operator app 1 to 3. Both scale on
-CPU by themselves. To change the limits, edit `base/hpa.yaml` and apply. With
-only a few friends using it, setting the learner's `minReplicas` to 1 roughly
-halves its share of the bill, at the cost of a brief gap if that one pod
-restarts.
+The learner app runs 1 to 10 copies and scales on CPU by itself. To change the
+limits, edit `base/hpa.yaml` and apply. One copy is the cheapest setting and
+is fine for a few friends; the trade-off is a brief gap if that one pod
+restarts. Raise `minReplicas` to 2 before sharing widely.
 
 ## Stopping and deleting
 
@@ -406,7 +388,10 @@ repository there too if you want nothing left.
 
 The operator app can ask a coding agent to implement a proposal and open a pull
 request. That work runs on a separate worker that clones this repository. It
-is off by default because it needs a GitHub token and costs the most.
+is off by default because it needs a GitHub token and costs the most. The
+operator app itself is not part of this installation, so the coder is only
+useful if you run the operator app elsewhere (Cloud Run, or your Mac) against
+the same database.
 
 1. Create a fine-grained GitHub token for this one repository, with read and
    write access to contents and pull requests.
@@ -441,7 +426,7 @@ with GitHub Actions" first. Then:
 1. Give the deployer service account `roles/container.developer` on the
    project, and `roles/artifactregistry.writer` on the `dp` repository.
 2. In the GitHub repository, under Settings → Environments → production, add
-   these variables: `GCP_PROJECT`, `GCP_REGION`, `LEARNER_HOST`, `OPS_HOST`,
+   these variables: `GCP_PROJECT`, `GCP_REGION`, `LEARNER_HOST`,
    `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
    `GKE_CLUSTER`, `GKE_LOCATION` and `GKE_STATIC_IP_NAME` are optional and
    default to `dp`, your region and `dp-ip`.
@@ -476,9 +461,8 @@ kubectl -n deutsch-partner logs <pod-name> --previous  # logs from the last cras
 | --- | --- |
 | `ImagePullBackOff` or `ErrImagePull` | The image name or tag in `site.env` is wrong, or step 3's permission is missing. Run `docker manifest inspect <image>` to check the image exists. |
 | `exec format error` in the logs | The image was built without `--platform linux/amd64`. Rebuild it with that flag. |
-| `CreateContainerConfigError` | A Secret is missing. Check `kubectl -n deutsch-partner get secrets` shows `learner-secrets`, `ops-secrets` and `worker-secrets`. |
+| `CreateContainerConfigError` | A Secret is missing. Check `kubectl -n deutsch-partner get secrets` shows `learner-secrets` and `worker-secrets`. |
 | `CrashLoopBackOff` | The program started and exited. The logs name the missing or invalid setting, for example `SUPABASE_SECRET_KEY: is required in production`. |
-| The operator app will not start and mentions a model key | `OPENROUTER_API_KEY` got into `ops.env`. Remove it and replace the Secret. |
 | `Pending` for a long time | Autopilot is adding a machine, which can take a few minutes. `describe pod` shows why if it takes longer. |
 | Certificate stuck on `Provisioning` | DNS for one of the two names does not point at the IP yet. Check with `dig +short`. |
 | 502 errors right after deploying | The load balancer's health checks are still warming up. Give it 5 to 10 minutes. |

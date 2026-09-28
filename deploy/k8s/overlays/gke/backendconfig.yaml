@@ -1,4 +1,4 @@
-# How the load balancer talks to the two web apps.
+# How the load balancer talks to the learner app.
 apiVersion: cloud.google.com/v1
 kind: BackendConfig
 metadata:

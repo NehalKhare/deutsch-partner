@@ -102,8 +102,10 @@ wants a machine. A Fly.io equivalent is noted in `deploy/cloudrun/README.md`.
 
 ## Kubernetes on GKE
 
-`deploy/k8s/` runs the same three images on a GKE Autopilot cluster, as an
-alternative to Cloud Run. It is Kustomize: `base/` holds a Deployment per
+`deploy/k8s/` runs the learner and worker images on a GKE Autopilot cluster, as
+an alternative to Cloud Run. The operator app is not deployed there: it is
+Cloud Run only, so a GKE installation has no `/ops` origin and needs no
+`OPERATOR_USER_IDS`. It is Kustomize: `base/` holds a Deployment per
 deployable with the Cloud Run sizing and probe paths, `components/coder/` the
 optional coding worker, and `overlays/gke/` a Google load balancer with a
 managed certificate, a 900 s backend timeout and an HTTP-to-HTTPS redirect.

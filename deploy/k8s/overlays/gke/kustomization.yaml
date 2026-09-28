@@ -40,7 +40,7 @@ configMapGenerator:
 patches:
   # Route the Google load balancer straight to the pods, with the long
   # timeout and health check in backendconfig.yaml.
-  - target: { kind: Service, name: "learner|ops" }
+  - target: { kind: Service, name: learner }
     patch: |-
       - op: add
         path: /metadata/annotations
@@ -54,11 +54,6 @@ replacements:
       - select: { kind: Deployment, name: learner }
         fieldPaths:
           - spec.template.spec.containers.[name=learner].image
-  - source: { kind: ConfigMap, name: site, fieldPath: data.OPS_IMAGE }
-    targets:
-      - select: { kind: Deployment, name: ops }
-        fieldPaths:
-          - spec.template.spec.containers.[name=ops].image
   - source: { kind: ConfigMap, name: site, fieldPath: data.WORKER_IMAGE }
     targets:
       - select: { kind: Deployment, name: worker }
@@ -78,27 +73,15 @@ replacements:
         fieldPaths:
           - data.APP_URL
         options: { delimiter: "//", index: 1 }
-  - source: { kind: ConfigMap, name: site, fieldPath: data.OPS_HOST }
-    targets:
-      - select: { kind: Ingress, name: dp }
-        fieldPaths:
-          - spec.rules.1.host
-      - select: { kind: ManagedCertificate, name: dp-cert }
-        fieldPaths:
-          - spec.domains.1
-      - select: { kind: ConfigMap, name: ops-config }
-        fieldPaths:
-          - data.APP_URL
-        options: { delimiter: "//", index: 1 }
 
   - source: { kind: ConfigMap, name: site, fieldPath: data.SUPABASE_URL }
     targets:
-      - select: { kind: ConfigMap, name: "learner-config|ops-config|worker-config" }
+      - select: { kind: ConfigMap, name: "learner-config|worker-config" }
         fieldPaths:
           - data.NEXT_PUBLIC_SUPABASE_URL
   - source: { kind: ConfigMap, name: site, fieldPath: data.SUPABASE_PUBLISHABLE_KEY }
     targets:
-      - select: { kind: ConfigMap, name: "learner-config|ops-config" }
+      - select: { kind: ConfigMap, name: learner-config }
         fieldPaths:
           - data.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 

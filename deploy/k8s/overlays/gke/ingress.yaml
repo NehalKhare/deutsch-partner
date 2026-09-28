@@ -1,5 +1,5 @@
-# One Google HTTPS load balancer for both web apps, on a reserved static IP.
-# Each hostname reaches its own app. The worker has no route here.
+# One Google HTTPS load balancer for the learner app, on a reserved static IP.
+# The worker has no route here.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -17,8 +17,7 @@ spec:
       name: learner
       port: { name: http }
   rules:
-    # Hosts are replaced with LEARNER_HOST and OPS_HOST from site.env, in this
-    # order.
+    # The host is replaced with LEARNER_HOST from site.env.
     - host: learner.placeholder.invalid
       http:
         paths:
@@ -27,13 +26,4 @@ spec:
             backend:
               service:
                 name: learner
-                port: { name: http }
-    - host: ops.placeholder.invalid
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: ops
                 port: { name: http }

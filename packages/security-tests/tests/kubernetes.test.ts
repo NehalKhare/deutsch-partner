@@ -81,7 +81,6 @@ function references(deployment: Manifest, kind: "secret" | "configMap"): string[
 /** Which Secret and ConfigMap each Deployment may read. A new one is a deliberate edit here. */
 const ALLOWED = {
   learner: { secrets: ["learner-secrets"], configMaps: ["learner-config"] },
-  ops: { secrets: ["ops-secrets"], configMaps: ["ops-config"] },
   worker: { secrets: ["worker-secrets"], configMaps: ["worker-config"] },
   "worker-coder": { secrets: ["coder-secrets", "worker-secrets"], configMaps: ["coder-config"] },
 } as const;
@@ -89,7 +88,6 @@ const ALLOWED = {
 /** Each secret template, and the deployable whose .env.example it must stay inside. */
 const TEMPLATES = {
   learner: "apps/learner/.env.example",
-  ops: "apps/ops/.env.example",
   worker: "apps/worker/.env.example",
   coder: "apps/worker/.env.example",
 } as const;
@@ -148,29 +146,21 @@ describe("the secret templates", () => {
     expect(extra).toEqual([]);
   });
 
-  it("give the operator app no model key and no repository token", () => {
-    const keys = keysOf(template("ops"), true);
-    expect(keys).not.toContain("OPENROUTER_API_KEY");
-    expect(keys).not.toContain("GITHUB_TOKEN");
-    expect(keys).not.toContain("MCP_SERVER_API_KEY");
-    expect(keys).toContain("OPERATOR_USER_IDS");
-  });
-
-  it("give the allowlist to the operator app alone", () => {
+  it("give the operator allowlist to nobody, since the operator app is not deployed here", () => {
     for (const name of ["learner", "worker", "coder"] as const) {
       expect(keysOf(template(name), true), name).not.toContain("OPERATOR_USER_IDS");
     }
   });
 
   it("give the repository token to the coder alone", () => {
-    for (const name of ["learner", "ops", "worker"] as const) {
+    for (const name of ["learner", "worker"] as const) {
       expect(keysOf(template(name), true), name).not.toContain("GITHUB_TOKEN");
     }
     expect(keysOf(template("coder"))).toContain("GITHUB_TOKEN");
   });
 
   it("carry the salt for every deployable, because pseudonyms must join", () => {
-    for (const name of ["learner", "ops", "worker"] as const) {
+    for (const name of ["learner", "worker"] as const) {
       expect(keysOf(template(name)), name).toContain("LOG_PSEUDONYM_SALT");
     }
   });
@@ -210,7 +200,7 @@ describe("the settings files", () => {
 
   it("run every app in production mode, where the env schemas require their secrets", () => {
     const configs = settingsFiles().filter((file) => /\/(config|components\/coder)\/[^/]+\.env$/.test(file.path));
-    expect(configs.length).toBeGreaterThanOrEqual(4);
+    expect(configs.length).toBeGreaterThanOrEqual(3);
     for (const file of configs) {
       expect(envEntries(file.source), file.path).toContainEqual({ key: "NODE_ENV", value: "production" });
     }
