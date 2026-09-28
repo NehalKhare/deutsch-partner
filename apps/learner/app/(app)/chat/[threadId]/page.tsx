@@ -9,6 +9,9 @@ import { createLearnerRepository } from "@dp/db/learner-repository";
 import { createPerformanceRepository } from "@dp/db/performance-repository";
 import { createScenarioRepository } from "@dp/db/scenario-repository";
 import { createServerSupabaseClient } from "@/lib/supabase/server-client";
+import { isSceneMode } from "@dp/domain/conversation";
+import type { Scenario } from "@dp/domain/scenario";
+import type { ScenarioRepository } from "@dp/db/scenario-repository";
 import type { DatabaseClient } from "@dp/db/types";
 
 export const metadata = { title: "Conversation" };
@@ -62,24 +65,34 @@ export default async function ThreadPage({
   // them back here, and this page has to say so from the first paint.
   const miniLevel = thread.data.miniLevel;
 
+  // A scenario thread is a scene beside the path, not a place on it: no
+  // tally is read, because nothing said in it is counted, and the page says
+  // "roleplay" or "reading" where a lesson says its level.
+  const scene = isSceneMode(thread.data.mode)
+    ? { mode: thread.data.mode, title: thread.data.title }
+    : null;
+
   // That level's stored tally, so the mastery strip resumes where this level
   // actually is rather than at zero. Read as the learner, RLS-scoped like the
   // rest; if it fails the strip starts empty — a smaller loss than no page.
-  const tally = await createPerformanceRepository(supabase).getForLevel(
-    learnerId,
-    miniLevel,
-  );
+  const tally = scene
+    ? null
+    : await createPerformanceRepository(supabase).getForLevel(learnerId, miniLevel);
 
   // A scenario opens the scene: a dialogue's roles and opening line, or a
   // comprehension's passage, arrive as the tutor's first message — no hidden
   // instruction, and the learner sees exactly what the tutor was given. The
-  // repository validates the slug, so a malformed or unknown one simply seeds
-  // nothing and the thread still works as a plain conversation.
-  const scenario =
-    typeof scenarioSlug === "string" && scenarioSlug.length > 0
-      ? await createScenarioRepository(supabase).getBySlug(scenarioSlug)
-      : null;
-  const seed = scenario?.ok ? scenarioSeed(scenario.data) : null;
+  // slug rides the URL when the thread is first opened; a scene thread
+  // reopened from a list has no slug, so the scenario is found again by the
+  // thread's title — a scene without its seed is a tutor told a scene stands
+  // that is nowhere to be seen. A malformed or unknown slug seeds nothing and
+  // the thread still works as a plain conversation.
+  const scenario = await findScenario(
+    createScenarioRepository(supabase),
+    typeof scenarioSlug === "string" ? scenarioSlug : "",
+    scene?.title ?? null,
+  );
+  const seed = scenario ? scenarioSeed(scenario) : null;
 
   return (
     <main className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col px-6 pt-6 md:px-10">
@@ -93,10 +106,11 @@ export default async function ThreadPage({
         miniLevel={miniLevel}
         theme={getMiniLevel(miniLevel).theme}
         initialTally={
-          tally.ok && tally.data
+          tally?.ok && tally.data
             ? { turns: tally.data.turns, strongTurns: tally.data.strongTurns }
             : undefined
         }
+        scene={scene ?? undefined}
         // The thread's own level, so a reply is read out at the pace the
         // learner is being taught at rather than at a default.
         cefr={thread.data.cefr}
@@ -110,4 +124,28 @@ export default async function ThreadPage({
       />
     </main>
   );
+}
+
+/**
+ * The scenario behind a thread: by the slug the URL carries on first open,
+ * else by the title a scene thread was named after. Null for a lesson, and
+ * for a scene whose scenario is no longer in the corpus.
+ */
+async function findScenario(
+  scenarios: ScenarioRepository,
+  slug: string,
+  sceneTitle: string | null,
+): Promise<Scenario | null> {
+  if (slug.length > 0) {
+    const bySlug = await scenarios.getBySlug(slug);
+    if (bySlug.ok) return bySlug.data;
+  }
+  if (sceneTitle === null) return null;
+
+  const listed = await scenarios.list();
+  const match = listed.ok ? listed.data.find((entry) => entry.title === sceneTitle) : null;
+  if (!match) return null;
+
+  const byTitle = await scenarios.getBySlug(match.slug);
+  return byTitle.ok ? byTitle.data : null;
 }

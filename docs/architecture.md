@@ -83,6 +83,20 @@ four layers in order:
 | 3 | Counts tokens as they stream and aborts at the ceiling even if the provider ignores layer 2 | `stream-guard.ts` |
 | 4 | Checks euro budgets before dispatch and fails closed | `budget-gate.ts` |
 
+The output ceiling is what the provider counts, and a reasoning model counts
+its thinking inside it. Three things follow. Every tier whose model reasons
+carries a reasoning effort in the registry, and the routing table may bound a
+task tighter than its tier: the tutor's turn and its repair run at "minimal",
+because three to eight sentences of German need no scratchpad. The provider
+is asked for the visible ceiling plus a reserve sized to that effort, while
+the stream guard still holds the text to the visible ceiling and the cost
+projection counts the reserve as spend that may happen. And a stream the
+provider ends with finish_reason "length" is recorded as truncated even when
+the guard saw room, because the guard counts text alone. The ledger row that
+forced all three: an A1 turn under monthly budget pressure — the tier
+stepped down to mid, the ceiling halved to 200 — with 196 output tokens, 191
+of them reasoning, recorded as complete, while the learner saw "Guten Tag,".
+
 Then it writes **exactly one ledger row per call**, on success and on failure
 alike, because a failed call that produced tokens still cost money. The ledger
 is append-only, enforced by a database trigger, and holds a pseudonymous hash

@@ -147,6 +147,19 @@ describe("a valid turn", () => {
     });
   });
 
+  it("sends neither a tally nor a position for a scene", async () => {
+    // The page draws a scene, not a level; a trailer would draw a strip and a
+    // position header would draw a move into a conversation that has neither.
+    const { deps } = fakeGraph({ threadMode: "roleplay", threadTitle: "Im Restaurant" });
+
+    const result = await handleChatTurn(body(), IDENTITY, deps);
+    if (!result.ok) throw new Error("turn refused");
+
+    expect(result.outcome.position).toBeNull();
+    const { trailer } = splitChatStream(await drain(toReadableStream(result.outcome)));
+    expect(trailer).toBeNull();
+  });
+
   it("sends no trailer for a turn the evaluator skipped", async () => {
     // Five formulaic "Danke!"s must not move a mastery bar, so a skipped turn
     // says nothing rather than repeating stale numbers.

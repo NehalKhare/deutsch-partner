@@ -8,10 +8,9 @@ import type { TurnBudget } from "./budgeter";
 import { createFxRateService } from "./fx";
 import {
   createModelRegistry,
-  registryOverridesFromEnv,
-} from "./registry";
+  registryOverridesFromEnv, reasoningReserveFor } from "./registry";
 import type { PlanCode } from "@dp/domain/plans";
-import { ceilingsFor, tierFor, type TaskId, type Tier } from "@dp/domain/tasks";
+import { ceilingsFor, tierFor, type TaskId, type Tier, reasoningEffortFor } from "@dp/domain/tasks";
 import { requireEnvValue, type AppEnv } from "@dp/env/schema";
 import { nullLogger, type Logger } from "@dp/observability/logger";
 import type { UsageAccounting } from "./repositories/usage-repository";
@@ -402,13 +401,15 @@ export function createTrainerModelLadder(
     now,
   });
 
-  const effort = registry.forTier(route.tier).reasoningEffort;
+  const effort = reasoningEffortFor(task) ?? registry.forTier(route.tier).reasoningEffort;
 
   return registry.candidates(route.tier).map((modelId): TrainerModel => {
     const model = new ChatOpenAI({
       apiKey,
       model: modelId,
-      maxTokens: route.maxOutputTokens,
+      // The visible ceiling plus the room to think, as the chat transport
+      // sends it: the provider counts reasoning inside this number.
+      maxTokens: route.maxOutputTokens + reasoningReserveFor(effort),
       // The tier's, as the chat transport sends it. A small-ceiling tier on a
       // reasoning model otherwise spends every agent turn thinking and emits
       // neither a tool call nor an answer.

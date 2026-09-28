@@ -59,7 +59,15 @@ export interface TurnState {
    * The thread this turn speaks into — specifically the mini-level it was
    * opened at, which is the place a fresh visit returns the learner to.
    */
-  readonly thread?: { readonly miniLevel: number };
+  readonly thread?: {
+    readonly miniLevel: number;
+    /**
+     * The scene a scenario thread practises, or undefined for a lesson. A
+     * scene is not a place on the path: nothing said in it stands the
+     * learner at a level, moves them on, or counts towards a tally.
+     */
+    readonly scene?: LearnerContext["scene"];
+  };
   readonly history?: readonly PromptMessage[];
   readonly intent?: RetrievalIntent;
   readonly knowledge?: readonly RetrievedChunk[];

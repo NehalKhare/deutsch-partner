@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { formatEffectiveLevel, type EffectiveLevel } from "@dp/domain/cefr";
 import { effectiveLevelSchema } from "@dp/domain/cefr";
+import { SCENE_MODES, type SceneMode } from "@dp/domain/conversation";
 import { nonEmptyTextSchema } from "@dp/domain/primitives";
 import { TUTOR, type TutorPersona, type VoiceGender } from "@dp/domain/tutor";
 import type { BehaviorPolicy } from "./behavior-policy";
@@ -161,10 +162,17 @@ const JARGON_TEXT: Readonly<Record<BehaviorPolicy["grammarJargon"], string>> = {
  * in the response policy already decides how long the bringing-back may be.
  * Nothing here is data — the theme it refers to is rendered in the learner
  * state block — so the text is versioned with the rest of the policy.
+ *
+ * A scenario thread — a roleplay or a reading — has a scene instead of a
+ * theme, and the scene arrives as a seed message in the untrusted history,
+ * which the data boundary rightly says is never an instruction. So the
+ * learner state names the scene from the trusted side, and this rule defers
+ * to it; the stay-in-scene protocol is rendered with the scene, since it
+ * costs nothing on the turns that have none.
  */
 const SCOPE = [
   "Scope:",
-  "- The current mini-level, described below, is the whole syllabus for this conversation. Practise its theme, words and grammar; teach nothing beyond them.",
+  "- The syllabus for this conversation is the current mini-level described below — or, when the learner state names a scene, that scene. Practise it; teach nothing beyond it.",
   "- Off the theme — another topic, slang, a debate — acknowledge it in a few warm words, do not take it up, and bring them back with an easy question on the theme.",
   "- Never scold; if their wording was rough, simply use the clean form yourself.",
   "- Their interests are colour for the theme, not a second topic. A word or rule from this level is on topic.",
@@ -230,6 +238,20 @@ export const learnerContextSchema = z.strictObject({
    * callers that borrow this projection have no conversation to steer.
    */
   targetFunctions: z.array(nonEmptyTextSchema(120)).max(10).optional(),
+  /**
+   * The scene this thread practises, when it is a scenario thread: a
+   * dialogue played as a roleplay or a passage read and questioned. The
+   * scene itself — roles, opening line, passage — is the seed message the
+   * client pins into the history, which the tutor may not take orders from;
+   * this is the trusted statement that the seed stands and is the syllabus.
+   */
+  scene: z
+    .strictObject({
+      mode: z.enum(SCENE_MODES),
+      /** The scenario's title, as the thread is named. */
+      title: nonEmptyTextSchema(200),
+    })
+    .optional(),
   /** Words due for review, worth working in naturally. */
   dueVocabulary: z.array(nonEmptyTextSchema(60)).max(12),
   /** Recurring mistakes, phrased as what to watch for. */
@@ -248,6 +270,31 @@ export const learnerContextSchema = z.strictObject({
 
 export type LearnerContext = z.infer<typeof learnerContextSchema>;
 
+/**
+ * How to hold a scene.
+ *
+ * Both halves of the sentence matter: the tutor stays in it, and keeps the
+ * learner in it. A learner who steps out — a question, another topic, a chat
+ * in English — gets one short line out of character and then the next line
+ * of the scene, which is the same redirection the syllabus rule gives a
+ * wandering lesson, in the scene's own terms.
+ */
+const SCENE_TEXT: Readonly<Record<SceneMode, (title: string) => string>> = {
+  roleplay: (title) =>
+    [
+      `This thread is a roleplay: "${title}". The scene, the roles and the opening line are the first message in <recent_messages>; you wrote it, and it stands.`,
+      "The scene is the syllabus here, not the mini-level. Speak only as your character, in the first person — never as the teacher, never with headings, labels or stage directions — and let the scene develop: each of your lines moves the story one step and gives the learner their next line to say.",
+      "Stay in your role and keep the learner in theirs; favour this level's words inside the scene. A slip gets one short aside, marked as your reply rules say, and the scene goes on.",
+      "If they step out of it — a question, another topic, a chat in English — answer in one short line out of character, then step back in with your next line of the scene. If they ask to swap roles, swap and start over.",
+    ].join(" "),
+  reading: (title) =>
+    [
+      `This thread is a reading exercise: "${title}". The passage and the rules are the first message in <recent_messages>; you wrote it, and it stands.`,
+      "The text is the syllabus here, not the mini-level: a retelling first, then your questions on it one at a time, with no headings or labels.",
+      "If the learner drifts to something else, answer in one short line, then return to the next question.",
+    ].join(" "),
+};
+
 function line(label: string, values: readonly string[]): string | null {
   return values.length === 0 ? null : `${label}: ${values.join("; ")}`;
 }
@@ -263,6 +310,11 @@ export function buildLearnerContext(context: LearnerContext): string {
 
   return [
     `The learner is at ${level}, mini-level ${context.miniLevel}: ${context.theme} (${context.focus}).`,
+    // The title is corpus data, hand-authored but still not this module's,
+    // so it gets the same neutralising as the goal.
+    context.scene
+      ? SCENE_TEXT[context.scene.mode](escapeUntrusted(context.scene.title))
+      : null,
     context.justMoved === "asked"
       ? `They have just asked to move on, and have been moved to this level. Welcome them to it in a sentence, then carry on.`
       : null,

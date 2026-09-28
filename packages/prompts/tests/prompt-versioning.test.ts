@@ -67,8 +67,11 @@ const RECORDED: Readonly<Record<string, string>> = {
   // identity names the level's theme instead of "what they want to talk
   // about", the purpose lock makes the level the whole syllabus, and the
   // behaviour block carries the redirection protocol — all three in versioned
-  // blocks, so every one of the twelve hashes moved. The can-do goals that
-  // joined the learner-state block are caller data and outside the lock.
+  // blocks, so every one of the twelve hashes moved. The syllabus rule defers
+  // to a scene when the learner state names one, so a scenario thread — a
+  // roleplay or a reading — is held to its scene rather than dragged back to
+  // the lesson. The can-do goals and the scene paragraph that joined the
+  // learner-state block are caller data and outside the lock.
   // Version 6: the tutor is whoever the learner's voice says — Jonas with
   // the male voice, Alex with the female — and the identity block states the
   // gender so German's Lehrer/Lehrerin comes out right. The name is in the
@@ -77,18 +80,18 @@ const RECORDED: Readonly<Record<string, string>> = {
   // 5 marked the reply's teaching — the wrong form in backticks, the
   // corrected form or one suggested line in bold — so mistakes and
   // suggestions render in colour.)
-  "conversation.turn@7/A1/male": "6d0fb761",
-  "conversation.turn@7/A1/female": "d2e542fb",
-  "conversation.turn@7/A2/male": "7f4a81ba",
-  "conversation.turn@7/A2/female": "a0f1fde4",
-  "conversation.turn@7/B1/male": "1f5f4e95",
-  "conversation.turn@7/B1/female": "ec473ab7",
-  "conversation.repair@7/A1/male": "6d0fb761",
-  "conversation.repair@7/A1/female": "d2e542fb",
-  "conversation.repair@7/A2/male": "7f4a81ba",
-  "conversation.repair@7/A2/female": "a0f1fde4",
-  "conversation.repair@7/B1/male": "1f5f4e95",
-  "conversation.repair@7/B1/female": "ec473ab7",
+  "conversation.turn@7/A1/male": "e18809c6",
+  "conversation.turn@7/A1/female": "e1e6b540",
+  "conversation.turn@7/A2/male": "8d5d1d73",
+  "conversation.turn@7/A2/female": "56c0c10d",
+  "conversation.turn@7/B1/male": "228218be",
+  "conversation.turn@7/B1/female": "70e26458",
+  "conversation.repair@7/A1/male": "e18809c6",
+  "conversation.repair@7/A1/female": "e1e6b540",
+  "conversation.repair@7/A2/male": "8d5d1d73",
+  "conversation.repair@7/A2/female": "56c0c10d",
+  "conversation.repair@7/B1/male": "228218be",
+  "conversation.repair@7/B1/female": "70e26458",
   // Version 5 (evaluation) / version 3 (extraction.errors): the closed error
   // taxonomy gained register_formality — du/Sie and register slips — and the
   // taxonomy renders into both output contracts. (Version 4 fixed the

@@ -4,8 +4,7 @@ import {
   CHAT_TIERS,
   createModelRegistry,
   downgradeTier,
-  registryOverridesFromEnv,
-} from "../src/registry";
+  registryOverridesFromEnv, reasoningReserveFor } from "../src/registry";
 import { CEFR_LEVELS } from "@dp/domain/cefr";
 import { PLAN_CODES } from "@dp/domain/plans";
 import {
@@ -76,6 +75,18 @@ describe("model registry", () => {
     // Bounded rather than off: the mid tier's structured output wants some
     // understanding, and none of its ceilings can afford unbounded thinking.
     expect(registry.forTier("mid").reasoningEffort).toBe("low");
+    // And the strong tier: its model is a reasoning model too, and the tutor
+    // answers an A1 learner inside 300 tokens. Left to decide, it thought
+    // almost all of them away and the learner saw three tokens and a cut.
+    expect(registry.forTier("strong").reasoningEffort).toBe("low");
+  });
+
+  it("gives a model that is asked to think room above the visible ceiling, and none otherwise", () => {
+    // Bounded and rising with the effort: thinking is billed as output.
+    expect(reasoningReserveFor(null)).toBe(0);
+    expect(reasoningReserveFor("minimal")).toBeGreaterThan(0);
+    expect(reasoningReserveFor("low")).toBeGreaterThan(reasoningReserveFor("minimal"));
+    expect(reasoningReserveFor("high")).toBeGreaterThan(reasoningReserveFor("low"));
   });
 
   it("gives every tier headroom for the largest task routed to it", () => {

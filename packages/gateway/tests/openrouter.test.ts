@@ -288,6 +288,24 @@ describe("openrouter streaming", () => {
     expect(chunks.join("")).toBe("ja");
   });
 
+  it("reports the provider's finish reason once the stream is done", async () => {
+    // "length" is the one that matters: a reasoning model that thought the
+    // ceiling away sends a fragment and this word, and nothing else says
+    // the reply was cut.
+    const cut = `data: ${JSON.stringify({
+      choices: [{ delta: { content: "" }, finish_reason: "length" }],
+    })}\n\n`;
+    const transport = transportWith(
+      vi.fn().mockResolvedValue(sseResponse([delta("Guten Tag,"), cut, "data: [DONE]\n\n"])),
+    );
+
+    const opened = await transport.stream(request());
+    expect(opened.finishReason?.()).toBeNull();
+    for await (const _chunk of opened.chunks) void _chunk;
+
+    expect(opened.finishReason?.()).toBe("length");
+  });
+
   it("reports usage only once the stream has finished", async () => {
     const usageEvent = `data: ${JSON.stringify({
       choices: [],

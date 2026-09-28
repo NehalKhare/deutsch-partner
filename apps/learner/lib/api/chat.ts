@@ -248,9 +248,12 @@ export async function handleChatTurn(
         (state) => state.performance ?? null,
         () => null,
       ),
-      position: learner
-        ? { miniLevel: learner.state.miniLevel, theme: learner.miniLevel.theme }
-        : null,
+      // No position for a scene: the page shows the scene, not a level, and
+      // a header naming one would only invite the client to draw a move.
+      position:
+        learner && !turn.turn.state.thread?.scene
+          ? { miniLevel: learner.state.miniLevel, theme: learner.miniLevel.theme }
+          : null,
     },
   };
 }

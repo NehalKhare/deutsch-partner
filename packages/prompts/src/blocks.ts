@@ -77,7 +77,12 @@ const LEARNER_FACING_CAPS: Readonly<Record<BlockId, number>> = {
   behavior_policy: 350,
   correction_policy: 200,
   response_policy: 200,
-  learner_state: 350,
+  // Raised from 350 for the scene paragraph a scenario thread carries on
+  // top of the level's curriculum: a roleplay at a level with full word,
+  // review and error lists measures about 480, and a cap that truncates
+  // the stay-in-scene rule on exactly those turns is no cap at all. An
+  // ordinary lesson renders well under 200.
+  learner_state: 550,
   thread_summary: 400,
   retrieved_knowledge: 1200,
   learner_memory: 300,

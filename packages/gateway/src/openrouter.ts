@@ -110,7 +110,14 @@ const streamEventSchema = z
   .object({
     model: z.string().optional(),
     choices: z
-      .array(z.object({ delta: z.object({ content: z.string().nullish() }).optional() }).loose())
+      .array(
+        z
+          .object({
+            delta: z.object({ content: z.string().nullish() }).optional(),
+            finish_reason: z.string().nullish(),
+          })
+          .loose(),
+      )
       .optional(),
     usage: usageSchema.optional(),
   })
@@ -277,6 +284,7 @@ export function createOpenRouterTransport(
 
       let usage: ProviderUsage | null = null;
       let firstTokenMs: number | null = null;
+      let finishReason: string | null = null;
       let resolvedModel = request.modelId;
       const source = response.body;
 
@@ -320,6 +328,9 @@ export function createOpenRouterTransport(
                 if (parsed.data.model) resolvedModel = parsed.data.model;
                 if (parsed.data.usage) seenUsage = parsed.data.usage;
 
+                const finish = parsed.data.choices?.[0]?.finish_reason;
+                if (typeof finish === "string") finishReason = finish;
+
                 const text = parsed.data.choices?.[0]?.delta?.content;
                 if (typeof text === "string" && text.length > 0) {
                   firstTokenMs ??= Date.now() - started;
@@ -338,6 +349,7 @@ export function createOpenRouterTransport(
         chunks: chunks(),
         usage: () => usage,
         firstTokenMs: () => firstTokenMs,
+        finishReason: () => finishReason,
       } satisfies StreamResponse;
     },
   };

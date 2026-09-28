@@ -93,6 +93,13 @@ export interface StreamResponse {
   /** Available once the stream is exhausted; null before that. */
   usage(): ProviderUsage | null;
   firstTokenMs(): number | null;
+  /**
+   * The provider's own word for why it stopped, once the stream is done —
+   * "length" when its ceiling cut the reply, which the guard cannot see
+   * when the ceiling was spent on reasoning rather than on text. Optional
+   * so a transport that does not report one is still a transport.
+   */
+  finishReason?(): string | null;
 }
 
 export interface ModelTransport {

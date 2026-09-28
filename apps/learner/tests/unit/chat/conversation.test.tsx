@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 
@@ -279,6 +279,80 @@ describe("the reply as it arrives", () => {
     await waitFor(() => {
       expect(container.querySelectorAll("[data-role='assistant']")).toHaveLength(1);
     });
+  });
+});
+
+describe("the transcript follows the conversation", () => {
+  /**
+   * The test DOM lays nothing out and scrolls nothing, so the sentinel's
+   * place in the viewport is declared, and scrollIntoView is given a body
+   * that records the call.
+   */
+  function sentinelOf(container: HTMLElement, bottom: number) {
+    const end = container.querySelector("[data-transcript-end]") as HTMLElement | null;
+    if (!end) throw new Error("the end of the transcript is not on the page");
+
+    Object.defineProperty(end, "getBoundingClientRect", {
+      value: () => ({ top: bottom, bottom, left: 0, right: 0, width: 0, height: 0 }),
+      configurable: true,
+    });
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(end, "scrollIntoView", { value: scrollIntoView, configurable: true });
+
+    return { end, scrollIntoView };
+  }
+
+  it("scrolls to the reply as it arrives", async () => {
+    const reply = replyStream();
+    server.use(
+      http.post(CHAT_ENDPOINT, () => new HttpResponse(reply.body, { status: 200 })),
+    );
+
+    const user = userEvent.setup();
+    const { container } = renderConversation();
+    const { scrollIntoView } = sentinelOf(container, 700);
+
+    await user.type(screen.getByLabelText(/your message in german/i), "Hallo");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+    reply.send("Guten Tag!");
+    reply.end();
+
+    await waitFor(() => {
+      expect(screen.getByText("Guten Tag!")).toBeInTheDocument();
+    });
+
+    // Once for the learner's own message, then for the reply: the end of
+    // the conversation was brought into view every time it moved.
+    expect(scrollIntoView).toHaveBeenCalled();
+    expect(scrollIntoView).toHaveBeenLastCalledWith({ block: "end" });
+  });
+
+  it("leaves a learner who scrolled up to read where they are", async () => {
+    const reply = replyStream();
+    server.use(
+      http.post(CHAT_ENDPOINT, () => new HttpResponse(reply.body, { status: 200 })),
+    );
+
+    const user = userEvent.setup();
+    const { container } = renderConversation([
+      { id: "a", role: "assistant", content: "Wie geht es dir?" },
+    ]);
+    // The end of the conversation is far below the viewport, and the learner
+    // said so by scrolling.
+    const { scrollIntoView } = sentinelOf(container, 5000);
+    fireEvent.scroll(document);
+    scrollIntoView.mockClear();
+
+    await user.type(screen.getByLabelText(/your message in german/i), "Hallo");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+    reply.send("Guten Tag!");
+    reply.end();
+
+    await waitFor(() => {
+      expect(screen.getByText("Guten Tag!")).toBeInTheDocument();
+    });
+
+    expect(scrollIntoView).not.toHaveBeenCalled();
   });
 });
 
@@ -1187,6 +1261,69 @@ describe("progress towards mastery", () => {
     expect(window.localStorage.getItem("deutsch-partner.mastery-strip")).toBe(
       "shown",
     );
+  });
+});
+
+describe("a scene thread", () => {
+  const SCENE = { mode: "roleplay" as const, title: "Im Restaurant" };
+
+  function renderScene(initialTally?: { turns: number; strongTurns: number }) {
+    return render(
+      <Conversation
+        threadId="1e2f0a4c-6b7d-4e8f-9a0b-1c2d3e4f5a6b"
+        title="Im Restaurant"
+        miniLevel={9}
+        theme="Einkaufen"
+        scene={SCENE}
+        initialTally={initialTally}
+      />,
+    );
+  }
+
+  it("names the scene where a lesson names its level", () => {
+    renderScene();
+
+    expect(screen.getByText(/roleplay/i)).toBeInTheDocument();
+    expect(screen.getByText(/not counted towards your level/i)).toBeInTheDocument();
+    expect(screen.queryByText(/mini-level 9/i)).not.toBeInTheDocument();
+  });
+
+  it("draws none of the path: no next-level button, no progress, no offer", () => {
+    // Even handed a tally that would clear the level: a scene has no level
+    // to clear, and the server never sends one anyway.
+    renderScene({ turns: 7, strongTurns: 7 });
+
+    expect(screen.queryByRole("button", { name: /next mini-level/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /show progress/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/cleared/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Move on" })).not.toBeInTheDocument();
+  });
+
+  it("draws no move into the scene, whatever headers arrive", async () => {
+    server.use(
+      http.post(
+        CHAT_ENDPOINT,
+        () =>
+          new HttpResponse("Gern, hier ist die Karte.", {
+            status: 200,
+            headers: {
+              "x-mini-level": "10",
+              "x-mini-level-theme": encodeURIComponent("Im Café"),
+            },
+          }),
+      ),
+    );
+
+    const user = userEvent.setup();
+    const { container } = renderScene();
+
+    await user.type(screen.getByLabelText(/your message in german/i), "Weiter bitte!");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+    await screen.findByText("Gern, hier ist die Karte.");
+
+    expect(container.querySelector("[data-role='milestone']")).not.toBeInTheDocument();
+    expect(screen.queryByText(/mini-level 10/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Im Restaurant" })).toBeInTheDocument();
   });
 });
 

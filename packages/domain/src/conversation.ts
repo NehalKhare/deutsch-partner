@@ -28,6 +28,22 @@ export const CONVERSATION_MODES = [
 export const conversationModeSchema = z.enum(CONVERSATION_MODES);
 export type ConversationMode = z.infer<typeof conversationModeSchema>;
 
+/**
+ * The modes that practise a scene rather than the learner's mini-level.
+ *
+ * A roleplay plays a scenario's dialogue; a reading works through its
+ * passage. Neither is a lesson at a level: the thread keeps the mini-level it
+ * was opened at for the tutor's pitch, but nothing said in it counts towards
+ * that level's tally, opens its gate or moves the learner along the path.
+ */
+export const SCENE_MODES = ["roleplay", "reading"] as const;
+export const sceneModeSchema = z.enum(SCENE_MODES);
+export type SceneMode = z.infer<typeof sceneModeSchema>;
+
+export function isSceneMode(mode: ConversationMode): mode is SceneMode {
+  return (SCENE_MODES as readonly string[]).includes(mode);
+}
+
 export const conversationThreadSchema = z
   .object({
     id: uuidSchema,

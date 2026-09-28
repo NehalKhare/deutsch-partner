@@ -24,7 +24,7 @@ import { createAccountant } from "./accounting";
 import { applyFx, type LedgerRow, type UsageLedger } from "./ledger";
 import type { FxRateService } from "./fx";
 import { estimateUsd, resolveRate, type PricingStore } from "./pricing";
-import { downgradeTier, type ModelRegistry } from "./registry";
+import { downgradeTier, type ModelRegistry, reasoningReserveFor } from "./registry";
 import { guardStream, type StreamGuardResult } from "./stream-guard";
 import type {
   Citation,
@@ -35,7 +35,7 @@ import type {
   StreamResponse,
 } from "./transport";
 import type { PlanCode } from "@dp/domain/plans";
-import { webSearchFor, type Tier } from "@dp/domain/tasks";
+import { webSearchFor, type Tier, reasoningEffortFor, type ReasoningEffort } from "@dp/domain/tasks";
 import { nullLogger, type Logger } from "@dp/observability/logger";
 
 /**
@@ -399,12 +399,21 @@ export function createModelGateway(deps: GatewayDeps): ModelGateway {
     const rate = await resolveRate(deps.pricing, entry.provider, entry.modelId);
     const usd = estimateUsd(rate, {
       inputTokens: prompt.inputTokens,
-      outputTokens: spec.maxOutputTokens,
+      // The most the provider may bill for: the visible ceiling and the room
+      // a reasoning model is given above it.
+      outputTokens: spec.maxOutputTokens + reasoningReserveFor(effortFor(spec)),
     });
 
     if (usd === null) return 0;
 
     return applyFx(usd, await deps.fx.resolve(now())).costEur;
+  }
+
+  /** The task's bound where the routing table sets one, else the tier's. */
+  function effortFor(spec: ModelCallSpec): ReasoningEffort | null {
+    return (
+      reasoningEffortFor(spec.task) ?? deps.registry.forTier(spec.tier).reasoningEffort ?? null
+    );
   }
 
   function requestFor(
@@ -413,6 +422,8 @@ export function createModelGateway(deps: GatewayDeps): ModelGateway {
     modelId: string,
     signal: AbortSignal,
   ): ModelRequest {
+    const effort = effortFor(spec);
+
     return {
       modelId,
       system: prompt.system,
@@ -425,17 +436,21 @@ export function createModelGateway(deps: GatewayDeps): ModelGateway {
           ? prompt.systemStable
           : null,
       user: prompt.user,
-      // Layer 2. Always sent, never omitted.
-      maxOutputTokens: spec.maxOutputTokens,
+      // Layer 2. Always sent, never omitted. The visible ceiling plus the
+      // room a reasoning model needs to think, because the provider counts
+      // its thinking inside this number and the text is what is left: the
+      // stream guard, layer 3, holds the text itself to the ceiling.
+      maxOutputTokens: spec.maxOutputTokens + reasoningReserveFor(effort),
       signal,
       structured: spec.outputSchema !== undefined,
       // From the routing table, never from the caller. A search is billed per
       // result, so the same reasoning that stops a caller choosing its own
       // tier stops it switching this on.
       webSearch: webSearchFor(spec.task),
-      // The tier's, so a schema-bound extractor on a reasoning model answers
-      // instead of thinking its whole ceiling away.
-      reasoningEffort: deps.registry.forTier(spec.tier).reasoningEffort ?? null,
+      // The task's bound where the routing table sets one, else the tier's,
+      // so a schema-bound extractor — or a tutor inside a 300-token ceiling —
+      // on a reasoning model answers instead of thinking its ceiling away.
+      reasoningEffort: effort,
     };
   }
 
@@ -701,10 +716,15 @@ export function createModelGateway(deps: GatewayDeps): ModelGateway {
           modelIdResolved: reported?.modelIdResolved ?? attempt.modelId,
         };
 
+        // Cut by the guard, or cut by the provider: a reasoning model that
+        // spent the ceiling thinking stops with finish_reason "length" and a
+        // fragment the guard, counting text alone, would call complete.
+        const truncated = result.truncated || opened.finishReason?.() === "length";
+
         const recorded = await recordAttempt(plan.spec, context, attempt, plan, {
           status: "ok",
           usage,
-          truncated: result.truncated,
+          truncated,
           latencyMs: Date.now() - started,
           firstTokenMs: opened.firstTokenMs(),
           errorCode: null,
@@ -712,7 +732,7 @@ export function createModelGateway(deps: GatewayDeps): ModelGateway {
 
         return {
           text: result.text,
-          truncated: result.truncated,
+          truncated,
           degraded: plan.degraded,
           tier: attempt.tier,
           modelIdResolved: usage.modelIdResolved,

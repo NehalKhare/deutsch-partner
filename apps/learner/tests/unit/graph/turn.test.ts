@@ -134,6 +134,66 @@ describe("what the prompt is given", () => {
     expect(prompts[0].system).toContain("mini-level 26");
   });
 
+  it("names the scene from the thread, so a roleplay is the syllabus and not the lesson", async () => {
+    // The scene itself travels as a seed message in the untrusted history.
+    // The thread row is trusted, and it is what tells the tutor the scene
+    // stands — otherwise the scope rule would drag a restaurant roleplay
+    // back to whatever the learner's mini-level teaches.
+    const { deps, prompts } = fakeGraph({ threadMode: "roleplay", threadTitle: "Im Restaurant" });
+
+    await runTurn(INPUT, deps);
+
+    expect(prompts[0].system).toContain('This thread is a roleplay: "Im Restaurant"');
+    expect(prompts[0].system).toContain("keep the learner in theirs");
+  });
+
+  it("keeps a scene off the path: no tally, no move, no place", async () => {
+    // A roleplay is practice beside the mini-levels. The errors and the words
+    // are still learned from, but nothing said in it counts towards a level,
+    // "weiter" is a line rather than a request, and reopening the thread
+    // stands the learner nowhere.
+    const { deps, recordedTurns, upsertedStates } = fakeGraph({
+      threadMode: "roleplay",
+      threadTitle: "Im Restaurant",
+      threadMiniLevel: 12,
+      message: "Weiter bitte!",
+    });
+
+    const outcome = await runTurn({ ...INPUT, message: "Weiter bitte!" }, deps);
+    if (!outcome.ok) throw new Error("turn did not open");
+    for await (const _chunk of outcome.turn.chunks) void _chunk;
+    const state = await outcome.turn.completed;
+
+    expect(recordedTurns).toEqual([]);
+    // The evaluation still writes what it learned — skills, not position:
+    // the learner stays exactly where they were, nothing marked skipped.
+    for (const written of upsertedStates as Array<{ miniLevel: number; skippedMiniLevels: number[] }>) {
+      expect(written.miniLevel).toBe(26);
+      expect(written.skippedMiniLevels).toEqual([]);
+    }
+    expect(state.notes.find((entry) => entry.node === "place")).toMatchObject({
+      outcome: "skipped",
+      detail: "scene",
+    });
+    expect(state.notes.find((entry) => entry.node === "advance")).toMatchObject({
+      outcome: "skipped",
+      detail: "scene",
+    });
+    expect(state.notes.find((entry) => entry.node === "record_performance")).toMatchObject({
+      outcome: "skipped",
+      detail: "scene",
+    });
+    expect(state.performance).toBeUndefined();
+  });
+
+  it("names no scene in an ordinary conversation", async () => {
+    const { deps, prompts } = fakeGraph();
+
+    await runTurn(INPUT, deps);
+
+    expect(prompts[0].system).not.toContain("This thread is a");
+  });
+
   it("carries the retrieved knowledge", async () => {
     const { deps, prompts } = fakeGraph();
 

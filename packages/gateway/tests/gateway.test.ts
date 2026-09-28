@@ -14,7 +14,7 @@ import type {
   ProviderUsage,
   StreamResponse,
 } from "../src/transport";
-import { createModelRegistry } from "../src/registry";
+import { REASONING_RESERVE_TOKENS, createModelRegistry } from "../src/registry";
 import { createLogger } from "@dp/observability/logger";
 
 const NOW = new Date("2026-08-21T12:00:00.000Z");
@@ -205,12 +205,52 @@ describe("a successful call", () => {
     expect(rows[0].costEur).toBeCloseTo(0.00184, 10);
   });
 
-  it("always sends the provider an output ceiling", async () => {
-    const { gateway, transport } = harness();
+  it("always sends the provider an output ceiling: the visible one plus room to think", async () => {
+    // The provider counts a reasoning model's thinking inside max_tokens.
+    // The tutor's turn is bounded to "minimal", so it gets that reserve
+    // above its 300 visible tokens; the ledger row and the stream guard
+    // keep the 300, which is what the learner may be shown.
+    const { gateway, transport, rows } = harness();
 
     await gateway.complete(spec, PROMPT, CONTEXT);
 
-    expect(sentRequests(transport)[0].maxOutputTokens).toBe(300);
+    expect(sentRequests(transport)[0].maxOutputTokens).toBe(
+      300 + REASONING_RESERVE_TOKENS.minimal,
+    );
+    expect(rows[0]?.maxOutputTokens).toBe(300);
+  });
+
+  it("reports a stream the provider cut for length as truncated, even when the guard saw room", async () => {
+    // A reasoning model that spent the ceiling thinking sends three tokens
+    // and finish_reason "length". Counting text alone, the guard would call
+    // that complete; the ledger and the caller must not.
+    const transport: ModelTransport & { requests: ModelRequest[] } = {
+      requests: [],
+      async complete() {
+        throw new Error("not used");
+      },
+      async stream(request) {
+        this.requests.push(request);
+        return {
+          chunks: (async function* () {
+            yield "Guten Tag,";
+          })(),
+          usage: () => usage({ outputTokens: 196, reasoningTokens: 191 }),
+          firstTokenMs: () => 2500,
+          finishReason: () => "length",
+        };
+      },
+    };
+    const { gateway, rows } = harness({ transport });
+
+    const outcome = await gateway.stream(spec, PROMPT, CONTEXT);
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    for await (const _chunk of outcome.data.chunks) void _chunk;
+    const settled = await outcome.data.settled;
+
+    expect(settled.truncated).toBe(true);
+    expect(rows[0]).toMatchObject({ truncated: true });
   });
 
   it("increments the daily and monthly counters alongside the row", async () => {
@@ -925,6 +965,31 @@ describe("dependencies", () => {
     await gateway.complete(spec, PROMPT, CONTEXT);
 
     expect(snapshot).toHaveBeenCalledWith({ userIdHash: "hash-alice", now: NOW });
+  });
+});
+
+describe("reasoning effort", () => {
+  it("takes the task's bound over the tier's, so the tutor answers instead of thinking", async () => {
+    // The strong tier says "low"; the routing table says the tutor's turn is
+    // "minimal". Inside a 300-token A1 ceiling the difference is the whole
+    // reply: left to decide, the model thought the ceiling away and the
+    // learner saw three tokens and a cut.
+    const { gateway, transport } = harness();
+
+    await gateway.complete(spec, PROMPT, CONTEXT);
+
+    expect(createModelRegistry().forTier("strong").reasoningEffort).toBe("low");
+    expect(sentRequests(transport)[0].reasoningEffort).toBe("minimal");
+  });
+
+  it("falls back to the tier's default for a task the table leaves alone", async () => {
+    const { gateway, transport } = harness();
+
+    await gateway.complete(researchSpec(), PROMPT, CONTEXT);
+
+    expect(sentRequests(transport)[0].reasoningEffort).toBe(
+      createModelRegistry().forTier(researchSpec().tier).reasoningEffort,
+    );
   });
 });
 

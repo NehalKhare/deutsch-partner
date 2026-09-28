@@ -1,5 +1,10 @@
 import type { AppEnv } from "@dp/env/schema";
-import { CHAT_TIER_LADDER, TIERS, type Tier } from "@dp/domain/tasks";
+import {
+  CHAT_TIER_LADDER,
+  TIERS,
+  type ReasoningEffort,
+  type Tier,
+} from "@dp/domain/tasks";
 
 /**
  * The model registry.
@@ -42,8 +47,37 @@ export type ModelProvider = "openrouter" | "openai";
  * work is structured output that needs some understanding, so thinking is
  * bounded rather than switched off. Left unset, the first real PRD call spent
  * its 1000-token ceiling thinking and was cut off mid-answer, twice.
+ *
+ * The strong tier carries "low" too, since its model is also a reasoning
+ * model and its smallest ceiling is 300 tokens at A1. The routing table may
+ * bound a task tighter than its tier — the tutor's turn is "minimal" — and
+ * the gateway takes the task's bound over the tier's.
  */
-export type ReasoningEffort = "minimal" | "low" | "medium" | "high";
+export type { ReasoningEffort };
+
+/**
+ * Room to think, above the ceiling on what the learner sees.
+ *
+ * The provider counts a reasoning model's thinking inside max_tokens. Sent
+ * the visible ceiling alone, the model thinks most of it away and the reply
+ * is whatever is left: the ledger showed A1 turns of 196 output tokens, 191
+ * of them reasoning, and the learner saw "Guten Tag," — on a tier already
+ * bounded to "low". So the provider is asked for the visible ceiling plus a
+ * reserve sized to the effort, the stream guard still holds the text to the
+ * visible ceiling, and the cost projection counts the reserve as spend that
+ * may happen. Bounded, because thinking is billed as output.
+ */
+export const REASONING_RESERVE_TOKENS: Readonly<Record<ReasoningEffort, number>> = {
+  minimal: 256,
+  low: 768,
+  medium: 1536,
+  high: 3072,
+};
+
+/** The reserve for an effort, or none for a model that is not asked to think. */
+export function reasoningReserveFor(effort: ReasoningEffort | null | undefined): number {
+  return effort ? REASONING_RESERVE_TOKENS[effort] : 0;
+}
 
 export interface ModelEntry {
   readonly tier: Tier;
@@ -101,6 +135,7 @@ const DEFAULTS: Readonly<Record<Tier, ModelEntry>> = {
     hardMaxInputTokens: 8_000,
     hardMaxOutputTokens: 1_000,
     contextWindow: 1_000_000,
+    reasoningEffort: "low",
   },
   mid: {
     tier: "mid",

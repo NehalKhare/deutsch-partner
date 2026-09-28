@@ -240,7 +240,20 @@ dialogue's one action is **Practice Dialogue (AI Chat)**: it opens a roleplay
 thread named after the scenario, and the scene's opening line arrives as the
 partner's first message — assembled from the scenario's own data and visible
 in the transcript, so the roleplay needs no hidden instruction and the
-learner sees exactly what the tutor was given. A comprehension's one action
+learner sees exactly what the tutor was given. That message travels in the
+untrusted history, which the prompt fences as data; what makes the scene
+binding is the thread row itself. Its mode and title reach the tutor as
+trusted learner state — "this thread is a roleplay: Im Restaurant" — and the
+tutor's scope rule, which otherwise holds a conversation to the learner's
+mini-level, defers to the scene: stay in role, keep the learner in theirs,
+and when they step out answer in one short line out of character and step
+back in with the next line. A scene is beside the path, not on it: the turn
+records the errors and the words it hears, but writes no line into any
+level's tally, honours no "weiter" as a request to move on, and stands the
+learner at no level — so a roleplay can never clear a mini-level or be told
+it has, and the page names the scene where a lesson names its level. A
+scene thread reopened from a list finds its scenario again by title, so the
+seed is always in front of the tutor. A comprehension's one action
 is **Read & Answer Questions**: the passage with its questions, graded by a
 normalized string check in the browser — generous by design, showing the
 model answer to compare against rather than ever saying "wrong", because

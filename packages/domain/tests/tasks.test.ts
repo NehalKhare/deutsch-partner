@@ -12,8 +12,7 @@ import {
   routeFor,
   tierFor,
   type TaskId,
-  type Tier,
-} from "../src/tasks";
+  type Tier, reasoningEffortFor } from "../src/tasks";
 
 /**
  * Plan-dependent routing, held to billing-and-plans-spec.md S3 and S4.
@@ -27,6 +26,23 @@ import {
 const LEVELS_AND_NONE: readonly (CEFRLevel | undefined)[] = [...CEFR_LEVELS, undefined];
 
 const rung = (tier: Tier): number => (CHAT_TIER_LADDER as readonly Tier[]).indexOf(tier);
+
+describe("how much a task may think", () => {
+  it("switches thinking off for the tutor's turn and its repair", () => {
+    // Three to eight sentences of German need no scratchpad, and the A1
+    // ceiling of 300 output tokens cannot afford one: the thinking is
+    // counted inside it.
+    expect(reasoningEffortFor("conversation.turn")).toBe("minimal");
+    expect(reasoningEffortFor("conversation.repair")).toBe("minimal");
+  });
+
+  it("leaves every other task to its tier's default", () => {
+    for (const task of TASK_IDS) {
+      if (task === "conversation.turn" || task === "conversation.repair") continue;
+      expect(reasoningEffortFor(task), task).toBeNull();
+    }
+  });
+});
 
 describe("the chat tier ladder", () => {
   it("runs strongest first, and holds only the tiers that carry chat", () => {

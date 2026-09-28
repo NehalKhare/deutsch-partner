@@ -114,8 +114,27 @@ export interface PlanRoute {
   readonly byLevel?: Readonly<Record<CEFRLevel, TokenCeilings>>;
 }
 
+/**
+ * How much a reasoning-capable model may think before it answers, in the
+ * provider's own vocabulary. A tier carries a default in the gateway's
+ * registry; a task may bound it further here, never loosen it.
+ */
+export const REASONING_EFFORTS = ["minimal", "low", "medium", "high"] as const;
+export type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
+
 export interface TaskRoute extends TokenCeilings {
   readonly tier: Tier;
+  /**
+   * A ceiling on thinking for this task, over the tier's own default.
+   *
+   * The output ceiling is what the provider counts, and a reasoning model
+   * counts its thinking inside it. The tutor answers an A1 learner inside
+   * 300 tokens; left to decide, the strong tier's model spent nearly all of
+   * them thinking about a roleplay and the learner saw "Guten Tag," — three
+   * tokens and a cut. A conversation turn is three to eight sentences of
+   * German from a model that needs no scratchpad to write them.
+   */
+  readonly reasoningEffort?: ReasoningEffort;
   /**
    * conversation.turn is pitched differently at each level, so its ceilings
    * are too. Everything else uses one pair.
@@ -145,6 +164,7 @@ const ROUTES: Readonly<Record<TaskId, TaskRoute>> = {
    */
   "conversation.turn": {
     tier: "strong",
+    reasoningEffort: "minimal",
     maxInputTokens: 8000,
     maxOutputTokens: 1000,
     byLevel: {
@@ -166,6 +186,7 @@ const ROUTES: Readonly<Record<TaskId, TaskRoute>> = {
   /** The same voice as the turn it repairs, so the same plan entry. */
   "conversation.repair": {
     tier: "strong",
+    reasoningEffort: "minimal",
     maxInputTokens: 6000,
     maxOutputTokens: 700,
     byPlan: { free: { tier: "mid" } },
@@ -397,6 +418,11 @@ function largestOf(table: Readonly<Record<CEFRLevel, TokenCeilings>>): TokenCeil
  * level must not be handed premium's context, and a call with neither plan
  * nor level must resolve as it did before plans existed.
  */
+/** The task's bound on thinking, or null to leave it to the tier. */
+export function reasoningEffortFor(task: TaskId): ReasoningEffort | null {
+  return ROUTES[task].reasoningEffort ?? null;
+}
+
 export function ceilingsFor(task: TaskId, level?: CEFRLevel, plan?: PlanCode): TokenCeilings {
   const route = ROUTES[task];
   const table = planRouteFor(route, plan)?.byLevel ?? route.byLevel;

@@ -346,7 +346,9 @@ describe("the standing safety clauses", () => {
     // guard behind that promise.
     expect(learnerFacing).not.toMatch(/what they want to talk about/i);
     expect(learnerFacing).toMatch(/about the theme of their current mini-level/i);
-    expect(learnerFacing).toMatch(/whole syllabus for this conversation/i);
+    expect(learnerFacing).toMatch(/the syllabus for this conversation is the current mini-level/i);
+    // A scenario thread is a scene, not a lesson; the rule defers to it.
+    expect(learnerFacing).toMatch(/when the learner state names a scene, that scene/i);
   });
 
   it("carries the redirection protocol for anything off the theme", () => {

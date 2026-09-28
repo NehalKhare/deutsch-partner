@@ -143,6 +143,19 @@ function isSpeech(entry: FlowEntry): entry is ChatMessage {
  * box), and an upgrade prompt stands where the red alert would have, saying
  * when it reopens and that progress is saved (billing-and-plans-spec.md S4).
  */
+/**
+ * How far from the bottom still counts as following the conversation. A
+ * couple of lines: enough that a reply growing under the cursor does not
+ * un-follow the learner, not so much that a deliberate scroll up is ignored.
+ */
+const FOLLOW_THRESHOLD_PX = 48;
+
+/** What the header calls a scene, in place of a level. */
+const SCENE_LABEL: Readonly<Record<"roleplay" | "reading", string>> = {
+  roleplay: "Roleplay",
+  reading: "Reading",
+};
+
 export function Conversation({
   threadId,
   title,
@@ -154,6 +167,7 @@ export function Conversation({
   outputPreference = "text",
   masteryThreshold = 80,
   initialTally,
+  scene,
   capture,
   playback,
   voice,
@@ -161,6 +175,14 @@ export function Conversation({
   threadId: string;
   /** The thread's name, shown beside the companion in the header. */
   title?: string;
+  /**
+   * The scene this thread practises, when it is a scenario thread. A scene
+   * is beside the path rather than on it: the header names the scene instead
+   * of a level, and nothing that belongs to the path — the mastery strip, the
+   * cleared-level offer, the next-level button, a milestone — is drawn,
+   * because the server counts nothing said here towards any level.
+   */
+  scene?: { readonly mode: "roleplay" | "reading"; readonly title: string };
   /** A seed for tests and demos. Production threads always start empty. */
   initialMessages?: readonly ChatMessage[];
   /** How far the learner has come, which is how large the companion is. */
@@ -282,6 +304,48 @@ export function Conversation({
     setCanRecord(recorder.supported());
   }, [recorder]);
 
+  /**
+   * The transcript follows the conversation.
+   *
+   * A new message — the learner's own, a milestone, each chunk of a streaming
+   * reply — lands at the bottom, and the window goes with it, so the reply
+   * is read as it arrives rather than found by scrolling. Unless the learner
+   * has scrolled up: someone re-reading an earlier turn while the tutor
+   * answers is not yanked away from it. Being near the bottom is what opts
+   * back in, which is what every chat window does, and the ref rather than
+   * state because a scroll position is not something to re-render on.
+   *
+   * Done with a sentinel after the last message rather than by scrolling
+   * the transcript's own box: which element actually scrolls depends on the
+   * layout — the transcript when the height chain clips it, the page region
+   * around it when it does not — and scrolling the sentinel into view works
+   * whichever it is. Following is judged the same way, by where the
+   * sentinel sits in the viewport, from every scroll event on the page.
+   */
+  const endRef = useRef<HTMLDivElement>(null);
+  const followingRef = useRef(true);
+
+  useEffect(() => {
+    const track = () => {
+      const end = endRef.current;
+      if (!end) return;
+      const viewport = window.innerHeight || document.documentElement.clientHeight;
+      followingRef.current = end.getBoundingClientRect().bottom <= viewport + FOLLOW_THRESHOLD_PX;
+    };
+    // Capture, so a scroll inside any box on the page is seen, not only the
+    // document's own.
+    document.addEventListener("scroll", track, true);
+    return () => document.removeEventListener("scroll", track, true);
+  }, []);
+
+  useEffect(() => {
+    if (!followingRef.current) return;
+    const end = endRef.current;
+    if (end && typeof end.scrollIntoView === "function") {
+      end.scrollIntoView({ block: "end" });
+    }
+  }, [messages, streaming]);
+
   // The microphone must not stay open because somebody navigated away.
   useEffect(() => {
     return () => {
@@ -317,7 +381,9 @@ export function Conversation({
 
     const movedTo = response.headers.get("x-mini-level");
     const movedTheme = response.headers.get("x-mini-level-theme");
-    if (movedTo && Number.isFinite(Number(movedTo))) {
+    // A scene has no position to keep honest; the server sends none, and a
+    // header that arrived anyway must not draw a move into the scene.
+    if (!scene && movedTo && Number.isFinite(Number(movedTo))) {
       const level = Number(movedTo);
       const levelTheme = movedTheme ? decodeURIComponent(movedTheme) : null;
       setPosition({ miniLevel: level, theme: levelTheme });
@@ -364,7 +430,7 @@ export function Conversation({
     // The tally after this turn, from the same write the mastery gate reads.
     // The verdict is only worth showing when it is about a single counted
     // turn at the level the strip is already watching.
-    if (trailer) {
+    if (trailer && !scene) {
       const before =
         tallyRef.current.miniLevel === trailer.tally.miniLevel
           ? tallyRef.current
@@ -551,36 +617,53 @@ export function Conversation({
             </h1>
           ) : null}
           <p className="font-display text-xs uppercase tracking-wider text-copy/60">
-            Mini-level {position.miniLevel}
-            {position.theme ? (
+            {scene ? (
+              // A scene, not a level: what is being played, and that it stands
+              // beside the path rather than on it.
               <>
+                {SCENE_LABEL[scene.mode]}
                 {" · "}
-                <span lang="de" className="normal-case tracking-normal text-copy/60">
-                  {position.theme}
+                <span className="normal-case tracking-normal text-copy/60">
+                  practice, not counted towards your level
                 </span>
               </>
-            ) : null}
+            ) : (
+              <>
+                Mini-level {position.miniLevel}
+                {position.theme ? (
+                  <>
+                    {" · "}
+                    <span lang="de" className="normal-case tracking-normal text-copy/60">
+                      {position.theme}
+                    </span>
+                  </>
+                ) : null}
+              </>
+            )}
           </p>
         </div>
 
         <div className="flex items-center gap-2">
           {/* A visible handle on the same door "weiter" opens. It goes through
               the ordinary send path on purpose: the server owns the move, and
-              the tutor answers from the new level in the same breath. */}
-          <button
-            type="button"
-            onClick={() => void send("Weiter bitte!", { restoreOnFailure: false })}
-            disabled={sending}
-            aria-label="Move on to the next mini-level"
-            className={cn(
-              "flex items-center gap-1.5 rounded-full px-2.5 py-1 font-display text-xs",
-              "uppercase tracking-wider text-copy/70 transition-colors hover:text-brand",
-              "disabled:pointer-events-none disabled:opacity-50",
-              focusRing,
-            )}
-          >
-            Next mini-level →
-          </button>
+              the tutor answers from the new level in the same breath. Not in
+              a scene, where "weiter" is a line and there is no door. */}
+          {scene ? null : (
+            <button
+              type="button"
+              onClick={() => void send("Weiter bitte!", { restoreOnFailure: false })}
+              disabled={sending}
+              aria-label="Move on to the next mini-level"
+              className={cn(
+                "flex items-center gap-1.5 rounded-full px-2.5 py-1 font-display text-xs",
+                "uppercase tracking-wider text-copy/70 transition-colors hover:text-brand",
+                "disabled:pointer-events-none disabled:opacity-50",
+                focusRing,
+              )}
+            >
+              Next mini-level →
+            </button>
+          )}
 
           {canSpeak ? (
             <button
@@ -600,7 +683,9 @@ export function Conversation({
           ) : null}
 
           {/* Some learners want the score in view; some find a falling bar
-              louder than the tutor. Their call, remembered on this device. */}
+              louder than the tutor. Their call, remembered on this device.
+              A scene has no score to show. */}
+          {scene ? null : (
           <button
             type="button"
             onClick={toggleMastery}
@@ -614,10 +699,11 @@ export function Conversation({
           >
             Show progress
           </button>
+          )}
         </div>
       </header>
 
-      {showMastery ? (
+      {showMastery && !scene ? (
         <MasteryProgress
           tally={{ turns: tally.turns, strongTurns: tally.strongTurns }}
           lastTurn={lastTurn}
@@ -728,13 +814,16 @@ export function Conversation({
             </li>
           ) : null}
         </ol>
+        {/* Where "the end of the conversation" is, for the window to follow. */}
+        <div ref={endRef} aria-hidden data-transcript-end />
       </div>
 
       {/* The gate is open, and it is the learner's to walk through. Mastery
           moves nobody by itself: this says the level is cleared and offers
           the move, and "keep practising" is a real answer — the tutor will
           happily stay. A status region, so the news is read out once. */}
-      {hasMastered(tally, thresholdRatio(masteryThreshold)) &&
+      {!scene &&
+      hasMastered(tally, thresholdRatio(masteryThreshold)) &&
       offerDeclinedFor !== tally.miniLevel ? (
         <section
           role="status"

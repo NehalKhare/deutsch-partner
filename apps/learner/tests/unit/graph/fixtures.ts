@@ -108,6 +108,9 @@ export interface FakeOptions {
   readonly tallyReadFails?: boolean;
   /** The level the thread was opened at; defaults to where the learner is. */
   readonly threadMiniLevel?: number;
+  /** The thread's mode and title; a scenario thread is a roleplay or a reading. */
+  readonly threadMode?: "free_chat" | "roleplay" | "reading";
+  readonly threadTitle?: string;
   /** The learner's chosen pass mark, as a percentage. Defaults to 80. */
   readonly masteryThreshold?: number;
   readonly recordFails?: boolean;
@@ -257,6 +260,8 @@ export function fakeGraph(options: FakeOptions = {}) {
           id: threadId,
           learnerId: INPUT.learnerId,
           miniLevel: options.threadMiniLevel ?? STATE.miniLevel,
+          mode: options.threadMode ?? "free_chat",
+          title: options.threadTitle ?? "Reisen",
         });
       }),
     } as unknown as GraphDeps["conversations"],

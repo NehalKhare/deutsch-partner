@@ -20,6 +20,7 @@ import {
 } from "@dp/learning/vocabulary-engine";
 import type { Evaluator } from "@/lib/ai/evaluation";
 import type { BudgetScope } from "@dp/domain/budgets";
+import { isSceneMode, type ConversationMode } from "@dp/domain/conversation";
 import { PLAN_CATALOGUE, type PlanCode } from "@dp/domain/plans";
 import type { ModelGateway } from "@dp/gateway/gateway";
 import { callSpecFor } from "@dp/gateway/call-spec";
@@ -195,11 +196,36 @@ export async function loadThread(
 
   // The level the thread was opened at rides along: it is the place a fresh
   // visit to this conversation returns the learner to.
+  //
+  // So does the scene, when the thread is a scenario. The scene itself — the
+  // roles or the passage — is a seed message in the client's history, which
+  // the prompt fences as untrusted; the thread row is what says, from the
+  // trusted side, that this conversation is that scene and not the lesson.
+  const scene = sceneFor(thread.data);
+  const learner =
+    state.learner && scene
+      ? { ...state.learner, context: { ...state.learner.context, scene } }
+      : state.learner;
+
   return note(
-    { ...state, thread: { miniLevel: thread.data.miniLevel } },
+    {
+      ...state,
+      ...(learner ? { learner } : {}),
+      thread: { miniLevel: thread.data.miniLevel, ...(scene ? { scene } : {}) },
+    },
     "load_thread",
     "ok",
   );
+}
+
+/** A roleplay or a reading thread names its scene; every other mode has none. */
+export function sceneFor(thread: {
+  readonly mode: ConversationMode;
+  readonly title: string;
+}): LearnerContext["scene"] {
+  return isSceneMode(thread.mode)
+    ? { mode: thread.mode, title: thread.title.slice(0, 200) }
+    : undefined;
 }
 
 // --- 2.4: stand where this conversation lives ---------------------------------
@@ -227,6 +253,9 @@ export async function standAtThreadPlace(
 ): Promise<TurnState> {
   if (!state.learner) return note(state, "place", "skipped", "no learner");
   if (!state.thread) return note(state, "place", "skipped", "no thread");
+  // A scene is not a place on the path. Reopening a roleplay from months ago
+  // must not stand the learner back at the level they had then.
+  if (state.thread.scene) return note(state, "place", "skipped", "scene");
   if ((state.history ?? []).length > 0) {
     return note(state, "place", "skipped", "conversation under way");
   }
@@ -267,6 +296,9 @@ export async function honourAdvanceRequest(
   deps: GraphDeps,
 ): Promise<TurnState> {
   if (!state.learner) return note(state, "advance", "skipped", "no learner");
+  // Inside a scene "Weiter, bitte!" is a line — the next customer, the next
+  // question — not a request to leave the level. The path is not in play.
+  if (state.thread?.scene) return note(state, "advance", "skipped", "scene");
   if (!asksToAdvance(state.input.message)) {
     return note(state, "advance", "skipped", "not asked");
   }
@@ -685,6 +717,12 @@ export async function recordPerformance(
   }
   if (!state.evaluation) {
     return note(state, "record_performance", "skipped", "no evaluation");
+  }
+  // A scene is practice beside the path, not on it: the errors and the words
+  // are still recorded above, but no line goes into the level's tally, so a
+  // roleplay can never clear a mini-level or be told it has.
+  if (state.thread?.scene) {
+    return note(state, "record_performance", "skipped", "scene");
   }
 
   const recorded = await deps.performance.recordTurn(
