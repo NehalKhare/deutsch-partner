@@ -47,6 +47,7 @@ const EXPECTED_TABLES = [
   "model_invocations",
   "model_pricing_snapshots",
   "ops_jobs",
+  "plan_comps",
   "plan_passes",
   "product_prds",
   "product_proposals",
@@ -154,6 +155,7 @@ describe("indexes", () => {
       "billing_checkouts",
       "subscriptions",
       "plan_passes",
+      "plan_comps",
     ];
 
     for (const table of owned) {

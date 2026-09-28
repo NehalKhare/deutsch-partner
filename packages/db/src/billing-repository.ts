@@ -8,6 +8,7 @@ import {
   billingIntervalSchema,
   offerKeySchema,
   subscriptionStatusSchema,
+  type CompGrant,
   type OfferKey,
   type PassGrant,
   type SubscriptionGrant,
@@ -40,6 +41,7 @@ const CUSTOMERS = "billing_customers";
 const CHECKOUTS = "billing_checkouts";
 const SUBSCRIPTIONS = "subscriptions";
 const PASSES = "plan_passes";
+const COMPS = "plan_comps";
 const PRICES = "billing_prices";
 const EVENTS = "billing_events";
 
@@ -148,6 +150,17 @@ export const planPassRowSchema = z.object({
   stripe_payment_intent_id: stripePaymentIntentIdSchema.nullable(),
   amount_minor: z.number().int().min(0),
   currency: currencyCodeSchema,
+  revoked_at: timestamp.nullable(),
+  created_at: timestamp,
+});
+
+export const planCompRowSchema = z.object({
+  id: z.uuid(),
+  learner_id: z.uuid(),
+  plan_code: paidPlanCodeSchema,
+  starts_at: timestamp,
+  ends_at: timestamp.nullable(),
+  reason: z.string().regex(/^[a-z0-9_]{1,60}$/, "a reason code"),
   revoked_at: timestamp.nullable(),
   created_at: timestamp,
 });
@@ -282,6 +295,22 @@ const passGrantShape = planPassRowSchema.pick({
 
 const passGrantFromRow = passGrantShape.transform(
   (row): PassGrant => ({
+    planCode: row.plan_code,
+    startsAt: row.starts_at,
+    endsAt: row.ends_at,
+    revokedAt: row.revoked_at,
+  }),
+);
+
+const compGrantShape = planCompRowSchema.pick({
+  plan_code: true,
+  starts_at: true,
+  ends_at: true,
+  revoked_at: true,
+});
+
+const compGrantFromRow = compGrantShape.transform(
+  (row): CompGrant => ({
     planCode: row.plan_code,
     startsAt: row.starts_at,
     endsAt: row.ends_at,
@@ -467,6 +496,7 @@ export interface LearnerBillingGrants {
   readonly customerId: string | null;
   readonly subscriptions: readonly SubscriptionGrant[];
   readonly passes: readonly PassGrant[];
+  readonly comps: readonly CompGrant[];
   /** Any subscription row at all, in any status: what trial eligibility asks. */
   readonly hasEverSubscribed: boolean;
 }
@@ -573,7 +603,7 @@ export function createLearnerBillingRepository(client: DatabaseClient): LearnerB
 
       // The ownership filter is RLS's to enforce; it is also here so the query
       // uses the learner index and states what it is for.
-      const [customer, subscriptions, passes] = await Promise.all([
+      const [customer, subscriptions, passes, comps] = await Promise.all([
         maybeValue(
           client.from(CUSTOMERS).select("stripe_customer_id").eq("learner_id", id.data).maybeSingle(),
           z.object({ stripe_customer_id: stripeCustomerIdSchema }).transform((row) => row.stripe_customer_id),
@@ -590,6 +620,12 @@ export function createLearnerBillingRepository(client: DatabaseClient): LearnerB
           .eq("learner_id", id.data)
           .order("ends_at", { ascending: false })
           .limit(BILLING_ROWS_READ),
+        client
+          .from(COMPS)
+          .select(columnsOf(compGrantShape))
+          .eq("learner_id", id.data)
+          .order("starts_at", { ascending: false })
+          .limit(BILLING_ROWS_READ),
       ]);
       if (!customer.ok) return customer;
 
@@ -597,11 +633,14 @@ export function createLearnerBillingRepository(client: DatabaseClient): LearnerB
       if (!subscriptionRows.ok) return subscriptionRows;
       const passRows = decodeRows(passes, passGrantFromRow);
       if (!passRows.ok) return passRows;
+      const compRows = decodeRows(comps, compGrantFromRow);
+      if (!compRows.ok) return compRows;
 
       return ok({
         customerId: customer.data,
         subscriptions: subscriptionRows.data,
         passes: passRows.data,
+        comps: compRows.data,
         hasEverSubscribed: subscriptionRows.data.length > 0,
       });
     },

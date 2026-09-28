@@ -40,6 +40,7 @@ const grants = (over: Partial<LearnerBillingGrants> = {}): LearnerBillingGrants 
   customerId: null,
   subscriptions: [],
   passes: [],
+  comps: [],
   hasEverSubscribed: false,
   ...over,
 });
@@ -105,6 +106,19 @@ describe("standingFrom", () => {
   it("keeps a past-due subscription, which still grants during Stripe's retries", () => {
     const late = subscription({ status: "past_due" });
     expect(standingFrom(grants({ subscriptions: [late], hasEverSubscribed: true }), NOW).subscription).toEqual(late);
+  });
+
+  it("resolves an operator comp: Premium with no end, no card, still trial-eligible", () => {
+    const standing = standingFrom(
+      grants({
+        comps: [{ planCode: "premium", startsAt: new Date(NOW.getTime() - DAY), endsAt: null, revokedAt: null }],
+      }),
+      NOW,
+    );
+
+    expect(standing.entitlement).toEqual({ plan: "premium", source: "comp", until: null });
+    expect(standing.subscription).toBeNull();
+    expect(standing.hasCustomer).toBe(false);
   });
 });
 

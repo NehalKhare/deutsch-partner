@@ -1,4 +1,4 @@
-import { isGrantingStatus, type PassGrant, type SubscriptionGrant } from "./billing";
+import { isGrantingStatus, type CompGrant, type PassGrant, type SubscriptionGrant } from "./billing";
 import { PLAN_CATALOGUE, type PaidPlanCode, type PlanCode } from "./plans";
 
 /**
@@ -28,7 +28,7 @@ import { PLAN_CATALOGUE, type PaidPlanCode, type PlanCode } from "./plans";
  */
 export const SUBSCRIPTION_GRACE_MS = 3 * 86_400_000;
 
-export type EntitlementSource = "free" | "subscription" | "pass";
+export type EntitlementSource = "free" | "subscription" | "pass" | "comp";
 
 export interface Entitlement {
   readonly plan: PlanCode;
@@ -40,12 +40,14 @@ export interface Entitlement {
 export interface EntitlementInput {
   readonly subscriptions: readonly SubscriptionGrant[];
   readonly passes: readonly PassGrant[];
+  /** Operator comps (spec S5, source 3). Absent when the caller read none. */
+  readonly comps?: readonly CompGrant[];
   readonly now: Date;
 }
 
 interface Candidate {
   readonly plan: PaidPlanCode;
-  readonly source: "subscription" | "pass";
+  readonly source: "subscription" | "pass" | "comp";
   readonly until: Date | null;
 }
 
@@ -66,6 +68,14 @@ function passGrants(pass: PassGrant, now: Date): boolean {
   );
 }
 
+function compGrants(comp: CompGrant, now: Date): boolean {
+  return (
+    comp.revokedAt === null &&
+    comp.startsAt.getTime() <= now.getTime() &&
+    (comp.endsAt === null || now.getTime() < comp.endsAt.getTime())
+  );
+}
+
 /** An unknown end has not ended, so it outlasts any known one. */
 const endOf = (until: Date | null): number =>
   until === null ? Number.POSITIVE_INFINITY : until.getTime();
@@ -76,7 +86,7 @@ function better(a: Candidate, b: Candidate): Candidate {
   return endOf(b.until) > endOf(a.until) ? b : a;
 }
 
-export function resolveEntitlement({ subscriptions, passes, now }: EntitlementInput): Entitlement {
+export function resolveEntitlement({ subscriptions, passes, comps = [], now }: EntitlementInput): Entitlement {
   const candidates: Candidate[] = [
     ...subscriptions
       .filter((subscription) => subscriptionGrants(subscription, now))
@@ -88,6 +98,9 @@ export function resolveEntitlement({ subscriptions, passes, now }: EntitlementIn
     ...passes
       .filter((pass) => passGrants(pass, now))
       .map((pass) => ({ plan: pass.planCode, source: "pass" as const, until: pass.endsAt })),
+    ...comps
+      .filter((comp) => compGrants(comp, now))
+      .map((comp) => ({ plan: comp.planCode, source: "comp" as const, until: comp.endsAt })),
   ];
 
   if (candidates.length === 0) return { plan: "free", source: "free", until: null };

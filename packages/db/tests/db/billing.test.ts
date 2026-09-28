@@ -7,6 +7,7 @@ import {
   billingPriceRowSchema,
   createBillingAdminRepository,
   createLearnerBillingRepository,
+  planCompRowSchema,
   planPassRowSchema,
   subscriptionRowSchema,
   type BillingPriceInput,
@@ -47,6 +48,7 @@ beforeEach(async () => {
   await database.db.exec(`
     delete from public.billing_events;
     delete from public.billing_prices;
+    delete from public.plan_comps;
     delete from public.plan_passes;
     delete from public.subscriptions;
     delete from public.billing_checkouts;
@@ -743,6 +745,23 @@ describe("the learner's repository, under RLS", () => {
     expect(grants.data.passes).toEqual([
       { planCode: "plus", startsAt: NOW, endsAt: new Date("2027-03-24T12:00:00Z"), revokedAt: null },
     ]);
+    expect(grants.data.comps).toEqual([]);
+  });
+
+  it("reads a comp the operator granted, open end and all", async () => {
+    // Written as the operator writes it: through the secret key, never a
+    // learner's client. The learner only ever reads it back.
+    await database.db.query(
+      `insert into public.plan_comps (learner_id, plan_code, starts_at, reason)
+       values ($1, 'premium', $2, 'operator')`,
+      [ALICE, NOW],
+    );
+
+    const grants = await database.asLearner(ALICE, () => learnerRepo().grantsFor(ALICE));
+
+    expect(grants.ok && grants.data.comps).toEqual([
+      { planCode: "premium", startsAt: NOW, endsAt: null, revokedAt: null },
+    ]);
   });
 
   it("sees nothing of another learner, even when asked for them by id", async () => {
@@ -750,7 +769,7 @@ describe("the learner's repository, under RLS", () => {
 
     expect(asked).toEqual({
       ok: true,
-      data: { customerId: null, subscriptions: [], passes: [], hasEverSubscribed: false },
+      data: { customerId: null, subscriptions: [], passes: [], comps: [], hasEverSubscribed: false },
     });
   });
 
@@ -787,6 +806,7 @@ const CONTRACTS: ReadonlyArray<[string, ZodObject]> = [
   ["billing_checkouts", billingCheckoutRowSchema],
   ["subscriptions", subscriptionRowSchema],
   ["plan_passes", planPassRowSchema],
+  ["plan_comps", planCompRowSchema],
   ["billing_prices", billingPriceRowSchema],
 ];
 

@@ -399,8 +399,12 @@ Stated here so nobody has to discover it by reading the code.
   account.
 - **B7 to B10 are not built.** No hands-free conversation mode for Premium
   (B7); voice is not in the ledger (B8, below); the operator app has no revenue
-  or margin view per plan, no comps and no refunds through worker jobs (B9);
-  and none of the consumer-law pages or Stripe Tax live (B10).
+  or margin view per plan and no refunds through worker jobs (B9); and none of
+  the consumer-law pages or Stripe Tax live (B10). Comps exist as a grant
+  source — the `plan_comps` table, spec S5 source 3, resolved and shown like
+  any other grant, with the operator's own account seeded Premium by migration
+  — but the operator app has no page to grant or revoke one; that is SQL
+  through the secret key.
 - **No reconcile job.** Stripe's retry schedule is the only queue: an event
   that fails for longer than Stripe retries (three days in live mode) is never
   applied unless an operator resends it, and

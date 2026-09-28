@@ -200,18 +200,23 @@ describe("the admin repository's writes", () => {
 
 describe("the learner's repository", () => {
   it("asks for the columns entitlement needs, filtered to the learner", async () => {
-    const fake = createFakeSupabase({ subscriptions: { data: [] }, plan_passes: { data: [] } });
+    const fake = createFakeSupabase({
+      subscriptions: { data: [] },
+      plan_passes: { data: [] },
+      plan_comps: { data: [] },
+    });
 
     const result = await createLearnerBillingRepository(fake.client).grantsFor(LEARNER);
 
     expect(result).toEqual({
       ok: true,
-      data: { customerId: null, subscriptions: [], passes: [], hasEverSubscribed: false },
+      data: { customerId: null, subscriptions: [], passes: [], comps: [], hasEverSubscribed: false },
     });
     expect(fake.methodArgs("subscriptions", "select")).toEqual([
       ["plan_code, status, current_period_end, cancel_at_period_end, trial_end"],
     ]);
     expect(fake.methodArgs("plan_passes", "eq")).toEqual([["learner_id", LEARNER]]);
+    expect(fake.methodArgs("plan_comps", "eq")).toEqual([["learner_id", LEARNER]]);
   });
 
   it("fails the read when a row is malformed rather than dropping it", async () => {
@@ -219,6 +224,7 @@ describe("the learner's repository", () => {
     const fake = createFakeSupabase({
       subscriptions: { data: [{ plan_code: "gold", status: "active", current_period_end: null, cancel_at_period_end: false, trial_end: null }] },
       plan_passes: { data: [] },
+      plan_comps: { data: [] },
     });
 
     const result = await createLearnerBillingRepository(fake.client).grantsFor(LEARNER);

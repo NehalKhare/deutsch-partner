@@ -55,6 +55,7 @@ const BILLING_TABLES = [
   "billing_checkouts",
   "subscriptions",
   "plan_passes",
+  "plan_comps",
 ] as const;
 
 beforeAll(async () => {
@@ -107,6 +108,11 @@ beforeAll(async () => {
          (learner_id, plan_code, starts_at, ends_at, stripe_checkout_session_id, amount_minor, currency)
        values ($1, 'plus', now(), now() + interval '180 days', $2, 100, 'eur')`,
       [learner, `cs_test_${tag}`],
+    );
+    await database.db.query(
+      `insert into public.plan_comps (learner_id, plan_code, reason)
+       values ($1, 'premium', 'operator')`,
+      [learner],
     );
   }
 });

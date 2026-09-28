@@ -76,6 +76,17 @@ describe("planStatusLine", () => {
     ).toBe("Premium pass · until 12 October 2026");
   });
 
+  it("says a comp is on the house, with its end only when it has one", () => {
+    const onComp = (until: Date | null): BillingStanding => ({
+      ...UNREADABLE_STANDING,
+      readable: true,
+      entitlement: { plan: "premium", source: "comp", until },
+    });
+
+    expect(planStatusLine(onComp(null))).toBe("Premium, on the house");
+    expect(planStatusLine(onComp(PERIOD_END))).toBe("Premium, on the house · until 12 October 2026");
+  });
+
   it("says the plan could not be read, rather than calling a subscriber Free", () => {
     expect(planStatusLine(UNREADABLE_STANDING)).toBe("Your plan could not be read just now.");
   });

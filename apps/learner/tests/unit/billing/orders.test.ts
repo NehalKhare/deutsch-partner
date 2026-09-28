@@ -75,7 +75,7 @@ beforeEach(async () => {
   provider = createMockBillingProvider();
   store = createMemoryBillingStore();
   await store.replacePrices(ALL_PRICES, NOW);
-  grants = { customerId: null, subscriptions: [], passes: [], hasEverSubscribed: false };
+  grants = { customerId: null, subscriptions: [], passes: [], comps: [], hasEverSubscribed: false };
   grantsReadable = true;
   info.mockReset();
   warn.mockReset();

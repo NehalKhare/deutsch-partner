@@ -24,6 +24,14 @@ export function planStatusLine(standing: BillingStanding): string {
     return entitlement.until ? `${name} pass · until ${formatBillingDate(entitlement.until)}` : `${name} pass`;
   }
 
+  if (entitlement.source === "comp") {
+    // Given, not sold: nothing renews and nothing is charged, so the only
+    // promise worth making is when it ends, if it ends at all.
+    return entitlement.until
+      ? `${name}, on the house · until ${formatBillingDate(entitlement.until)}`
+      : `${name}, on the house`;
+  }
+
   if (subscription?.status === "trialing") {
     const end = subscription.trialEnd ?? subscription.currentPeriodEnd;
     return end ? `${name} trial · ends on ${formatBillingDate(end)}` : `${name} trial`;

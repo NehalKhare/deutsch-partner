@@ -68,7 +68,12 @@ export function standingFrom(rows: LearnerBillingGrants, now: Date): BillingStan
 
   return {
     readable: true,
-    entitlement: resolveEntitlement({ subscriptions: rows.subscriptions, passes: rows.passes, now }),
+    entitlement: resolveEntitlement({
+      subscriptions: rows.subscriptions,
+      passes: rows.passes,
+      comps: rows.comps,
+      now,
+    }),
     subscription: live[0] ?? null,
     paidSubscription: live.find((subscription) => subscription.status !== "trialing") ?? null,
     trial: live.find((subscription) => subscription.status === "trialing") ?? null,

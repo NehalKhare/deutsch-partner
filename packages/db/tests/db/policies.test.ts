@@ -58,6 +58,7 @@ const READ_ONLY_OWNED_TABLES = [
   "billing_checkouts",
   "subscriptions",
   "plan_passes",
+  "plan_comps",
 ];
 
 beforeAll(async () => {

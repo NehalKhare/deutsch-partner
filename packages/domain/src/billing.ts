@@ -132,3 +132,16 @@ export interface PassGrant {
   readonly endsAt: Date;
   readonly revokedAt: Date | null;
 }
+
+/**
+ * An operator comp as entitlement needs it (spec S5, grant source 3): a plan
+ * given rather than sold — the team's own accounts, a make-good — written only
+ * through the secret key, never by anything a learner can reach. The window is
+ * [startsAt, endsAt); a null endsAt grants until the comp is revoked.
+ */
+export interface CompGrant {
+  readonly planCode: PaidPlanCode;
+  readonly startsAt: Date;
+  readonly endsAt: Date | null;
+  readonly revokedAt: Date | null;
+}

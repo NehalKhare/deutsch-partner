@@ -210,6 +210,7 @@ export const EXPORTED_TABLES = [
   "billing_checkouts",
   "subscriptions",
   "plan_passes",
+  "plan_comps",
 ] as const;
 
 const exportSchema = z.object({

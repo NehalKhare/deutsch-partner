@@ -348,7 +348,25 @@ Act disclosures. Kleinunternehmer status, OSS registration and Stripe Tax
 versus a merchant of record are a Steuerberater's questions. Account deletion
 must cancel an active subscription first, and does not yet.
 
-## Security posture
+### Comps
+
+A comp gives a plan without a sale (billing-and-plans-spec.md S5, source 3):
+a row in `plan_comps`, written through the secret-key client — the SQL editor
+or a service-role script, never a learner's session, which can only read it.
+The operator app has no page for this yet. To grant Premium indefinitely:
+
+```sql
+insert into public.plan_comps (learner_id, plan_code, reason)
+values ('<learner uuid>', 'premium', 'operator');
+```
+
+`ends_at` bounds it, `reason` is a short code (`^[a-z0-9_]{1,60}$` — never a
+name or an email), and revoking is `update public.plan_comps set revoked_at =
+now() where id = '<id>'`; nothing deletes, the row is the record. The
+operator's own learner account (`69dc…f363e`) is seeded a Premium comp by
+migration `20260928100000_plan_comps.sql`, guarded on the profile existing —
+an account created after that migration ran gets its comp with the insert
+above.
 
 - Row Level Security on every table a learner owns, with `USING` **and**
   `WITH CHECK` on every update policy

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { PassGrant, SubscriptionGrant } from "../src/billing";
+import type { CompGrant, PassGrant, SubscriptionGrant } from "../src/billing";
 import {
   SUBSCRIPTION_GRACE_MS,
   nextPassStart,
@@ -42,8 +42,21 @@ function pass(over: Partial<PassGrant> = {}): PassGrant {
   };
 }
 
-const resolve = (subscriptions: readonly SubscriptionGrant[], passes: readonly PassGrant[] = []) =>
-  resolveEntitlement({ subscriptions, passes, now: NOW });
+function comp(over: Partial<CompGrant> = {}): CompGrant {
+  return {
+    planCode: "premium",
+    startsAt: at(-DAY),
+    endsAt: null,
+    revokedAt: null,
+    ...over,
+  };
+}
+
+const resolve = (
+  subscriptions: readonly SubscriptionGrant[],
+  passes: readonly PassGrant[] = [],
+  comps: readonly CompGrant[] = [],
+) => resolveEntitlement({ subscriptions, passes, comps, now: NOW });
 
 describe("with nothing to grant", () => {
   it("is free, from nowhere, with no end", () => {
@@ -144,6 +157,39 @@ describe("a pass", () => {
 
   it("grants nothing once it is revoked, however much of it is left", () => {
     expect(resolve([], [pass({ revokedAt: at(-1) })]).plan).toBe("free");
+  });
+});
+
+describe("an operator comp", () => {
+  it("grants its plan with no end while it has none", () => {
+    expect(resolve([], [], [comp()])).toEqual({ plan: "premium", source: "comp", until: null });
+  });
+
+  it("grants until its end when it has one, end exclusive", () => {
+    expect(resolve([], [], [comp({ endsAt: at(30 * DAY) })])).toEqual({
+      plan: "premium",
+      source: "comp",
+      until: at(30 * DAY),
+    });
+    expect(resolve([], [], [comp({ endsAt: NOW })]).plan).toBe("free");
+  });
+
+  it("grants nothing before it starts", () => {
+    expect(resolve([], [], [comp({ startsAt: at(1) })]).plan).toBe("free");
+  });
+
+  it("grants nothing once it is revoked, even one with no end", () => {
+    expect(resolve([], [], [comp({ revokedAt: at(-1) })]).plan).toBe("free");
+  });
+
+  it("outlasts a paid grant of the same plan, because it has not ended", () => {
+    const entitlement = resolve([subscription({ planCode: "premium" })], [], [comp()]);
+
+    expect(entitlement).toEqual({ plan: "premium", source: "comp", until: null });
+  });
+
+  it("is absent from the input where a caller has no comp rows to hand", () => {
+    expect(resolveEntitlement({ subscriptions: [], passes: [], now: NOW }).plan).toBe("free");
   });
 });
 

@@ -160,16 +160,23 @@ Grant sources:
    incomplete_expired, unpaid, canceled and paused grant nothing.
    A subscription with cancel_at_period_end still grants until it ends.
 2. A pass row whose [starts_at, ends_at) contains now and that is not revoked.
-3. (Not built) an operator comp.
+3. An operator comp (plan_comps): a plan given rather than sold. Its window is
+   [starts_at, ends_at) with a null ends_at granting until revoked, and a
+   revoked comp grants nothing. A comp carries a reason code, never free text,
+   and is written only through the secret key — the learner can read their own
+   comp rows and nothing more, exactly as with the other grants. No Stripe
+   object stands behind it, so the webhook never touches it.
 
 Resolution is a pure function in packages/domain/src/entitlement.ts over rows
 already read, so it is tested without a database. It returns the plan, which
 source granted it, and until when.
 
-Entitlement is written by exactly one path: the Stripe webhook (section 8),
-through the secret-key client. The learner can read their own billing rows
-and nothing else; RLS grants select only. The success redirect after Checkout
-grants nothing — it is a page that waits for the webhook.
+Paid entitlement is written by exactly one path: the Stripe webhook (section
+8), through the secret-key client. Comps are written through the same
+secret-key client by the operator, never from Stripe. The learner can read
+their own billing rows and nothing else; RLS grants select only. The success
+redirect after Checkout grants nothing — it is a page that waits for the
+webhook.
 
 ==================================================
 6. PAYMENT METHODS
