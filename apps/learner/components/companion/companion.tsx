@@ -12,11 +12,15 @@ import styles from "./companion.module.css";
  * different state.
  */
 
-const MOOD_DESCRIPTION: Readonly<Record<CompanionState["emotion"], string>> = {
-  smiling: `${TUTOR.name}, your German partner, smiling`,
-  listening: `${TUTOR.name}, your German partner, listening`,
-  sad: `${TUTOR.name}, your German partner, looking sad`,
+const MOOD: Readonly<Record<CompanionState["emotion"], string>> = {
+  smiling: "smiling",
+  listening: "listening",
+  sad: "looking sad",
 };
+
+function moodDescription(name: string, emotion: CompanionState["emotion"]): string {
+  return `${name}, your German partner, ${MOOD[emotion]}`;
+}
 
 /** How much larger the fully grown companion is than a brand-new one. */
 const GROWTH_RANGE = 0.55;
@@ -25,6 +29,8 @@ export interface CompanionProps {
   readonly state: CompanionState;
   /** Overrides the default description where context suggests a better one. */
   readonly label?: string;
+  /** Whose face this is: the learner's chosen tutor, Jonas unless told otherwise. */
+  readonly tutorName?: string;
   /** Hides it from assistive technology when nearby text already says this. */
   readonly decorative?: boolean;
   readonly className?: string;
@@ -33,6 +39,7 @@ export interface CompanionProps {
 export function Companion({
   state,
   label,
+  tutorName = TUTOR.name,
   decorative = false,
   className,
 }: CompanionProps) {
@@ -49,7 +56,10 @@ export function Companion({
       data-animated={state.animated}
       {...(decorative
         ? { "aria-hidden": true }
-        : { role: "img", "aria-label": label ?? MOOD_DESCRIPTION[state.emotion] })}
+        : {
+            role: "img",
+            "aria-label": label ?? moodDescription(tutorName, state.emotion),
+          })}
     >
       <div className={styles.body}>
         <div className={styles.face}>

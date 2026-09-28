@@ -40,12 +40,16 @@ function replyStream() {
   };
 }
 
-function renderConversation(initialMessages: readonly ChatMessage[] = []) {
+function renderConversation(
+  initialMessages: readonly ChatMessage[] = [],
+  extra: { readonly voiceGender?: "male" | "female" } = {},
+) {
   return render(
     <Conversation
       threadId="1e2f0a4c-6b7d-4e8f-9a0b-1c2d3e4f5a6b"
       initialMessages={initialMessages}
       miniLevel={1}
+      {...extra}
     />,
   );
 }
@@ -496,6 +500,29 @@ describe("what a screen reader is told", () => {
     await waitFor(() => {
       expect(screen.getByRole("status")).toHaveTextContent("");
     });
+  });
+
+  it("names the tutor the learner's voice belongs to", async () => {
+    // The female voice is Alex, not Jonas read out by a woman: the name on
+    // screen has to be the same person the reply is spoken by.
+    const reply = replyStream();
+    server.use(
+      http.post(CHAT_ENDPOINT, () => new HttpResponse(reply.body, { status: 200 })),
+    );
+
+    const user = userEvent.setup();
+    renderConversation([], { voiceGender: "female" });
+
+    expect(screen.getByText(/Alex is waiting/)).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText(/your message in german/i), "Hallo");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("status")).toHaveTextContent("Alex is replying.");
+    });
+
+    reply.end();
   });
 
   it("does not read the reply out again on every chunk", async () => {

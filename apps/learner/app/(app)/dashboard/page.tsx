@@ -4,6 +4,7 @@ import { Companion } from "@/components/companion/companion";
 import { VocabularyTiles } from "@/components/dashboard/vocabulary-tiles";
 import { focusRing, linkInline, pageTitle, prose } from "@dp/ui/styles";
 import { companionStateFor } from "@dp/domain/companion";
+import { TUTOR, tutorFor } from "@dp/domain/tutor";
 import { cn } from "@dp/ui/utils";
 import { ERROR_TYPE_LABELS } from "@dp/learning/error-labels";
 import { getMiniLevel } from "@dp/learning/mini-levels";
@@ -337,7 +338,8 @@ export default async function DashboardPage() {
             {/* One line of purpose: this list is what the tutor is quietly
                 watching for in every conversation. */}
             <span className="truncate text-xs text-copy/50">
-              Jonas watches for these
+              {tutorFor(profile.ok ? profile.data.voicePreference : TUTOR.voice).name}{" "}
+              watches for these
             </span>
           </div>
           <ul className="divide-y divide-edge/40">

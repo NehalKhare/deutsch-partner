@@ -1,6 +1,6 @@
 import { TRIAL_DAYS } from "@dp/domain/billing";
 import { CEFR_LEVELS, MAX_MINI_LEVEL } from "@dp/domain/cefr";
-import { TUTOR } from "@dp/domain/tutor";
+import { TUTOR, tutorFor } from "@dp/domain/tutor";
 
 import { planName } from "@/lib/billing/copy";
 import { PRICING_PATH } from "@/lib/billing/offers";
@@ -29,7 +29,8 @@ export function llmsText(appUrl: string): string {
     "",
     `${SITE.name} is a web application for English speakers learning German, from ` +
       `absolute beginner to ${lastLevel}. The learner talks to a tutor named ${TUTOR.name} ` +
-      `in German; the tutor replies at the learner's level, corrects mistakes in the way ` +
+      `(or ${tutorFor("female").name}, with the female voice) in German; the tutor ` +
+      `replies at the learner's level, corrects mistakes in the way ` +
       `that level can use, and keeps a record of what the learner knows. The curriculum ` +
       `is ${MAX_MINI_LEVEL} hand-authored mini-levels across ${CEFR_LEVELS.join(", ")}, ` +
       `all open from the first day. The site is written in English and teaches German.`,

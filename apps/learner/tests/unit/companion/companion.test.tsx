@@ -34,6 +34,13 @@ describe("accessibility", () => {
     );
   });
 
+  it("is Alex's face when the learner chose the female voice", () => {
+    render(<Companion state={at(1, "idle")} tutorName="Alex" />);
+
+    expect(screen.getByRole("img")).toHaveAccessibleName(/^Alex, your German partner/);
+    expect(screen.getByRole("img")).not.toHaveAccessibleName(/Jonas/);
+  });
+
   it("accepts a caller-supplied description when context needs a better one", () => {
     render(<Companion state={at(1, "speaking")} label="Your partner is replying" />);
 

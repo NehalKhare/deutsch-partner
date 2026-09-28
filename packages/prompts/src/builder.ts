@@ -4,6 +4,7 @@ import { cefrLevelSchema, type CEFRLevel } from "@dp/domain/cefr";
 import { planCodeSchema } from "@dp/domain/plans";
 import { nonEmptyTextSchema } from "@dp/domain/primitives";
 import { tierFor } from "@dp/domain/tasks";
+import { TUTOR, VOICE_GENDERS, tutorFor, type TutorPersona } from "@dp/domain/tutor";
 import {
   MIN_RECENT_MESSAGES,
   SHEDDING_ORDER,
@@ -66,6 +67,13 @@ export const buildRequestSchema = z.strictObject({
    * reads it, so no plan is a different prompt version.
    */
   plan: planCodeSchema.optional(),
+  /**
+   * The learner's chosen voice, which is also their choice of tutor: Jonas or
+   * Alex. Read by the identity block alone. Unlike the plan, it does change
+   * the versioned text — a different name is a different promise — so the
+   * lock records a fingerprint per persona.
+   */
+  tutorVoice: z.enum(VOICE_GENDERS).default(TUTOR.voice),
 });
 
 export type BuildRequest = z.input<typeof buildRequestSchema>;
@@ -140,6 +148,7 @@ interface Context extends SheddableContext {
   readonly learner: z.infer<typeof learnerContextSchema>;
   readonly userMessage: string;
   readonly outputContract: OutputContract;
+  readonly tutor: TutorPersona;
 }
 
 /** Renders one block from the current context, or null when it has nothing to say. */
@@ -152,7 +161,7 @@ function renderBlock(id: BlockId, context: Context): RenderedBlock | null {
 
   switch (id) {
     case "identity":
-      return render(id, buildIdentityBlock(context.register), cap);
+      return render(id, buildIdentityBlock(context.register, context.tutor), cap);
     case "safety":
       return render(id, buildSafetyBlock(context.register), cap);
     case "data_boundary":
@@ -368,6 +377,7 @@ export function buildPrompt(
     recentMessages: [...input.recentMessages],
     userMessage: input.userMessage,
     summaryDropped: false,
+    tutor: tutorFor(input.tutorVoice),
   };
 
   let blocks = assemble(entry, context);

@@ -212,11 +212,12 @@ const ENTRIES: readonly PromptCatalogEntry[] = [
   {
     name: "conversation.turn",
     register: "learner_facing",
-    // Version 5: the reply marks its teaching — the learner's wrong form in
-    // backticks, the corrected form or a suggested line in bold, at most one
-    // bolded line — so the client can render mistakes and suggestions in
-    // colour instead of leaving them buried in prose.
-    version: 5,
+    // Version 6: the tutor is whoever the learner's voice says — Jonas with
+    // the male voice, Alex with the female — and the identity states the
+    // gender outright, so German's Lehrer/Lehrerin comes out right. (Version
+    // 5 marked the reply's teaching: the wrong form in backticks, the
+    // corrected form or a suggested line in bold, at most one bolded line.)
+    version: 6,
     task: "conversation.turn",
     tier: routeFor("conversation.turn").tier,
     purpose: "The learner-facing German conversation turn.",
@@ -229,7 +230,7 @@ const ENTRIES: readonly PromptCatalogEntry[] = [
   {
     name: "conversation.repair",
     register: "learner_facing",
-    version: 5,
+    version: 6,
     task: "conversation.repair",
     tier: routeFor("conversation.repair").tier,
     purpose:

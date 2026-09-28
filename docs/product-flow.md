@@ -2,21 +2,26 @@
 
 ## Who the tutor is
 
-**Jonas.** A named person rather than "the assistant", because someone
-practising conversation is practising it with somebody — and because without a
-name the model invented one every session: Anna in one thread, *dein
+**Jonas, or Alex.** A named person rather than "the assistant", because
+someone practising conversation is practising it with somebody — and because
+without a name the model invented one every session: Anna in one thread, *dein
 Deutsch-Partner* in the next, which is not a tutor a learner comes back to.
 
-He is a man, and that is declared once in [`domain/tutor.ts`](../domain/tutor.ts)
-rather than three times. Three layers have to agree about it: the prompt that
-tells him who he is, the speech provider that picks a voice, and the interface
-that puts his name on screen. The Web Speech API exposes no gender at all, so
-the browser fallback resolves the same fact against a list of German voices it
-knows to be men — a preference, not a requirement, because being read to in the
-wrong voice beats not being read to.
+There are two, and the learner's choice of voice picks between them: the male
+voice is Jonas, a man; the female voice is Alex, a woman. That is declared once
+in [`domain/tutor.ts`](../domain/tutor.ts) rather than three times. Three
+layers have to agree about it: the prompt that tells the tutor who they are
+(and, because German marks the speaker's gender — *Lehrer* or *Lehrerin* —
+which forms to use for themselves), the speech provider that picks a voice, and
+the interface that puts the name on screen. The Web Speech API exposes no
+gender at all, so the browser fallback resolves the same fact against a list of
+German voices it knows to be men or women — a preference, not a requirement,
+because being read to in the wrong voice beats not being read to.
 
-Changing his name is a one-line edit and a prompt version bump, which the
-version-lock test will insist on.
+Jonas is the default: a profile from before the choice existed is a learner who
+has not chosen. Changing either name is a one-line edit and a prompt version
+bump, which the version-lock test will insist on — it records a fingerprint per
+persona as well as per level, since the name sits in the identity block.
 
 ## Who this is for
 
@@ -451,8 +456,9 @@ product to compute.
 a learner, editable in one place: the learning goal, how corrections should
 arrive, topics and interests, whether they prefer typing or speaking, and
 which voice — male or female — reads replies aloud. The choice steers both
-speech engines (the provider's voice and the browser's), and the tutor stays
-Jonas either way; only the sound changes. The
+speech engines (the provider's voice and the browser's) and the tutor with
+them: the male voice is Jonas, the female voice is Alex, in the prompt, in
+the reply and on screen. The
 values are the onboarding answers, and they stay closed sets with caps for the
 same reason they were at onboarding — each one becomes prompt content and a
 retrieval filter on every turn.

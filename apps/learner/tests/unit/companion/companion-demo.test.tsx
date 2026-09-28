@@ -6,13 +6,25 @@ import { CompanionDemo } from "@/components/landing/companion-demo";
 import { TUTOR } from "@dp/domain/tutor";
 
 describe("CompanionDemo", () => {
-  it("starts with the companion speaking, so the page opens alive", async () => {
+  it("starts on the learner's turn, so the visitor is the one invited to speak", async () => {
     render(<CompanionDemo />);
 
     expect(await screen.findByRole("img")).toHaveAttribute(
       "data-emotion",
-      "smiling",
+      "listening",
     );
+    expect(screen.getByRole("radio", { name: /you speak/i })).toBeChecked();
+  });
+
+  it("comes alive when the companion takes its turn", async () => {
+    const user = userEvent.setup();
+    render(<CompanionDemo />);
+
+    await user.click(
+      screen.getByRole("radio", { name: new RegExp(`${TUTOR.name} speaks`, "i") }),
+    );
+
+    expect(screen.getByRole("img")).toHaveAttribute("data-emotion", "smiling");
     expect(screen.getByRole("img")).toHaveAttribute("data-animated", "true");
   });
 
@@ -26,6 +38,9 @@ describe("CompanionDemo", () => {
     const user = userEvent.setup();
     render(<CompanionDemo />);
 
+    await user.click(
+      screen.getByRole("radio", { name: new RegExp(`${TUTOR.name} speaks`, "i") }),
+    );
     await user.click(screen.getByRole("radio", { name: /you speak/i }));
 
     expect(screen.getByRole("img")).toHaveAttribute("data-emotion", "listening");
@@ -35,6 +50,9 @@ describe("CompanionDemo", () => {
     const user = userEvent.setup();
     render(<CompanionDemo />);
 
+    await user.click(
+      screen.getByRole("radio", { name: new RegExp(`${TUTOR.name} speaks`, "i") }),
+    );
     await user.click(screen.getByRole("radio", { name: /you speak/i }));
 
     expect(screen.getByRole("img")).toHaveAttribute("data-animated", "false");
@@ -53,12 +71,13 @@ describe("CompanionDemo", () => {
     const user = userEvent.setup();
     render(<CompanionDemo />);
 
-    await user.click(screen.getByRole("radio", { name: /you speak/i }));
+    const tutorTurn = screen.getByRole("radio", {
+      name: new RegExp(`${TUTOR.name} speaks`, "i"),
+    });
+    await user.click(tutorTurn);
 
-    expect(screen.getByRole("radio", { name: /you speak/i })).toBeChecked();
-    expect(
-      screen.getByRole("radio", { name: new RegExp(`${TUTOR.name} speaks`, "i") }),
-    ).not.toBeChecked();
+    expect(tutorTurn).toBeChecked();
+    expect(screen.getByRole("radio", { name: /you speak/i })).not.toBeChecked();
   });
 
   it("changes what the companion says with the turn", async () => {

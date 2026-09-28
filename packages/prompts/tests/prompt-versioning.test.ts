@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { CEFR_LEVELS } from "@dp/domain/cefr";
+import { VOICE_GENDERS, type VoiceGender } from "@dp/domain/tutor";
 import {
   TRAINER_PROMPT_NAME,
   TRAINER_PROMPT_VERSION,
@@ -62,15 +63,26 @@ const RECORDED: Readonly<Record<string, string>> = {
   // the fingerprints — a promise about the entry's own blocks — are inherited
   // unchanged. That is exactly why the versions had to move by hand: these
   // are behaviour changes the lock cannot see.
-  // Version 5: the reply marks its teaching — the wrong form in backticks,
-  // the corrected form or one suggested line in bold — so mistakes and
-  // suggestions render in colour. (Version 4 fixed the correction's shape.)
-  "conversation.turn@5/A1": "7e503226",
-  "conversation.turn@5/A2": "61631c4b",
-  "conversation.turn@5/B1": "cb5b0716",
-  "conversation.repair@5/A1": "7e503226",
-  "conversation.repair@5/A2": "61631c4b",
-  "conversation.repair@5/B1": "cb5b0716",
+  // Version 6: the tutor is whoever the learner's voice says — Jonas with
+  // the male voice, Alex with the female — and the identity block states the
+  // gender so German's Lehrer/Lehrerin comes out right. The name is in the
+  // identity block, which the lock covers, so a learner-facing version is now
+  // a promise per persona as well as per level: six keys, not three. (Version
+  // 5 marked the reply's teaching — the wrong form in backticks, the
+  // corrected form or one suggested line in bold — so mistakes and
+  // suggestions render in colour.)
+  "conversation.turn@6/A1/male": "b08fd997",
+  "conversation.turn@6/A1/female": "fc42c153",
+  "conversation.turn@6/A2/male": "17286650",
+  "conversation.turn@6/A2/female": "61397ac4",
+  "conversation.turn@6/B1/male": "2fefb3ef",
+  "conversation.turn@6/B1/female": "c057bee3",
+  "conversation.repair@6/A1/male": "b08fd997",
+  "conversation.repair@6/A1/female": "fc42c153",
+  "conversation.repair@6/A2/male": "17286650",
+  "conversation.repair@6/A2/female": "61397ac4",
+  "conversation.repair@6/B1/male": "2fefb3ef",
+  "conversation.repair@6/B1/female": "c057bee3",
   // Version 5 (evaluation) / version 3 (extraction.errors): the closed error
   // taxonomy gained register_formality — du/Sie and register slips — and the
   // taxonomy renders into both output contracts. (Version 4 fixed the
@@ -117,13 +129,18 @@ const RECORDED: Readonly<Record<string, string>> = {
  * one fingerprint — so tightening a field cap or adding an enum member would
  * change what a model is asked for and change no hash.
  */
-function versionedText(entry: PromptCatalogEntry, level?: "A1" | "A2" | "B1"): string {
+function versionedText(
+  entry: PromptCatalogEntry,
+  level?: "A1" | "A2" | "B1",
+  tutorVoice?: VoiceGender,
+): string {
   const cefr = level ?? "A2";
   const built = buildPrompt(entry, {
     policy: behaviorPolicyFor({ cefr }),
     cefr,
     learner: LEARNER,
     userMessage: "Ich fahre morgen nach Berlin.",
+    ...(tutorVoice ? { tutorVoice } : {}),
   });
 
   if (!built.ok) throw new Error(`${entry.name} did not build: ${built.detail}`);
@@ -136,10 +153,14 @@ function keysFor(entry: PromptCatalogEntry): Array<[string, string]> {
     return [[`${entry.name}@${entry.version}`, versionedText(entry)]];
   }
 
-  return CEFR_LEVELS.map((level) => [
-    `${entry.name}@${entry.version}/${level}`,
-    versionedText(entry, level),
-  ]);
+  // One key per level per persona: the tutor's name and gender sit in the
+  // identity block, so Jonas's prompt and Alex's are two different texts.
+  return CEFR_LEVELS.flatMap((level) =>
+    VOICE_GENDERS.map((voice): [string, string] => [
+      `${entry.name}@${entry.version}/${level}/${voice}`,
+      versionedText(entry, level, voice),
+    ]),
+  );
 }
 
 describe("prompt versions are locked to their text", () => {
@@ -199,6 +220,25 @@ describe("prompt versions are locked to their text", () => {
     );
 
     expect(new Set(perLevel).size).toBe(CEFR_LEVELS.length);
+  });
+
+  it("gives each persona its own fingerprint, because Jonas and Alex are different people", () => {
+    const perPersona = VOICE_GENDERS.map((voice) =>
+      fingerprint(versionedText(PROMPT_CATALOGUE[0], "A2", voice)),
+    );
+
+    expect(new Set(perPersona).size).toBe(VOICE_GENDERS.length);
+  });
+
+  it("gives a machine entry one fingerprint whatever the voice, since it is nobody", () => {
+    const entry = PROMPT_CATALOGUE.find(
+      (candidate) => candidate.register === "machine",
+    ) as PromptCatalogEntry;
+    const perPersona = VOICE_GENDERS.map((voice) =>
+      fingerprint(versionedText(entry, undefined, voice)),
+    );
+
+    expect(new Set(perPersona).size).toBe(1);
   });
 });
 

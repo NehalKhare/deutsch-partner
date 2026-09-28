@@ -9,7 +9,7 @@ import { SettingsForm } from "@/components/settings/settings-form";
 import { TrainerCoachingSettings } from "@/components/settings/trainer-coaching";
 import { VoiceSourceSetting } from "@/components/settings/voice-source";
 import { linkInline, pageTitle, prose } from "@dp/ui/styles";
-import { TUTOR } from "@dp/domain/tutor";
+import { tutorFor } from "@dp/domain/tutor";
 import { INITIAL_SETTINGS_STATE } from "@/lib/settings/input";
 import { getMiniLevel } from "@dp/learning/mini-levels";
 import { requireAuthenticatedUserId } from "@/lib/auth/current-user";
@@ -74,7 +74,7 @@ export default async function SettingsPage() {
           Settings
         </h1>
         <p className="text-sm leading-snug text-copy/65">
-          Everything here shapes how {TUTOR.name} talks to you.
+          Everything here shapes how {tutorFor(profile.data.voicePreference).name} talks to you.
         </p>
       </header>
 

@@ -84,10 +84,28 @@ describe("the voice", () => {
     expect(screen.getByRole("radio", { name: "Male voice" })).not.toBeChecked();
   });
 
-  it("says the name does not change with it", () => {
+  it("says which tutor each voice is", () => {
     renderForm();
 
-    expect(screen.getByText(/stays Jonas either way/i)).toBeInTheDocument();
+    expect(screen.getByText(/male voice is Jonas/i)).toBeInTheDocument();
+    expect(screen.getByText(/female voice is Alex/i)).toBeInTheDocument();
+  });
+
+  it("names the tutor the saved voice belongs to", () => {
+    renderForm(noop, { ...PROFILE, voicePreference: "female" });
+
+    expect(screen.getByText(/How should Alex correct you/i)).toBeInTheDocument();
+  });
+
+  it("renames the tutor as soon as the other voice is picked, before saving", async () => {
+    const user = userEvent.setup();
+    renderForm();
+
+    expect(screen.getByText(/How should Jonas correct you/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("radio", { name: "Female voice" }));
+
+    expect(screen.getByText(/How should Alex correct you/i)).toBeInTheDocument();
   });
 
   it("submits the choice", async () => {

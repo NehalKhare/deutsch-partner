@@ -433,6 +433,9 @@ export async function generate(
     })),
     recentMessages: [...(state.history ?? [])],
     userMessage: state.input.message,
+    // The learner's voice is also their choice of tutor: the prompt must
+    // introduce the same person the reply will be read out as.
+    tutorVoice: state.learner.profile.voicePreference,
     ...withPlan(state.input.plan),
   });
 

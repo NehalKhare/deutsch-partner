@@ -1,6 +1,6 @@
 import { CEFR_LEVELS, MAX_MINI_LEVEL } from "@dp/domain/cefr";
 import { PLAN_CATALOGUE } from "@dp/domain/plans";
-import { TUTOR } from "@dp/domain/tutor";
+import { TUTOR, tutorFor } from "@dp/domain/tutor";
 
 import { GUIDED_HOURS, timelinePhrase } from "@/lib/landing/timeline";
 
@@ -90,7 +90,8 @@ export const FAQ: readonly Faq[] = [
   {
     question: "Who am I talking to?",
     answer:
-      `A tutor named ${TUTOR.name}, the same one every session. Replies can be read ` +
-      `aloud, and you can answer with your voice.`,
+      `A tutor named ${TUTOR.name}, the same one every session — or ` +
+      `${tutorFor("female").name}, if you choose the female voice in settings. ` +
+      `Replies can be read aloud, and you can answer with your voice.`,
   },
 ];

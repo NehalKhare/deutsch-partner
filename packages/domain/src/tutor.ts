@@ -8,9 +8,9 @@
  * each time.
  *
  * Declared here, in the domain, because three layers need to agree about it:
- * the prompt that tells him who he is, the speech provider that chooses a
- * voice for him, and the interface that puts his name on screen. One constant
- * is what stops those three drifting into three different people.
+ * the prompt that tells the tutor who they are, the speech provider that
+ * chooses a voice for them, and the interface that puts their name on screen.
+ * One table is what stops those three drifting into three different people.
  */
 /**
  * The voices a learner may choose between.
@@ -24,10 +24,29 @@ export const VOICE_GENDERS = ["male", "female"] as const;
 
 export type VoiceGender = (typeof VOICE_GENDERS)[number];
 
-export const TUTOR = {
-  name: "Jonas",
-  /** The persona as shipped, and the default until a learner chooses. */
-  voice: "male",
-} as const;
+export interface TutorPersona {
+  readonly name: string;
+  readonly voice: VoiceGender;
+}
 
-export type TutorVoiceKind = (typeof TUTOR)["voice"];
+/**
+ * One tutor per voice.
+ *
+ * A learner who picks the female voice is not asking for Jonas read out by a
+ * woman; they are asking for a different person. So the name goes with the
+ * voice, and the prompt, the speech provider and the screen all resolve the
+ * learner's one choice to the same persona.
+ */
+export const TUTOR_PERSONAS: Readonly<Record<VoiceGender, TutorPersona>> = {
+  male: { name: "Jonas", voice: "male" },
+  female: { name: "Alex", voice: "female" },
+};
+
+/** The persona as shipped, and the default until a learner chooses. */
+export const TUTOR: TutorPersona = TUTOR_PERSONAS.male;
+
+export type TutorVoiceKind = VoiceGender;
+
+export function tutorFor(voice: VoiceGender): TutorPersona {
+  return TUTOR_PERSONAS[voice];
+}

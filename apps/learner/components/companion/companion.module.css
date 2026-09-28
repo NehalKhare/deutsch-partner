@@ -127,8 +127,44 @@
   transform: rotate(180deg) translateY(55%);
 }
 
+/*
+ * Speaking: the arc becomes an open mouth.
+ *
+ * A stroke can only get deeper or flatter, which reads as a smile changing its
+ * mind rather than as talking. Filling it in gives the mouth an inside that
+ * can open and close, and a flatter top than bottom keeps it smiling while it
+ * does. The resting size here is the reduced-motion pose: mid-word, not shut.
+ *
+ * Mouth, brows, squint and nod all share one cycle so every expression lands
+ * on the same beat as the syllable it belongs to.
+ */
+.root[data-animated="true"][data-emotion="smiling"] {
+  --speak-cycle: 2300ms;
+}
+
 .root[data-animated="true"][data-emotion="smiling"] .mouth {
-  animation: speak 1080ms ease-in-out infinite;
+  inline-size: 20cqw;
+  block-size: 10cqh;
+  background: var(--eye);
+  border-block-end-width: 0;
+  border-radius: 42% 42% 50% 50% / 30% 30% 70% 70%;
+  animation: speak var(--speak-cycle) ease-in-out infinite;
+}
+
+.root[data-animated="true"][data-emotion="smiling"] .eyes {
+  animation: speak-brows var(--speak-cycle) ease-in-out infinite;
+}
+
+/* A second animation beside the blink rather than in place of it: the blink
+   drives transform, the squint drives size, so both run. */
+.root[data-animated="true"][data-emotion="smiling"] .eye {
+  animation:
+    blink 6.5s ease-in-out infinite,
+    speak-squint var(--speak-cycle) ease-in-out infinite;
+}
+
+.root[data-animated="true"][data-emotion="smiling"] .face {
+  animation: speak-nod var(--speak-cycle) ease-in-out infinite;
 }
 
 @keyframes wobble {
@@ -157,43 +193,119 @@
 /*
  * Speech, at the rhythm speech actually has.
  *
- * Two evenly spaced stops read as a machine idling. Real speech opens and
- * closes at uneven intervals and changes width as well as height, so the stops
- * here are deliberately not on a grid and the loop length is prime enough to
- * the blink that the two never lock into a pattern.
+ * Evenly spaced stops read as a machine idling. The stops here are rough
+ * visemes — an open "a", a wide "ee", a round "o"/"u" — broken up by full
+ * closures where an "m" or "b" would press the lips together, and the phrase
+ * ends in a held pause, a breath before the next one. The pause rests on a
+ * small open smile rather than a shut line, which reads as blank. Nothing sits on a grid,
+ * and the loop does not divide the blink's period, so the two never lock into
+ * a pattern.
  */
 @keyframes speak {
   0% {
-    inline-size: 26cqw;
-    block-size: 11cqh;
-  }
-  14% {
     inline-size: 21cqw;
-    block-size: 21cqh;
+    block-size: 5cqh;
   }
-  29% {
-    inline-size: 28cqw;
+  6% {
+    inline-size: 22cqw;
+    block-size: 15cqh;
+  }
+  13% {
+    inline-size: 25cqw;
+    block-size: 7cqh;
+  }
+  18% {
+    inline-size: 17cqw;
+    block-size: 2cqh;
+  }
+  25% {
+    inline-size: 13cqw;
+    block-size: 13cqh;
+  }
+  33% {
+    inline-size: 21cqw;
+    block-size: 16cqh;
+  }
+  39% {
+    inline-size: 23cqw;
     block-size: 8cqh;
   }
-  43% {
+  44% {
+    inline-size: 18cqw;
+    block-size: 2cqh;
+  }
+  51% {
+    inline-size: 26cqw;
+    block-size: 6cqh;
+  }
+  58% {
     inline-size: 22cqw;
     block-size: 18cqh;
   }
-  58% {
-    inline-size: 27cqw;
+  66% {
+    inline-size: 12cqw;
+    block-size: 9cqh;
+  }
+  72% {
+    inline-size: 20cqw;
     block-size: 10cqh;
   }
-  71% {
-    inline-size: 20cqw;
-    block-size: 22cqh;
+  76% {
+    inline-size: 18cqw;
+    block-size: 2cqh;
   }
-  87% {
-    inline-size: 26cqw;
+  84%,
+  100% {
+    inline-size: 21cqw;
+    block-size: 5cqh;
+  }
+}
+
+/* A lift of the whole eye line on the stressed "a" at 33%: the tutor is
+   asking something, and a question raises the brows. */
+@keyframes speak-brows {
+  0%,
+  26%,
+  42%,
+  100% {
+    transform: translateY(0);
+  }
+  31%,
+  37% {
+    transform: translateY(-2.5cqh);
+  }
+}
+
+/* The biggest vowel of the phrase gets a smile that reaches the eyes. */
+@keyframes speak-squint {
+  0%,
+  53%,
+  68%,
+  100% {
     block-size: 13cqh;
   }
+  57%,
+  63% {
+    block-size: 8cqh;
+  }
+}
+
+/* A small dip on each stressed syllable, the nod people make without
+   noticing, so the face moves with the words rather than only the mouth. */
+@keyframes speak-nod {
+  0%,
+  12%,
+  28%,
+  40%,
+  52%,
+  66%,
   100% {
-    inline-size: 26cqw;
-    block-size: 11cqh;
+    transform: translateY(0);
+  }
+  6%,
+  33%,
+  58% {
+    transform: translateY(1.5cqh);
   }
 }
 
@@ -292,7 +404,10 @@
 
   .root[data-animated="true"] .body,
   .eye,
+  .root[data-animated="true"][data-emotion="smiling"] .eye,
   .root[data-animated="true"][data-emotion="smiling"] .mouth,
+  .root[data-animated="true"][data-emotion="smiling"] .eyes,
+  .root[data-animated="true"][data-emotion="smiling"] .face,
   .root[data-activity="idle"] .body,
   .root[data-activity="idle"] .eyes,
   .root[data-activity="idle"] .mouth {

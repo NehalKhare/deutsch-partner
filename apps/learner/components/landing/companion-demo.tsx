@@ -3,15 +3,19 @@
 import { useState } from "react";
 
 import { Companion } from "@/components/companion/companion";
-import { companionStateFor, type CompanionActivity } from "@dp/domain/companion";
+import {
+  companionStateFor,
+  type CompanionActivity,
+} from "@dp/domain/companion";
 import { TUTOR } from "@dp/domain/tutor";
 
 /**
  * The hero is the real component, not a picture of one.
  *
- * The three turns are the actual conversation loop: the partner speaks, the
- * learner speaks, the learner gets something wrong. A visitor can drive it
- * and see how the companion responds before signing up for anything.
+ * The three turns are the actual conversation loop: the learner speaks, the
+ * partner replies, the learner gets something wrong. It opens on the
+ * learner's turn because the visitor is the one being invited to talk; they
+ * can drive it and see how the companion responds before signing up.
  */
 
 interface Turn {
@@ -23,16 +27,16 @@ interface Turn {
 
 const TURNS: readonly Turn[] = [
   {
-    activity: "speaking",
-    label: `${TUTOR.name} speaks`,
-    line: "Wie war dein Wochenende?",
-    gloss: "How was your weekend?",
-  },
-  {
     activity: "listening",
     label: "You speak",
     line: "…",
     gloss: "Take your time. It waits.",
+  },
+  {
+    activity: "speaking",
+    label: `${TUTOR.name} speaks`,
+    line: "Wie war dein Wochenende?",
+    gloss: "How was your weekend?",
   },
   {
     activity: "struggling",

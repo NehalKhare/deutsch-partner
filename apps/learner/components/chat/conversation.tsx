@@ -27,7 +27,7 @@ import { HISTORY_WINDOW } from "@dp/domain/conversation";
 import { buttonPrimary, buttonQuiet, field, focusRing } from "@dp/ui/styles";
 import { cn } from "@dp/ui/utils";
 import { companionActivityFor, companionStateFor } from "@dp/domain/companion";
-import { TUTOR } from "@dp/domain/tutor";
+import { tutorFor } from "@dp/domain/tutor";
 import {
   hasMastered,
   thresholdRatio,
@@ -241,6 +241,10 @@ export function Conversation({
     dismissPlanRefusal,
     speak,
   } = useReadAloud({ cefr, voiceGender, playback, voice });
+
+  // The name on screen is the voice's: Jonas with the male voice, Alex with
+  // the female. A reply signed Jonas and read out by a woman is two people.
+  const tutor = tutorFor(voiceGender);
 
   const [draft, setDraft] = useState("");
   const [streaming, setStreaming] = useState("");
@@ -627,7 +631,7 @@ export function Conversation({
         {messages.length === 0 && streaming.length === 0 ? (
           <div className="m-auto flex max-w-xs flex-col gap-2 text-center">
             <p className="text-copy/45">
-              {TUTOR.name} is waiting. Say anything —{" "}
+              {tutor.name} is waiting. Say anything —{" "}
               <span lang="de" className="text-copy/70">
                 Hallo!
               </span>{" "}
@@ -769,7 +773,7 @@ export function Conversation({
           itself is announced when it arrives, and this only has to say that
           one is coming. */}
       <p role="status" className="sr-only">
-        {sending || streaming ? `${TUTOR.name} is replying.` : ""}
+        {sending || streaming ? `${tutor.name} is replying.` : ""}
       </p>
 
       {/* Voice is an addition to the conversation, not the conversation. Its

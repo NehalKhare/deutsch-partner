@@ -10,7 +10,7 @@ import {
   type MasteryThreshold,
   type TrainerPersonality,
 } from "@dp/domain/learner";
-import { TUTOR } from "@dp/domain/tutor";
+import { tutorFor } from "@dp/domain/tutor";
 import type { SettingsAction, SettingsFormState } from "@/lib/settings/input";
 import {
   CORRECTION_PREFERENCE_OPTIONS,
@@ -243,6 +243,11 @@ function SettingsFields({ profile }: { readonly profile: LearnerProfile }) {
       });
 
 
+  // The name follows the voice as it is chosen, before saving: a form that
+  // still says Jonas under a ticked "Female voice" looks like it has not
+  // understood what was asked.
+  const tutor = tutorFor(draft.voicePreference);
+
   /** A two-answer question drawn as a label and a pair of pills on one line. */
   const pillRow = <K extends "inputPreference" | "outputPreference" | "voicePreference">(
     key: K,
@@ -299,7 +304,7 @@ function SettingsFields({ profile }: { readonly profile: LearnerProfile }) {
 
       <fieldset className={group}>
         <legend className={cn(legendClass, "float-left w-full")}>
-          How should {TUTOR.name} correct you?
+          How should {tutor.name} correct you?
         </legend>
         <div className="flex flex-col gap-1.5">
           {CORRECTION_PREFERENCE_OPTIONS.map((option) => (
@@ -416,8 +421,9 @@ function SettingsFields({ profile }: { readonly profile: LearnerProfile }) {
           ["female", "Female voice"],
         ])}
         <p className={hintText}>
-          The voice applies to read-aloud replies. {TUTOR.name} stays{" "}
-          {TUTOR.name} either way.
+          The name changes with the voice: the male voice is{" "}
+          {tutorFor("male").name}, the female voice is {tutorFor("female").name}.
+          Replies come from {tutor.name}, in writing and read aloud.
         </p>
       </div>
 

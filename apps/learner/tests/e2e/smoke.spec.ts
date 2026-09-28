@@ -14,7 +14,7 @@ test("the companion changes mood when a visitor tries a turn", async ({ page }) 
   await page.goto("/");
 
   const companion = page.getByRole("img").first();
-  await expect(companion).toHaveAttribute("data-emotion", "smiling");
+  await expect(companion).toHaveAttribute("data-emotion", "listening");
 
   await page.getByText("You slip up", { exact: true }).click();
   await expect(companion).toHaveAttribute("data-emotion", "sad");
@@ -32,6 +32,7 @@ test("the companion speaks while it is the one talking", async ({ page }) => {
   // companion state without a model call, which makes it the only place the
   // animation itself can be asserted rather than the attribute that drives it.
   await page.goto("/");
+  await page.getByText(/ speaks$/).click();
 
   const root = page.locator("[data-animated]").first();
   await expect(root).toHaveAttribute("data-animated", "true");
@@ -47,6 +48,9 @@ test("the companion holds still and listens when it is the learner's turn", asyn
   page,
 }) => {
   await page.goto("/");
+  // It opens on this turn, so go to the tutor's first: arriving back here is
+  // what proves the loop stops, not merely that it never started.
+  await page.getByText(/ speaks$/).click();
   await page.getByText("You speak", { exact: true }).click();
 
   const root = page.locator("[data-animated]").first();
@@ -64,6 +68,7 @@ test("the companion holds still and listens when it is the learner's turn", asyn
 test("the companion holds still when motion is reduced", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
+  await page.getByText(/ speaks$/).click();
 
   const body = page.locator("[data-animated='true'] > div").first();
   await expect(body).toHaveCSS("animation-name", "none");
