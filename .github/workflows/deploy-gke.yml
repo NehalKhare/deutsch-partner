@@ -1,0 +1,121 @@
+# Build the two containers and deploy them to a GKE Autopilot cluster.
+#
+# Manual only for now, so it never races deploy-apps.yml, which deploys the
+# same images to Cloud Run. Secrets are never touched here: they are created
+# in the cluster by hand (deploy/k8s/README.md), and the Deployments read them
+# by name. Everything else comes from the chosen environment's variables:
+#
+#   GCP_WORKLOAD_IDENTITY_PROVIDER, GCP_DEPLOYER_SA   (shared with deploy-apps)
+#   GCP_PROJECT, GCP_REGION                           (Artifact Registry lives here)
+#   GKE_CLUSTER (default dp), GKE_LOCATION (default GCP_REGION)
+#   GKE_STATIC_IP_NAME (default dp-ip)
+#   LEARNER_HOST
+#   NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+#
+# The deployer service account needs roles/artifactregistry.writer on the
+# repository and roles/container.developer on the project.
+name: Deploy to GKE
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Which GitHub environment's variables to deploy with
+        default: production
+        type: choice
+        options: [production, staging]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-gke-${{ inputs.environment }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT }}/dp
+  TAG: ${{ inputs.environment }}-${{ github.sha }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: true
+      matrix:
+        app: [learner, worker]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SA }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - run: gcloud auth configure-docker "${{ vars.GCP_REGION }}-docker.pkg.dev" --quiet
+
+      - name: Build and push ${{ matrix.app }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.app == 'worker' && 'docker/worker.Dockerfile' || 'docker/next-app.Dockerfile' }}
+          # GKE Autopilot runs amd64 nodes unless asked otherwise.
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.REGISTRY }}/dp-${{ matrix.app }}:${{ env.TAG }}
+          build-args: |
+            APP=${{ matrix.app }}
+            GIT_SHA=${{ github.sha }}
+            NEXT_PUBLIC_SUPABASE_URL=${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+            NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=${{ vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+          cache-from: type=gha,scope=gke-${{ matrix.app }}
+          cache-to: type=gha,scope=gke-${{ matrix.app }},mode=max
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SA }}
+      - uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ${{ vars.GKE_CLUSTER || 'dp' }}
+          location: ${{ vars.GKE_LOCATION || vars.GCP_REGION }}
+          project_id: ${{ vars.GCP_PROJECT }}
+
+      - name: Write site.env
+        # The same file a person writes by hand from site.env.example.
+        env:
+          LEARNER_HOST: ${{ vars.LEARNER_HOST }}
+          STATIC_IP_NAME: ${{ vars.GKE_STATIC_IP_NAME || 'dp-ip' }}
+          SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+          GITHUB_REPOSITORY_TARGET: ${{ github.repository }}
+        run: |
+          set -eu
+          cat > deploy/k8s/overlays/gke/site.env <<EOF
+          LEARNER_HOST=${LEARNER_HOST}
+          STATIC_IP_NAME=${STATIC_IP_NAME}
+          LEARNER_IMAGE=${REGISTRY}/dp-learner:${TAG}
+          WORKER_IMAGE=${REGISTRY}/dp-worker:${TAG}
+          SUPABASE_URL=${SUPABASE_URL}
+          SUPABASE_PUBLISHABLE_KEY=${SUPABASE_PUBLISHABLE_KEY}
+          GITHUB_REPOSITORY=${GITHUB_REPOSITORY_TARGET}
+          EOF
+
+      - name: Apply the manifests
+        run: kubectl apply -k deploy/k8s/overlays/gke
+
+      - name: Wait for every Deployment to roll out
+        run: |
+          set -eu
+          for deployment in $(kubectl -n deutsch-partner get deployments -o name); do
+            kubectl -n deutsch-partner rollout status "$deployment" --timeout=10m
+          done

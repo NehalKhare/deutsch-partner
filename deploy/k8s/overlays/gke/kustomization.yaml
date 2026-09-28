@@ -1,0 +1,92 @@
+# Google Kubernetes Engine (Autopilot): the base plus a Google load balancer
+# with managed HTTPS certificates.
+#
+# Everything that differs per installation (hostnames, images, the Supabase
+# URL) lives in site.env, which you create from site.env.example. The GitHub
+# workflow writes it from repository variables. See ../../README.md.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Set again here so the optional coder component lands in the same place.
+namespace: deutsch-partner
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: deutsch-partner
+    includeSelectors: false
+
+resources:
+  - ../../base
+  - ingress.yaml
+  - certificate.yaml
+  - backendconfig.yaml
+  - frontendconfig.yaml
+
+# Uncomment to run the coding worker as well. It needs the coder-secrets
+# Secret and GITHUB_REPOSITORY in site.env.
+# components:
+#   - ../../components/coder
+
+# site.env is read here and copied into the manifests below. It is marked
+# local-config, so it is never sent to the cluster itself.
+configMapGenerator:
+  - name: site
+    envs: [site.env]
+    options:
+      disableNameSuffixHash: true
+      annotations:
+        config.kubernetes.io/local-config: "true"
+
+patches:
+  # Route the Google load balancer straight to the pods, with the long
+  # timeout and health check in backendconfig.yaml.
+  - target: { kind: Service, name: learner }
+    patch: |-
+      - op: add
+        path: /metadata/annotations
+        value:
+          cloud.google.com/neg: '{"ingress": true}'
+          cloud.google.com/backend-config: '{"default": "dp-backend"}'
+
+replacements:
+  - source: { kind: ConfigMap, name: site, fieldPath: data.LEARNER_IMAGE }
+    targets:
+      - select: { kind: Deployment, name: learner }
+        fieldPaths:
+          - spec.template.spec.containers.[name=learner].image
+  - source: { kind: ConfigMap, name: site, fieldPath: data.WORKER_IMAGE }
+    targets:
+      - select: { kind: Deployment, name: worker }
+        fieldPaths:
+          - spec.template.spec.containers.[name=worker].image
+
+  - source: { kind: ConfigMap, name: site, fieldPath: data.LEARNER_HOST }
+    targets:
+      - select: { kind: Ingress, name: dp }
+        fieldPaths:
+          - spec.rules.0.host
+      - select: { kind: ManagedCertificate, name: dp-cert }
+        fieldPaths:
+          - spec.domains.0
+      # https://<host>: only the part after "//" is replaced.
+      - select: { kind: ConfigMap, name: learner-config }
+        fieldPaths:
+          - data.APP_URL
+        options: { delimiter: "//", index: 1 }
+
+  - source: { kind: ConfigMap, name: site, fieldPath: data.SUPABASE_URL }
+    targets:
+      - select: { kind: ConfigMap, name: "learner-config|worker-config" }
+        fieldPaths:
+          - data.NEXT_PUBLIC_SUPABASE_URL
+  - source: { kind: ConfigMap, name: site, fieldPath: data.SUPABASE_PUBLISHABLE_KEY }
+    targets:
+      - select: { kind: ConfigMap, name: learner-config }
+        fieldPaths:
+          - data.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+
+  - source: { kind: ConfigMap, name: site, fieldPath: data.STATIC_IP_NAME }
+    targets:
+      - select: { kind: Ingress, name: dp }
+        fieldPaths:
+          - metadata.annotations.[kubernetes.io/ingress.global-static-ip-name]

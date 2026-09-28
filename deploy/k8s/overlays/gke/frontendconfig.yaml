@@ -1,0 +1,9 @@
+# Plain HTTP is answered with a redirect to HTTPS.
+apiVersion: networking.gke.io/v1beta1
+kind: FrontendConfig
+metadata:
+  name: dp-frontend
+spec:
+  redirectToHttps:
+    enabled: true
+    responseCodeName: MOVED_PERMANENTLY_DEFAULT

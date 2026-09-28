@@ -33,6 +33,4 @@ deliberate deploy.
 
 Fly.io: one `fly.toml` per app, `min_machines_running = 1` for learner and the
 workers, the workers as `[processes]` with no `http_service`, a volume for the
-coder checkout. Kubernetes: Deployments with an HPA for the two Next apps behind
-an Ingress with a 900 s read timeout, one-replica Deployments for the workers,
-ExternalSecrets, the same probe paths, a PVC for the checkout.
+coder checkout. Kubernetes (GKE Autopilot) is built: see `deploy/k8s/README.md`.

@@ -1,0 +1,21 @@
+# The learner app scales on CPU. The Deployment leaves `replicas` unset so
+# that an apply never fights the autoscaler. The workers do not scale:
+# more than one coder would compete for the same machine-sized builds.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: learner
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: learner
+  minReplicas: 1
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
