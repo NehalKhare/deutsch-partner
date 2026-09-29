@@ -1,4 +1,3 @@
-# AE.AFA.CAP.1
 # Deutsch Partner
 
 An AI German-conversation tutor for English speakers, from absolute beginner to
@@ -268,3 +267,4 @@ provider as far as an approved proposal; the agents and the trainer are tested
 against scripted models. [Architecture](docs/architecture.md#what-is-not-built)
 lists what is deliberately not built.
 
+The database is the only meeting point. The learner writes learner state and its own model spend. The operator app only enqueues rows. pg_cron enqueues the scheduled jobs on its own. The worker polls the same table and drains whatever is there. Nothing here needs another app's hostname.
