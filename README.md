@@ -253,6 +253,34 @@ what this product's learners flagged against what forums say about learners in
 general. [The full walkthrough](docs/product-ops-agents.md) has the stage graph,
 the checkpoint shape, the validation layer and the liveness signal.
 
+## Where it runs
+
+| Deployable | Host | Address |
+| --- | --- | --- |
+| `apps/learner` | Vercel, root directory `apps/learner`, Node 22 | <https://deutsch-partner.vercel.app> |
+| `apps/worker` | Railway, one always-on instance built from `docker/worker.Dockerfile` at the repository root | none: it polls and serves no traffic |
+| `apps/ops` | not deployed yet | — |
+| the database | one hosted Supabase project; migrations land through `deploy-db.yml` | — |
+
+The three deployables never call each other. Each talks only to the Supabase
+project and to OpenRouter, so any one of them can be redeployed, moved or
+switched off without the others noticing. The learner is fully usable with no
+worker running; pg_cron keeps queueing the scheduled jobs, and a worker deployed
+later drains the backlog.
+
+Two values must be identical everywhere or the ledger and audit rows stop
+joining: the Supabase URL and secret key, and `LOG_PSEUDONYM_SALT`. Every
+deployable sets `APP_URL` to the learner's address above — a full URL with its
+scheme, or the env schema refuses to boot — but only so OpenRouter labels the
+spend; nothing ever fetches from it.
+
+On Railway the health check path is `/healthz`; it answers 503 until the first
+poll of the queue has completed, so a failing check right after a deploy is the
+worker waiting on Supabase, not a crash. The Dockerfile carries no BuildKit
+cache mounts and no `VOLUME` because Railway's validator rejects both. The
+Cloud Run and GKE routes, the pipelines and the runbooks are in
+[docs/deployment.md](docs/deployment.md).
+
 ## Status
 
 Every phase of the build specification is implemented, and the monolith has
