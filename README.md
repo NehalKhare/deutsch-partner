@@ -267,3 +267,4 @@ run for real against the linked project, and product ops has run against a real
 provider as far as an approved proposal; the agents and the trainer are tested
 against scripted models. [Architecture](docs/architecture.md#what-is-not-built)
 lists what is deliberately not built.
+
