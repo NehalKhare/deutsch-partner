@@ -29,11 +29,13 @@ RUN npm install -g pnpm@${PNPM_VERSION}
 ENV CI=true
 WORKDIR /repo
 COPY --from=pruner /repo/out/pnpm-lock.yaml /repo/out/pnpm-workspace.yaml ./
-RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
-    pnpm fetch --frozen-lockfile
+# No BuildKit cache mounts: Railway's Dockerfile validator rejects an id
+# without its own service prefix, and neither GitHub Actions' type=gha cache
+# nor Railway persists a RUN cache mount between builds anyway. Layer caching
+# on the lockfile does the work instead.
+RUN pnpm fetch --frozen-lockfile
 COPY --from=pruner /repo/out/json/ .
-RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
-    pnpm install --frozen-lockfile --offline --prod
+RUN pnpm install --frozen-lockfile --offline --prod
 
 # ---- 3. runner --------------------------------------------------------------
 FROM ${NODE_IMAGE} AS runner
@@ -70,7 +72,9 @@ COPY --from=deps   --chown=node:node /repo/ ./
 COPY --from=pruner --chown=node:node /repo/out/full/ ./
 USER node
 WORKDIR /app/apps/worker
-VOLUME ["/workspace"]
+# No VOLUME instruction: Railway rejects it, and it was only declarative. The
+# coder's checkout volume is mounted at /workspace by the platform manifest
+# (Cloud Run, Kubernetes) or a Railway Volume, never by the image.
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=30s \
   CMD curl -fsS "http://127.0.0.1:${PORT}/healthz" || exit 1
