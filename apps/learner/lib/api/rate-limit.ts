@@ -78,6 +78,13 @@ export const RATE_LIMITS = {
   // who keeps abandoning Stripe's page can open in a day — three rather than
   // one, so abandoning it once is not a day-long lockout.
   billing_trial: { limit: 3, windowMs: 86_400_000 },
+  // Sign-in attempts per address, on top of the auth service's own per-IP
+  // limits. Keyed by a hash of the address because there is no account to
+  // key by until the password is right.
+  login: { limit: 10, windowMs: 15 * 60_000 },
+  // Second-factor attempts per account. A six-digit code is one in a million
+  // per guess; five guesses in five minutes keeps it that way.
+  mfa: { limit: 5, windowMs: 5 * 60_000 },
 } as const satisfies Record<string, RateLimitRule>;
 
 export type RateLimitScope = keyof typeof RATE_LIMITS;

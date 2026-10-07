@@ -4,8 +4,9 @@
 
 ```
 apps/learner     the learner product: Next.js, its own route handlers, its own
-                 composition root. Calls the gateway for chat, trainer, embeddings,
-                 and @dp/billing for plans: the pricing, order, trial and billing
+                 composition root. Sign-in with a second factor, like the operator
+                 app. Calls the gateway for chat, trainer, embeddings, and
+                 @dp/billing for plans: the pricing, order, trial and billing
                  pages, Stripe's webhook, the plan and daily quotas per request.
                  The only deployable that holds a Stripe key.
 apps/ops         the operator product on its own origin: sign-in with a second
@@ -32,7 +33,8 @@ packages/product-ops     the operator workflow: repository, board view, the grap
                          the agents, the trusted validation layer, review helpers
 packages/learning        the curriculum and the engines that move a learner through it
 packages/auth            Supabase clients, the session refresher, claims, credentials,
-                         the operator allowlist parser
+                         the TOTP second factor both apps sign in through, the
+                         operator allowlist parser
 packages/env             environment validation
 packages/observability   logging, pseudonyms, tracing config
 packages/ui              the two themes, the class strings both apps compose,
@@ -444,8 +446,8 @@ Stated here so nobody has to discover it by reading the code.
   ([operations](operations.md#payments-with-stripe)).
 - **Free's tutor runs on `mid` with no evaluation behind it.** Spec S3 permits
   it and document 4 S11 asks for an eval before a downgrade; the conversation
-  golden set comparing Free and Plus, which is the first eval set to write, is
-  not written (see "No golden eval sets" below).
+  golden set exists but has never been run on both tiers and compared (see
+  "Golden eval sets are written but never run against a live model" below).
 - **The ops overview is not plan-aware.** The budgets page shows and edits each
   plan's monthly euro bound; the cost dashboard does not break spend down by
   plan, so per-plan margin is not measured.
@@ -476,8 +478,16 @@ Stated here so nobody has to discover it by reading the code.
   a proposal a person reviews. No job compares prompt versions, alerts on a
   rising unhelpful share, or proposes a prompt edit on its own — the prompt
   layer is on the coding agent's deny-list on purpose.
-- **No golden eval sets.** Every prompt entry declares one; none is written.
-  Which tier each task belongs on is the routing document's judgement, unmeasured.
+- **Golden eval sets are written but never run against a live model.** Every
+  prompt entry's `evalSet` resolves to a corpus — `packages/prompts/golden/*.json`,
+  plus the Trainer analyzer's under `apps/learner/tests/golden` — and
+  `packages/prompts/tests/golden-sets.test.ts` holds each case coherent on every
+  CI run: the input fits the entry's input schema, the reference fits its
+  contract, the reference satisfies its own expectation, and the input renders
+  under the task's ceiling. The scorer (`packages/prompts/src/golden.ts`) is pure
+  and ready for a live runner, but no job sends the inputs through the gateway
+  and scores real replies, so which tier each task belongs on is still the
+  routing document's judgement, unmeasured.
 - **The pricing snapshot job has never run against the provider.** `pricing.snapshot`
   runs daily from the worker and reads the model list through the gateway's one
   non-model call; the row shape is parsed defensively and the job has been tested
@@ -590,9 +600,15 @@ Stated here so nobody has to discover it by reading the code.
   matched by paging the Auth admin user list. Both stop at 50,000 accounts and
   say so. Past that, a stored lookup index is the fix. Neither lookup nor the
   Auth admin deletion has yet run against the linked project.
-- **The operator app's second factor has run only against a fake auth client.**
-  Enrolment, the challenge and the step-up table are tested; nobody has enrolled
-  a real authenticator against the linked project yet.
+- **The second factor has run against a real authenticator only through the
+  fixture script.** Both apps require a TOTP code after the password — the
+  operator app since it was built, the learner app since October 2026 — and in
+  both, enrolment, the challenge and the step-up table are tested against a
+  fake auth client. `pnpm dummy:user` enrols and answers a real factor on the
+  linked project; no person has scanned a QR code there yet. A learner who
+  loses their authenticator has no self-service way back in: an operator
+  removes the factor in the Supabase dashboard after confirming who is asking,
+  and the next sign-in enrols a new one. Recovery codes are not built.
 - **The runs page polls; nothing is pushed.** While a run is moving, the
   page asks the server again every few seconds. Postgres can push this — a
   realtime subscription on `ai_run_events` is the obvious version — and the

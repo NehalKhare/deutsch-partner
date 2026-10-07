@@ -1,0 +1,52 @@
+{
+  "evalSet": "golden/productops-code-plan",
+  "description": "productops.code_plan: which files a change touches, as a plan a person approves. Every path must be inside the repository, migrations are described rather than written, and tests are listed before code. The expectation pins the guarded paths a plan must not name.",
+  "cases": [
+    {
+      "id": "grammar-review-plan",
+      "input": { "prd": "Grammar patterns in spaced-repetition review. Requirements: scheduler includes recurring error patterns; grammar card renders one example and the corrected form; marking correct advances the interval. Stack: packages/learning holds the review engine, apps/learner/app/(app)/review renders it." },
+      "reference": {
+        "filesToModify": ["packages/learning/src/review.ts", "apps/learner/app/(app)/review/page.tsx"],
+        "filesToCreate": ["apps/learner/components/review/grammar-card.tsx"],
+        "databaseChanges": [],
+        "apiChanges": [],
+        "uiChanges": ["A grammar card in the review page alongside word cards"],
+        "tests": ["packages/learning/tests/review.test.ts", "apps/learner/tests/unit/review/grammar-card.test.tsx"],
+        "dependencies": [],
+        "risks": ["Review intervals for grammar items may need different defaults than words"]
+      },
+      "expect": { "filesToModify": ["packages/learning/src/review.ts"], "dependencies": [] }
+    },
+    {
+      "id": "migration-is-described-not-written",
+      "note": "A feature that needs a schema change describes it; the plan never names a migration file.",
+      "input": { "prd": "Spend by plan on the operator overview. Requirements: rollup records the plan per call; overview shows a series per plan; totals reconcile. Stack: packages/db migrations, apps/worker cost rollup handler, apps/ops costs page." },
+      "reference": {
+        "filesToModify": ["apps/worker/src/handlers/cost-rollup.ts", "apps/ops/lib/costs.ts", "apps/ops/components/costs/spend-chart.tsx"],
+        "filesToCreate": [],
+        "databaseChanges": ["Add a plan column to cost_rollup_daily keyed with learner and day; backfill from the ledger"],
+        "apiChanges": [],
+        "uiChanges": ["One series per plan on the spend chart"],
+        "tests": ["apps/worker/tests/cost-rollup.test.ts", "apps/ops/tests/costs.test.ts"],
+        "dependencies": [],
+        "risks": ["Rows before the first FX rate carry zero cost and will show as zero per plan"]
+      },
+      "expect": { "databaseChanges": ["Add a plan column to cost_rollup_daily keyed with learner and day; backfill from the ledger"], "filesToCreate": [] }
+    },
+    {
+      "id": "voice-roleplay-plan",
+      "input": { "prd": "Spoken roleplay scenarios on Plus and Premium: voice mode on a scenario thread, tutor lines through TTS, learner replies through STT, same turn pipeline, quotas per plan. Stack: apps/learner/lib/graph, apps/learner/app/api/speak and transcribe, packages/domain/src/plans.ts." },
+      "reference": {
+        "filesToModify": ["apps/learner/lib/graph/nodes.ts", "apps/learner/app/(app)/scenarios/[id]/page.tsx", "packages/domain/src/plans.ts"],
+        "filesToCreate": ["apps/learner/components/scenarios/voice-mode.tsx"],
+        "databaseChanges": [],
+        "apiChanges": ["The scenario turn route accepts an audio upload and returns the transcript with the reply"],
+        "uiChanges": ["A voice toggle on the scenario page, locked on Free"],
+        "tests": ["apps/learner/tests/unit/scenarios/voice-mode.test.tsx", "packages/domain/tests/plans.test.ts"],
+        "dependencies": [],
+        "risks": ["Voice calls are not yet ledgered, so spend is invisible until that lands"]
+      },
+      "expect": { "apiChanges": ["The scenario turn route accepts an audio upload and returns the transcript with the reply"] }
+    }
+  ]
+}

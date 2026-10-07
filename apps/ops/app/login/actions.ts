@@ -5,17 +5,6 @@ import { createHash } from "node:crypto";
 import { redirect } from "next/navigation";
 
 import { credentialsSchema } from "@dp/auth/credentials";
-import { createAuthService, type AuthClient } from "@dp/auth/service";
-import { actionLogger, pseudonymOrUnavailable } from "@/lib/api/composition";
-import { limiterFor } from "@/lib/api/rate-limit";
-import { getOperatorSession } from "@/lib/auth/current-user";
-import {
-  CODE_FAILURE,
-  GENERIC_SIGN_IN_FAILURE,
-  TOO_MANY_ATTEMPTS,
-  type EnrolmentFormState,
-  type LoginFormState,
-} from "@/lib/auth/login-state";
 import {
   beginTotpEnrolment,
   ownsFactor,
@@ -23,7 +12,19 @@ import {
   verifiedTotpFactor,
   verifyTotp,
   type MfaClient,
-} from "@/lib/auth/mfa";
+} from "@dp/auth/mfa";
+import { createAuthService, type AuthClient } from "@dp/auth/service";
+import { actionLogger, pseudonymOrUnavailable } from "@/lib/api/composition";
+import { limiterFor } from "@/lib/api/rate-limit";
+import { getOperatorSession } from "@/lib/auth/current-user";
+import {
+  CODE_FAILURE,
+  FACTOR_NAME,
+  GENERIC_SIGN_IN_FAILURE,
+  TOO_MANY_ATTEMPTS,
+  type EnrolmentFormState,
+  type LoginFormState,
+} from "@/lib/auth/login-state";
 import { isOperator } from "@/lib/auth/operator";
 import { ENROL_PATH, HOME_PATH, LOGIN_PATH, MFA_PATH } from "@/lib/auth/routes";
 import { createServerSupabaseClient } from "@/lib/supabase/server-client";
@@ -137,7 +138,7 @@ async function beginEnrolment(previous: EnrolmentFormState): Promise<EnrolmentFo
   // An operator with a verified factor answers it; they do not enrol another.
   if (await verifiedTotpFactor(supabase)) redirect(MFA_PATH);
 
-  const begun = await beginTotpEnrolment(supabase);
+  const begun = await beginTotpEnrolment(supabase, FACTOR_NAME);
   if (!begun) {
     return { ...previous, status: "error", message: "Could not start enrolment. Try again." };
   }

@@ -188,6 +188,13 @@ server-owned run quiet for three minutes on its own.
 the Supabase dashboard (Authentication → Users) after confirming who is asking
 out of band; the next sign-in enrols a new one.
 
+**A learner cannot get past the second factor.** The same account record, the
+same fix: confirm who is asking out of band, remove the factor named "Deutsch
+Partner" under their user in the Supabase dashboard, and their next sign-in
+enrols a new authenticator. There are no recovery codes yet, so this is the
+only way back in, and it is an operator action — log it like any other
+support action on a learner.
+
 **A migration will not apply.** pgvector lives in the `extensions` schema on a
 real Supabase project but is created in `public` locally, so new migrations must
 write `extensions.vector(1536)` and `operator(extensions.<=>)`. This only

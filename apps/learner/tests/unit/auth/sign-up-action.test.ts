@@ -6,9 +6,10 @@ import { INITIAL_AUTH_STATE } from "@dp/auth/form-state";
  * Signing up with somewhere to go afterwards.
  *
  * A visitor who pressed "Choose Plus" on the pricing page arrives here with
- * the order page as `next`. A new account has to be set up before it can
- * reach any room, so the destination is carried through onboarding rather
- * than dropped at it — and it is only ever a same-site path.
+ * the order page as `next`. A new account has to set up an authenticator and
+ * then be set up itself before it can reach any room, so the destination is
+ * carried through enrolment and onboarding rather than dropped at either —
+ * and it is only ever a same-site path.
  */
 
 const signUp = vi.fn();
@@ -19,6 +20,9 @@ const redirect = vi.fn((to: string) => {
 vi.mock("next/navigation", () => ({ redirect: (to: string) => redirect(to) }));
 vi.mock("@/lib/supabase/server-client", () => ({ createServerSupabaseClient: async () => ({}) }));
 vi.mock("@dp/auth/service", () => ({ createAuthService: () => ({ signUp }) }));
+vi.mock("@/lib/api/rate-limit", () => ({
+  limiterFor: () => ({ check: async () => ({ allowed: true }) }),
+}));
 
 const { signUpAction } = await import("@/app/auth/actions");
 
@@ -37,28 +41,31 @@ beforeEach(() => {
 });
 
 describe("signUpAction", () => {
-  it("goes to the dashboard when there is nowhere else to go", async () => {
-    await expect(signUpAction(INITIAL_AUTH_STATE, form())).rejects.toThrow("NEXT_REDIRECT /dashboard");
+  it("sets up an authenticator first, and then goes to the dashboard when there is nowhere else to go", async () => {
+    await expect(signUpAction(INITIAL_AUTH_STATE, form())).rejects.toThrow(
+      "NEXT_REDIRECT /auth/mfa/enrol",
+    );
   });
 
-  it("carries a destination through onboarding", async () => {
+  it("carries a destination through enrolment and then onboarding", async () => {
     const next = "/billing/checkout?offer=dp_plus_month";
+    const afterEnrolment = `/onboarding?next=${encodeURIComponent(next)}`;
 
     await expect(signUpAction(INITIAL_AUTH_STATE, form(next))).rejects.toThrow(
-      `NEXT_REDIRECT /onboarding?next=${encodeURIComponent(next)}`,
+      `NEXT_REDIRECT /auth/mfa/enrol?next=${encodeURIComponent(afterEnrolment)}`,
     );
   });
 
   it("drops a destination that could leave the site", async () => {
     await expect(signUpAction(INITIAL_AUTH_STATE, form("//evil.example/steal"))).rejects.toThrow(
-      "NEXT_REDIRECT /dashboard",
+      "NEXT_REDIRECT /auth/mfa/enrol",
     );
   });
 
   it("drops a destination that hides a second slash behind a tab", async () => {
     // "/\t/evil.example" becomes "//evil.example" once a browser parses it.
     await expect(signUpAction(INITIAL_AUTH_STATE, form("/\t/evil.example"))).rejects.toThrow(
-      "NEXT_REDIRECT /dashboard",
+      "NEXT_REDIRECT /auth/mfa/enrol",
     );
   });
 

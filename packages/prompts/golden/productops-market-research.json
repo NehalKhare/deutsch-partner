@@ -1,0 +1,63 @@
+{
+  "evalSet": "golden/productops-market-research",
+  "description": "productops.market_research: one finding per call from supplied search results, citing only what was given. The expectation pins the source type and that cited evidence carries a URL from the supplied set.",
+  "cases": [
+    {
+      "id": "forum-pain-point-speaking-anxiety",
+      "input": { "query": "English speakers learning German biggest frustrations forum 2026" },
+      "reference": {
+        "findings": [
+          {
+            "title": "Learners avoid speaking because every mistake feels public",
+            "sourceType": "forum",
+            "sourceUrl": "https://www.reddit.com/r/German/comments/example-speaking-anxiety",
+            "summary": "Several threads describe freezing in real conversations despite months of app practice. Posters ask for low-stakes speaking practice with gentle correction.",
+            "painPoints": ["Freeze in real conversations", "Apps never make them speak", "Corrections feel like scolding"],
+            "trends": ["Demand for voice-first practice"],
+            "evidence": [{ "url": "https://www.reddit.com/r/German/comments/example-speaking-anxiety", "finding": "Poster with 8 months of Duolingo could not order at a bakery" }],
+            "relevanceScore": 0.9
+          }
+        ]
+      },
+      "expect": { "findings": [{ "sourceType": "forum", "evidence": [{ "url": "https://www.reddit.com/r/German/comments/example-speaking-anxiety" }] }] }
+    },
+    {
+      "id": "competitor-pricing",
+      "input": { "query": "Babbel Busuu German subscription price 2026" },
+      "reference": {
+        "findings": [
+          {
+            "title": "Competitors price German at about EUR 6 to 14 a month on annual plans",
+            "sourceType": "competitor",
+            "sourceUrl": "https://www.babbel.com/pricing",
+            "summary": "Annual plans undercut monthly ones by roughly half. None of the compared products includes unlimited spoken conversation.",
+            "painPoints": ["Monthly plans feel expensive"],
+            "trends": ["Annual discounting", "Lifetime offers on sale days"],
+            "evidence": [{ "url": "https://www.babbel.com/pricing", "finding": "Annual plan shown at a monthly-equivalent price well below the monthly plan" }],
+            "relevanceScore": 0.7
+          }
+        ]
+      },
+      "expect": { "findings": [{ "sourceType": "competitor" }] }
+    },
+    {
+      "id": "irrelevant-results-score-low",
+      "note": "When the supplied results do not bear on German learning, the finding says so with a low relevance score rather than inventing a fit.",
+      "input": { "query": "best German cars 2026 review" },
+      "reference": {
+        "findings": [
+          {
+            "title": "Results concern car reviews, not language learning",
+            "sourceType": "review",
+            "summary": "The supplied pages review vehicles. Nothing in them describes learners or language products.",
+            "painPoints": [],
+            "trends": [],
+            "evidence": [{ "finding": "Review pages compare vehicle models and prices" }],
+            "relevanceScore": 0.05
+          }
+        ]
+      },
+      "expect": { "findings": [{ "relevanceScore": 0.05 }] }
+    }
+  ]
+}

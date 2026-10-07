@@ -1,0 +1,39 @@
+{
+  "evalSet": "golden/productops-code-edit",
+  "description": "productops.code_edit: anchored edits to one existing file, or the whole contents of one new file, inside the approved plan. The expectation pins the kind and the path; an edit to an existing file must be anchored, never whole-file.",
+  "cases": [
+    {
+      "id": "modify-with-one-anchor",
+      "input": { "instruction": "In packages/domain/src/plans.ts the Free plan's knowledgeSnippets is 3. Change it to 4. The line reads exactly: knowledgeSnippets: 3," },
+      "reference": {
+        "kind": "modify",
+        "path": "packages/domain/src/plans.ts",
+        "rationale": "The Free plan gets one more retrieved snippet per turn, per the approved plan.",
+        "edits": [{ "anchor": "knowledgeSnippets: 3,", "replacement": "knowledgeSnippets: 4," }]
+      },
+      "expect": { "kind": "modify", "path": "packages/domain/src/plans.ts", "edits": [{ "anchor": "knowledgeSnippets: 3," }] }
+    },
+    {
+      "id": "create-new-test-file",
+      "input": { "instruction": "Create apps/learner/tests/unit/review/grammar-card.test.tsx with a Vitest test that renders GrammarCard from @/components/review/grammar-card with example 'Heute ich gehe' and corrected 'Heute gehe ich' and asserts both strings are visible." },
+      "reference": {
+        "kind": "create",
+        "path": "apps/learner/tests/unit/review/grammar-card.test.tsx",
+        "rationale": "The test the plan lists before the component exists.",
+        "contents": "import { render, screen } from \"@testing-library/react\";\nimport { describe, expect, it } from \"vitest\";\n\nimport { GrammarCard } from \"@/components/review/grammar-card\";\n\ndescribe(\"GrammarCard\", () => {\n  it(\"shows the example and the corrected form\", () => {\n    render(<GrammarCard example=\"Heute ich gehe\" corrected=\"Heute gehe ich\" />);\n\n    expect(screen.getByText(\"Heute ich gehe\")).toBeVisible();\n    expect(screen.getByText(\"Heute gehe ich\")).toBeVisible();\n  });\n});\n"
+      },
+      "expect": { "kind": "create", "path": "apps/learner/tests/unit/review/grammar-card.test.tsx" }
+    },
+    {
+      "id": "deletion-is-an-empty-replacement",
+      "input": { "instruction": "In apps/learner/lib/costs.ts remove the unused import line that reads exactly: import { legacyRate } from \"./legacy\";" },
+      "reference": {
+        "kind": "modify",
+        "path": "apps/learner/lib/costs.ts",
+        "rationale": "Removes an unused import the lint step flags.",
+        "edits": [{ "anchor": "import { legacyRate } from \"./legacy\";\n", "replacement": "" }]
+      },
+      "expect": { "kind": "modify", "edits": [{ "replacement": "" }] }
+    }
+  ]
+}

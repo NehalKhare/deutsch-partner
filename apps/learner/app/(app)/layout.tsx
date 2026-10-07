@@ -1,14 +1,12 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
 
 import { signOutAction } from "@/app/auth/actions";
 import { AccountMenu } from "@/components/site/account-menu";
 import { AppNav, tabBarSpace } from "@/components/site/app-nav";
 import { Wordmark } from "@dp/ui/wordmark";
 import { accountLabel } from "@dp/auth/account";
-import { getAuthenticatedAccount } from "@/lib/auth/current-user";
+import { requireAuthenticatedAccount } from "@/lib/auth/current-user";
 import { currentSummary } from "@/lib/dashboard/current-summary";
-import { LOGIN_PATH } from "@/lib/auth/routes";
 import { requireOnboarded } from "@/lib/onboarding/gate";
 import { PRIVATE_PAGE_METADATA } from "@/lib/seo/metadata";
 
@@ -19,9 +17,9 @@ export const metadata: Metadata = PRIVATE_PAGE_METADATA;
  * The authenticated shell.
  *
  * Guarding here rather than in each page means a new route under this segment
- * is protected by default: signed in, and set up. The proxy also redirects, and
- * the database enforces access independently: three layers, none of them relied
- * on alone.
+ * is protected by default: signed in with both factors, and set up. The proxy
+ * also redirects, and the database enforces access independently: three
+ * layers, none of them relied on alone.
  *
  * Visually it is the landing page's header with one thing swapped out, so
  * signing in changes what you can do and not what room you are standing in.
@@ -43,8 +41,7 @@ export default async function AuthenticatedLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const account = await getAuthenticatedAccount();
-  if (!account) redirect(LOGIN_PATH);
+  const account = await requireAuthenticatedAccount();
   await requireOnboarded(account.id);
 
   // For the count beside Catch up. Shared with the dashboard page through a

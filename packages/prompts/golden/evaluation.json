@@ -1,0 +1,138 @@
+{
+  "evalSet": "golden/evaluation",
+  "description": "evaluation.learner_message: one learner message with the tutor's preceding turns, scored for level, accuracy and mastery signals. The reference is a full evaluation the contract accepts; the expectation pins the level band, the errors that must be found, and the explanation language.",
+  "cases": [
+    {
+      "id": "a1-clean-introduction",
+      "note": "A correct A1 message yields no errors and an A1 estimate.",
+      "input": {
+        "learnerMessage": "Ich heiße Anna und ich wohne in Hamburg. Ich bin Lehrerin.",
+        "precedingTurns": [{ "role": "assistant", "content": "Hallo! Wer bist du und was machst du?" }]
+      },
+      "reference": {
+        "estimatedLevel": "A1",
+        "levelConfidence": 0.8,
+        "vocabularyUsed": ["heißen", "wohnen", "Lehrerin"],
+        "vocabularyWeaknesses": [],
+        "grammarPatternsUsed": ["present_tense_regular", "sein_conjugation"],
+        "errors": [],
+        "skillEstimates": { "fluency": 0.6, "comprehension": 0.8, "accuracy": 0.95, "range": 0.4 },
+        "masterySignals": [{ "lemma": "wohnen", "direction": "up" }],
+        "reviewCandidates": [],
+        "recommendationSignals": ["introductions"]
+      },
+      "expect": { "estimatedLevel": "A1", "errors": [] }
+    },
+    {
+      "id": "a2-word-order-after-adverb",
+      "note": "Verb must stay second after a fronted adverb; explanation is English and names the correct form.",
+      "input": {
+        "learnerMessage": "Morgen ich fahre nach Berlin mit dem Zug.",
+        "precedingTurns": [{ "role": "assistant", "content": "Was machst du morgen?" }]
+      },
+      "reference": {
+        "estimatedLevel": "A2",
+        "levelConfidence": 0.7,
+        "vocabularyUsed": ["fahren", "Zug", "morgen"],
+        "vocabularyWeaknesses": [],
+        "grammarPatternsUsed": ["present_tense_regular", "dative_after_mit"],
+        "errors": [
+          {
+            "errorType": "word_order",
+            "excerpt": "Morgen ich fahre",
+            "corrected": "Morgen fahre ich",
+            "explanation": "When a sentence opens with \"Morgen\", the verb must stay in second position; the correct order is \"Morgen fahre ich\"."
+          }
+        ],
+        "skillEstimates": { "fluency": 0.6, "comprehension": 0.8, "accuracy": 0.6, "range": 0.5 },
+        "masterySignals": [{ "lemma": "fahren", "direction": "up" }],
+        "reviewCandidates": [],
+        "recommendationSignals": ["verb_second_position"]
+      },
+      "expect": { "estimatedLevel": "A2", "errors": [{ "errorType": "word_order" }] }
+    },
+    {
+      "id": "a2-dative-and-gender",
+      "note": "Two errors in one sentence are both reported; neither masks the other.",
+      "input": {
+        "learnerMessage": "Ich gehe mit der Hund in das Park.",
+        "precedingTurns": [{ "role": "assistant", "content": "Was machst du am Sonntag?" }]
+      },
+      "reference": {
+        "estimatedLevel": "A2",
+        "levelConfidence": 0.65,
+        "vocabularyUsed": ["gehen", "Hund", "Park"],
+        "vocabularyWeaknesses": ["Park"],
+        "grammarPatternsUsed": ["dative_after_mit", "accusative_after_in_motion"],
+        "errors": [
+          {
+            "errorType": "case_dative",
+            "excerpt": "mit der Hund",
+            "corrected": "mit dem Hund",
+            "explanation": "\"mit\" always takes the dative, and \"Hund\" is masculine, so the correct form is \"mit dem Hund\"."
+          },
+          {
+            "errorType": "case_accusative",
+            "excerpt": "in das Park",
+            "corrected": "in den Park",
+            "explanation": "Movement into a place takes the accusative, and \"Park\" is masculine, so the correct form is \"in den Park\"."
+          }
+        ],
+        "skillEstimates": { "fluency": 0.5, "comprehension": 0.8, "accuracy": 0.4, "range": 0.4 },
+        "masterySignals": [{ "lemma": "Hund", "direction": "down" }],
+        "reviewCandidates": ["Park"],
+        "recommendationSignals": ["two_way_prepositions"]
+      },
+      "expect": { "errors": [{ "errorType": "case_dative" }, { "errorType": "case_accusative" }] }
+    },
+    {
+      "id": "b1-subordinate-clause-correct",
+      "note": "A correct weil-clause at B1 counts as a mastery signal and raises the estimate.",
+      "input": {
+        "learnerMessage": "Ich bleibe heute zu Hause, weil ich mich nicht gut fühle, aber morgen komme ich wieder.",
+        "precedingTurns": [{ "role": "assistant", "content": "Kommst du heute zum Training?" }]
+      },
+      "reference": {
+        "estimatedLevel": "B1",
+        "levelConfidence": 0.75,
+        "vocabularyUsed": ["bleiben", "sich fühlen", "wieder"],
+        "vocabularyWeaknesses": [],
+        "grammarPatternsUsed": ["weil_clause", "reflexive_verb", "aber_coordination"],
+        "errors": [],
+        "skillEstimates": { "fluency": 0.75, "comprehension": 0.85, "accuracy": 0.9, "range": 0.7 },
+        "masterySignals": [{ "lemma": "weil", "direction": "up" }, { "lemma": "sich fühlen", "direction": "up" }],
+        "reviewCandidates": [],
+        "recommendationSignals": ["subordinate_clauses"]
+      },
+      "expect": { "estimatedLevel": "B1", "errors": [], "masterySignals": [{ "lemma": "weil", "direction": "up" }] }
+    },
+    {
+      "id": "b1-register-slip",
+      "note": "Switching to du with a stranger in a formal scene is a register_formality error, not a grammar one.",
+      "input": {
+        "learnerMessage": "Guten Tag, Herr Müller. Kannst du mir bitte helfen?",
+        "precedingTurns": [{ "role": "assistant", "content": "Guten Tag, hier ist das Bürgeramt. Wie kann ich Ihnen helfen?" }]
+      },
+      "reference": {
+        "estimatedLevel": "B1",
+        "levelConfidence": 0.6,
+        "vocabularyUsed": ["helfen"],
+        "vocabularyWeaknesses": [],
+        "grammarPatternsUsed": ["modal_verb_koennen"],
+        "errors": [
+          {
+            "errorType": "register_formality",
+            "excerpt": "Kannst du mir",
+            "corrected": "Können Sie mir",
+            "explanation": "Addressing an official you do not know calls for the formal \"Sie\", so the correct form is \"Können Sie mir bitte helfen?\"."
+          }
+        ],
+        "skillEstimates": { "fluency": 0.7, "comprehension": 0.8, "accuracy": 0.7, "range": 0.6 },
+        "masterySignals": [],
+        "reviewCandidates": [],
+        "recommendationSignals": ["formal_register"]
+      },
+      "expect": { "errors": [{ "errorType": "register_formality" }] }
+    }
+  ]
+}

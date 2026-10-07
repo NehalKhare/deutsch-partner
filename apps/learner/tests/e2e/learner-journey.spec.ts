@@ -1,13 +1,16 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { FIXTURE_HINT, FIXTURE_MISSING, signInAsFixture } from "./fixture";
+
 /**
  * The eight flows the build spec names, end to end.
  *
  * Skipped unless a fixture account is supplied, because they need a real
- * Supabase project and a real corpus. Seed one with `pnpm dummy:user`, pin the
- * password with DEV_SEED_PASSWORD, ingest the corpus with `pnpm ingest`, then:
+ * Supabase project and a real corpus. Seed one with `pnpm dummy:user`, pin
+ * its password and authenticator secret (see ./fixture.ts), ingest the corpus
+ * with `pnpm ingest`, then:
  *
- *   DEV_SEED_EMAIL=... DEV_SEED_PASSWORD=... pnpm test:e2e
+ *   DEV_SEED_EMAIL=... DEV_SEED_PASSWORD=... DEV_SEED_TOTP_SECRET=... pnpm test:e2e
  *
  * Sign-up and onboarding have their own specs; this covers the rest, and
  * asserts the properties a unit test cannot: that a reply actually arrives a
@@ -15,16 +18,7 @@ import { expect, test, type Page } from "@playwright/test";
  * leaves the thread readable.
  */
 
-const email = process.env.DEV_SEED_EMAIL;
-const password = process.env.DEV_SEED_PASSWORD;
-
-async function signIn(page: Page): Promise<void> {
-  await page.goto("/auth/login");
-  await page.getByLabel("Email").fill(email as string);
-  await page.getByLabel("Password").fill(password as string);
-  await page.getByRole("button", { name: /sign in/i }).click();
-  await expect(page).toHaveURL(/\/dashboard/);
-}
+const signIn = signInAsFixture;
 
 async function startThread(page: Page): Promise<string> {
   await page.goto("/chat");
@@ -35,7 +29,7 @@ async function startThread(page: Page): Promise<string> {
 }
 
 test.describe("the learner journey", () => {
-  test.skip(!email || !password, "set DEV_SEED_EMAIL and DEV_SEED_PASSWORD to run this");
+  test.skip(FIXTURE_MISSING, FIXTURE_HINT);
 
   test("3. starts a conversation at the learner's own level", async ({ page }) => {
     await signIn(page);
@@ -178,7 +172,7 @@ test.describe("what a signed-out visitor cannot do", () => {
 });
 
 test.describe("the chat endpoint's own rules", () => {
-  test.skip(!email || !password, "set DEV_SEED_EMAIL and DEV_SEED_PASSWORD to run this");
+  test.skip(FIXTURE_MISSING, FIXTURE_HINT);
 
   test("refuses a malformed body", async ({ page, request }) => {
     await signIn(page);

@@ -1,0 +1,47 @@
+{
+  "evalSet": "golden/error-extraction",
+  "description": "extraction.errors: normalises an evaluation's prose into error instances against the closed taxonomy. The expectation pins the error types; the pattern wording may differ.",
+  "cases": [
+    {
+      "id": "single-word-order",
+      "input": { "evaluation": "The learner wrote 'Heute ich gehe ins Kino'. The verb should be in second position: 'Heute gehe ich ins Kino'. Otherwise the message is fine." },
+      "reference": { "errors": [{ "errorType": "word_order", "pattern": "Verb not in second position after a fronted time adverb", "utterance": "Heute ich gehe ins Kino" }] },
+      "expect": { "errors": [{ "errorType": "word_order" }] }
+    },
+    {
+      "id": "two-case-errors",
+      "input": { "evaluation": "Two problems: 'mit der Hund' should be 'mit dem Hund' (mit takes the dative, Hund is masculine) and 'in das Park' should be 'in den Park' (movement, accusative, masculine)." },
+      "reference": {
+        "errors": [
+          { "errorType": "case_dative", "pattern": "Dative not used after mit with a masculine noun", "utterance": "mit der Hund" },
+          { "errorType": "case_accusative", "pattern": "Accusative not used for movement into a place", "utterance": "in das Park" }
+        ]
+      },
+      "expect": { "errors": [{ "errorType": "case_dative" }, { "errorType": "case_accusative" }] }
+    },
+    {
+      "id": "no-errors",
+      "note": "An evaluation that reports a clean message yields an empty list, not an invented error.",
+      "input": { "evaluation": "The message 'Ich heiße Anna und wohne in Hamburg' is correct for A1. No errors." },
+      "reference": { "errors": [] },
+      "expect": { "errors": [] }
+    },
+    {
+      "id": "separable-verb-and-spelling",
+      "input": { "evaluation": "The learner wrote 'Ich aufstehe um sieben' - the separable prefix must go to the end: 'Ich stehe um sieben auf'. Also 'Nummmer' is misspelled; the correct spelling is 'Nummer'." },
+      "reference": {
+        "errors": [
+          { "errorType": "separable_verb", "pattern": "Separable prefix kept on the verb instead of moving to the end", "utterance": "Ich aufstehe um sieben" },
+          { "errorType": "spelling", "pattern": "Misspelled Nummer", "utterance": "Nummmer" }
+        ]
+      },
+      "expect": { "errors": [{ "errorType": "separable_verb" }, { "errorType": "spelling" }] }
+    },
+    {
+      "id": "register-formality",
+      "input": { "evaluation": "The learner used 'du' with an official at the Bürgeramt ('Kannst du mir helfen?'); the formal 'Können Sie mir helfen?' is expected here. Grammar is otherwise correct." },
+      "reference": { "errors": [{ "errorType": "register_formality", "pattern": "Informal du used with a stranger in an official setting", "utterance": "Kannst du mir helfen?" }] },
+      "expect": { "errors": [{ "errorType": "register_formality" }] }
+    }
+  ]
+}

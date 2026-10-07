@@ -1,11 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_SIGNED_IN_PATH,
+  ENROL_PATH,
   LOGIN_PATH,
+  MFA_PATH,
+  enrolRedirectTarget,
   isAuthPath,
   isProtectedPath,
+  isStepUpPath,
+  learnerRouteDecision,
   safeNextPath,
   signInRedirectTarget,
+  stepUpRedirectTarget,
 } from "@/lib/auth/routes";
 
 describe("isProtectedPath", () => {
@@ -128,5 +134,119 @@ describe("safeNextPath", () => {
 describe("DEFAULT_SIGNED_IN_PATH", () => {
   it("is itself protected, so the redirect cannot land somewhere public", () => {
     expect(isProtectedPath(DEFAULT_SIGNED_IN_PATH)).toBe(true);
+  });
+});
+
+describe("isStepUpPath", () => {
+  it.each([MFA_PATH, ENROL_PATH, `${MFA_PATH}/`])("recognises %s", (path) => {
+    expect(isStepUpPath(path)).toBe(true);
+  });
+
+  it.each([LOGIN_PATH, "/auth/mfaish", "/dashboard"])("leaves %s alone", (path) => {
+    expect(isStepUpPath(path)).toBe(false);
+  });
+
+  it("is not a sign-in page, so a password-only session is not bounced off it", () => {
+    expect(isAuthPath(MFA_PATH)).toBe(false);
+    expect(isAuthPath(ENROL_PATH)).toBe(false);
+  });
+});
+
+describe("stepUpRedirectTarget and enrolRedirectTarget", () => {
+  it("remember a destination the same way sign-in does", () => {
+    expect(stepUpRedirectTarget("/billing/checkout?offer=x")).toBe(
+      `${MFA_PATH}?next=${encodeURIComponent("/billing/checkout?offer=x")}`,
+    );
+    expect(enrolRedirectTarget("/chat")).toBe(`${ENROL_PATH}?next=%2Fchat`);
+  });
+
+  it("leave the default destination off, as noise", () => {
+    expect(stepUpRedirectTarget(DEFAULT_SIGNED_IN_PATH)).toBe(MFA_PATH);
+    expect(enrolRedirectTarget("/")).toBe(ENROL_PATH);
+  });
+
+  it("drop a destination that could leave the site", () => {
+    expect(stepUpRedirectTarget("//evil.example")).toBe(MFA_PATH);
+    expect(enrolRedirectTarget("https://evil.example")).toBe(ENROL_PATH);
+  });
+});
+
+/**
+ * The step-up table. A password alone opens the step-up pages and the public
+ * site, and nothing else; the destination a learner carries survives every hop.
+ */
+const none = { signedIn: false, aal: "aal1" as const };
+const password = { signedIn: true, aal: "aal1" as const };
+const both = { signedIn: true, aal: "aal2" as const };
+
+describe("learnerRouteDecision for a visitor with no session", () => {
+  it("passes the public site and the sign-in pages", () => {
+    expect(learnerRouteDecision("/", "", none)).toBeNull();
+    expect(learnerRouteDecision("/pricing", "", none)).toBeNull();
+    expect(learnerRouteDecision(LOGIN_PATH, "?next=%2Fchat", none)).toBeNull();
+  });
+
+  it("is sent to sign in from a protected page, remembering it", () => {
+    expect(learnerRouteDecision("/dashboard/progress", "", none)).toBe(
+      `${LOGIN_PATH}?next=%2Fdashboard%2Fprogress`,
+    );
+  });
+
+  it("is sent to sign in from the step-up pages, keeping the destination and not the page", () => {
+    expect(learnerRouteDecision(MFA_PATH, "?next=%2Fchat", none)).toBe(`${LOGIN_PATH}?next=%2Fchat`);
+    expect(learnerRouteDecision(ENROL_PATH, "", none)).toBe(LOGIN_PATH);
+  });
+});
+
+describe("learnerRouteDecision for a password without its second factor", () => {
+  it("is sent to the authenticator from everywhere protected, remembering where", () => {
+    expect(learnerRouteDecision("/dashboard", "", password)).toBe(MFA_PATH);
+    expect(learnerRouteDecision("/billing/checkout", "?offer=x", password)).toBe(
+      `${MFA_PATH}?next=${encodeURIComponent("/billing/checkout?offer=x")}`,
+    );
+    expect(learnerRouteDecision("/onboarding", "", password)).toBe(`${MFA_PATH}?next=%2Fonboarding`);
+  });
+
+  it("is sent on from the sign-in pages with the destination it was carrying", () => {
+    expect(learnerRouteDecision(LOGIN_PATH, "?next=%2Fchat", password)).toBe(`${MFA_PATH}?next=%2Fchat`);
+    expect(learnerRouteDecision("/auth/sign-up", "", password)).toBe(MFA_PATH);
+  });
+
+  it("may stand on the step-up pages and browse the public site", () => {
+    expect(learnerRouteDecision(MFA_PATH, "", password)).toBeNull();
+    expect(learnerRouteDecision(ENROL_PATH, "?next=%2Fchat", password)).toBeNull();
+    expect(learnerRouteDecision("/pricing", "", password)).toBeNull();
+  });
+
+  it("is not told about a destination that could leave the site", () => {
+    expect(learnerRouteDecision(LOGIN_PATH, "?next=%2F%2Fevil.example", password)).toBe(MFA_PATH);
+  });
+});
+
+describe("learnerRouteDecision for a session with both factors", () => {
+  it("passes everywhere protected", () => {
+    expect(learnerRouteDecision("/dashboard", "", both)).toBeNull();
+    expect(learnerRouteDecision("/chat/abc", "", both)).toBeNull();
+    expect(learnerRouteDecision("/onboarding", "", both)).toBeNull();
+  });
+
+  it("is sent where it was heading from the sign-in and step-up pages", () => {
+    expect(learnerRouteDecision(LOGIN_PATH, "", both)).toBe(DEFAULT_SIGNED_IN_PATH);
+    expect(learnerRouteDecision(LOGIN_PATH, "?next=%2Fbilling", both)).toBe("/billing");
+    expect(learnerRouteDecision(MFA_PATH, "?next=%2Fchat", both)).toBe("/chat");
+    expect(learnerRouteDecision(ENROL_PATH, "", both)).toBe(DEFAULT_SIGNED_IN_PATH);
+  });
+
+  it("drops a destination that could leave the site", () => {
+    expect(learnerRouteDecision(MFA_PATH, "?next=https%3A%2F%2Fevil.example", both)).toBe(
+      DEFAULT_SIGNED_IN_PATH,
+    );
+  });
+});
+
+describe("route handlers", () => {
+  it("are never redirected; they authenticate themselves", () => {
+    expect(learnerRouteDecision("/api/chat", "", none)).toBeNull();
+    expect(learnerRouteDecision("/api/chat", "", password)).toBeNull();
   });
 });

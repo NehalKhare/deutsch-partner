@@ -13,6 +13,7 @@ export * from "./catalogue";
 export * from "./contract";
 export * from "./delimiters";
 export * from "./fingerprint";
+export * from "./golden";
 export * from "./repair";
 export * from "./sections";
 export * from "./tokens";

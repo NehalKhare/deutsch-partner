@@ -1,0 +1,43 @@
+{
+  "evalSet": "golden/trainer-session-mining",
+  "description": "trainer.session_mining: a finished Trainer transcript mined for mistakes made more than once, vocabulary the learner lacked, and words seen. The expectation pins recurring error types and the gaps; vocabSeen may vary.",
+  "cases": [
+    {
+      "id": "recurring-dative-after-mit",
+      "input": {
+        "transcript": "Trainer: Womit fährst du zur Arbeit?\nLearner: Ich fahre mit der Bus.\nTrainer: Fast! Mit dem Bus. Und am Wochenende?\nLearner: Am Wochenende fahre ich mit der Fahrrad.\nTrainer: Mit dem Fahrrad. Was nimmst du mit?\nLearner: Ich nehme ein... how do you say backpack?\nTrainer: Der Rucksack."
+      },
+      "reference": {
+        "recurring": [{ "errorType": "case_dative", "pattern": "Dative article missing after \"mit\"; the correct forms are \"mit dem Bus\" and \"mit dem Fahrrad\"", "utterance": "Ich fahre mit der Bus." }],
+        "vocabGaps": ["Rucksack"],
+        "vocabSeen": ["Bus", "Fahrrad", "Wochenende", "fahren"]
+      },
+      "expect": { "recurring": [{ "errorType": "case_dative" }], "vocabGaps": ["Rucksack"] }
+    },
+    {
+      "id": "one-off-mistake-is-not-recurring",
+      "note": "A single slip is not a recurring pattern.",
+      "input": {
+        "transcript": "Trainer: Was hast du gestern gemacht?\nLearner: Ich habe Fußball gespielt und dann ich habe gekocht.\nTrainer: Dann habe ich gekocht - gut! Was hast du gekocht?\nLearner: Ich habe Nudeln gekocht. Dann habe ich geschlafen."
+      },
+      "reference": {
+        "recurring": [],
+        "vocabGaps": [],
+        "vocabSeen": ["spielen", "kochen", "Nudeln", "schlafen"]
+      },
+      "expect": { "recurring": [] }
+    },
+    {
+      "id": "recurring-verb-position-with-weil",
+      "input": {
+        "transcript": "Trainer: Warum lernst du Deutsch?\nLearner: Weil ich wohne in Hamburg.\nTrainer: Weil ich in Hamburg wohne - das Verb geht ans Ende. Und warum magst du Hamburg?\nLearner: Weil es hat einen Hafen.\nTrainer: Weil es einen Hafen hat. Was ist dein Lieblingsort?\nLearner: Die... the pier? Landungsbrücken."
+      },
+      "reference": {
+        "recurring": [{ "errorType": "subordinate_clause", "pattern": "Verb kept in second position inside a \"weil\" clause; the correct forms are \"weil ich in Hamburg wohne\" and \"weil es einen Hafen hat\"", "utterance": "Weil ich wohne in Hamburg." }],
+        "vocabGaps": ["Anlegestelle"],
+        "vocabSeen": ["Hafen", "wohnen", "Landungsbrücken"]
+      },
+      "expect": { "recurring": [{ "errorType": "subordinate_clause" }] }
+    }
+  ]
+}

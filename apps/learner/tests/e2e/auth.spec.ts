@@ -40,11 +40,26 @@ test("a visitor can cross to the sign-up form", async ({ page }) => {
   await expect(page.getByLabel("Confirm password")).toBeVisible();
 });
 
-test("static assets are not intercepted by the guard", async ({ request }) => {
-  const response = await request.get("/next.svg");
+/**
+ * The app ships no `public/` directory: its static files are the metadata
+ * routes under `app/` (favicon.ico, the manifest, robots.txt), which is why
+ * the guard's matcher names them. Each must answer a cookieless request with
+ * its own content, not a redirect to sign-in.
+ */
+for (const [path, type] of [
+  ["/favicon.ico", /image\//],
+  ["/manifest.webmanifest", /manifest\+json/],
+  ["/robots.txt", /text\/plain/],
+] as const) {
+  test(`static asset ${path} is not intercepted by the guard`, async ({
+    request,
+  }) => {
+    const response = await request.get(path, { maxRedirects: 0 });
 
-  expect(response.status()).toBe(200);
-});
+    expect(response.status()).toBe(200);
+    expect(response.headers()["content-type"]).toMatch(type);
+  });
+}
 
 test("onboarding requires a session like any other protected page", async ({
   page,
@@ -53,4 +68,15 @@ test("onboarding requires a session like any other protected page", async ({
 
   await expect(page).toHaveURL(/\/auth\/login/);
   await expect(page).toHaveURL(/next=%2Fonboarding/);
+});
+
+test("the second-factor pages need a session, and send a visitor to sign in", async ({ page }) => {
+  await page.goto("/auth/mfa?next=%2Fchat");
+
+  await expect(page).toHaveURL(/\/auth\/login/);
+  // The destination survives; the step-up page itself is not remembered.
+  await expect(page).toHaveURL(/next=%2Fchat/);
+
+  await page.goto("/auth/mfa/enrol");
+  await expect(page).toHaveURL(/\/auth\/login$/);
 });

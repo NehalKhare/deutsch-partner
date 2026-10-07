@@ -1,20 +1,32 @@
 import "server-only";
 
 import { redirect } from "next/navigation";
-import { z } from "zod";
 
-import { LOGIN_PATH } from "@/lib/auth/routes";
+import { readSessionClaims, type SessionClaims } from "@dp/auth/claims";
+
+import { LOGIN_PATH, MFA_PATH } from "@/lib/auth/routes";
 import { createServerSupabaseClient } from "@/lib/supabase/server-client";
-
-const subjectSchema = z.uuid();
-
-/** The address is shown back to its owner, so a malformed one is simply absent. */
-const emailSchema = z.email().max(320);
 
 export interface AuthenticatedAccount {
   readonly id: string;
   /** Null when the token carries none: not every sign-in method has one. */
   readonly email: string | null;
+}
+
+/**
+ * The session as the token states it, at whatever assurance level, or null.
+ *
+ * For the step-up pages and nothing else: they are the one place a password
+ * without a second factor is allowed to stand. Everything else in the app
+ * asks the functions below, which do not return until the second factor is
+ * present.
+ */
+export async function getSessionClaims(): Promise<SessionClaims | null> {
+  try {
+    return await readSessionClaims(await createServerSupabaseClient());
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -25,27 +37,20 @@ export interface AuthenticatedAccount {
  * locally where asymmetric keys are configured — so this is safe to use as the
  * identity the rest of a request is scoped to.
  *
+ * A password alone is not an account here. The session has to have answered
+ * its authenticator (aal2), and because every page, action and route handler
+ * reads its learner through this one function, a password-only session can
+ * open nothing — not a page the proxy forgot, not a fetch to /api/chat.
+ *
  * The address rides along because the shell shows it back: knowing which
  * account you are in is the point of putting a name in a nav bar, and reading
  * it from the same verified claim as the id means the two cannot disagree.
  */
 export async function getAuthenticatedAccount(): Promise<AuthenticatedAccount | null> {
-  try {
-    const supabase = await createServerSupabaseClient();
-    const { data, error } = await supabase.auth.getClaims();
-    if (error) return null;
+  const session = await getSessionClaims();
+  if (!session || session.aal !== "aal2") return null;
 
-    // The claim selects which learner's rows we read, so it must be the shape
-    // the database expects, not merely present.
-    const subject = subjectSchema.safeParse(data?.claims?.sub);
-    if (!subject.success) return null;
-
-    const email = emailSchema.safeParse(data?.claims?.email);
-
-    return { id: subject.data, email: email.success ? email.data : null };
-  } catch {
-    return null;
-  }
+  return { id: session.sub, email: session.email };
 }
 
 /** The id alone, which is what almost every caller scopes a query to. */
@@ -53,10 +58,20 @@ export async function getAuthenticatedUserId(): Promise<string | null> {
   return (await getAuthenticatedAccount())?.id ?? null;
 }
 
-/** As above, but sends the learner to sign in instead of returning null. */
-export async function requireAuthenticatedUserId(): Promise<string> {
-  const userId = await getAuthenticatedUserId();
-  if (!userId) redirect(LOGIN_PATH);
+/**
+ * As above, but sends the learner on instead of returning null: to sign in
+ * when there is no session, to their authenticator when there is only a
+ * password.
+ */
+export async function requireAuthenticatedAccount(): Promise<AuthenticatedAccount> {
+  const session = await getSessionClaims();
+  if (!session) redirect(LOGIN_PATH);
+  if (session.aal !== "aal2") redirect(MFA_PATH);
 
-  return userId;
+  return { id: session.sub, email: session.email };
+}
+
+/** The id alone, or a redirect. */
+export async function requireAuthenticatedUserId(): Promise<string> {
+  return (await requireAuthenticatedAccount()).id;
 }

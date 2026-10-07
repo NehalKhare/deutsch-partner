@@ -1,0 +1,99 @@
+{
+  "evalSet": "golden/productops-plan-breakdown",
+  "description": "productops.plan_breakdown: an approved PRD broken into phased, sized requirements with technical guidance against the current stack. The expectation pins the overall size and that dependencies point at earlier requirements.",
+  "cases": [
+    {
+      "id": "grammar-review-breakdown",
+      "input": { "brief": "PRD: grammar patterns in spaced-repetition review. Scheduler includes recurring error patterns; grammar card with example and correction; marking correct advances the interval. Architecture: review engine is pure functions in packages/learning; the review page is a server component." },
+      "reference": {
+        "summary": "A small change in two layers: the review engine learns a second item kind, then the page renders it. No schema change.",
+        "overallSize": "s",
+        "phases": [
+          {
+            "name": "Engine",
+            "goal": "The scheduler returns grammar items alongside words",
+            "requirements": [
+              { "id": "R1", "title": "Grammar item kind in the review engine", "description": "Recurring error patterns become review items with intervals; tests cover scheduling and advancement.", "size": "s", "dependsOn": [] }
+            ]
+          },
+          {
+            "name": "Page",
+            "goal": "A learner sees and answers a grammar card in review",
+            "requirements": [
+              { "id": "R2", "title": "Grammar card component", "description": "Renders the example, the corrected form and the mark buttons; reviewer sees it in a session.", "size": "xs", "dependsOn": ["R1"] }
+            ]
+          }
+        ],
+        "technicalGuidance": [
+          { "topic": "Scheduling", "current": "The review engine schedules vocabulary with a pure spaced-repetition function.", "recommendation": "Reuse the same function for grammar items; a second interval table is not needed yet.", "pros": ["No new state"], "cons": ["Grammar may deserve longer intervals later"] }
+        ]
+      },
+      "expect": { "overallSize": "s", "phases": [{ "requirements": [{ "id": "R2", "dependsOn": ["R1"] }] }] }
+    },
+    {
+      "id": "voice-roleplay-breakdown",
+      "input": { "brief": "PRD: spoken roleplay scenarios on Plus and Premium. Voice mode on scenario threads, TTS for tutor lines, STT for learner replies, same pipeline, quotas per plan. Architecture: speech routes exist and go through OpenRouter; voice is not ledgered; quotas live in packages/domain plans." },
+      "reference": {
+        "summary": "Three phases: make voice spend visible, wire the existing speech routes into scenario threads, then gate and quota it by plan.",
+        "overallSize": "l",
+        "phases": [
+          {
+            "name": "Accounting",
+            "goal": "Every spoken turn is ledgered before any learner can run one",
+            "requirements": [
+              { "id": "R1", "title": "Ledger voice calls", "description": "Speech routes write a ledger row per call with cost in EUR; tests prove a row per call.", "size": "m", "dependsOn": [] }
+            ]
+          },
+          {
+            "name": "Voice mode",
+            "goal": "A learner can run a scenario by voice end to end",
+            "requirements": [
+              { "id": "R2", "title": "Voice toggle on scenario thread", "description": "The scenario page exposes voice mode and plays tutor lines through text-to-speech.", "size": "s", "dependsOn": ["R1"] },
+              { "id": "R3", "title": "Spoken replies through the turn pipeline", "description": "A transcribed reply enters the existing turn pipeline and corrections render as in text.", "size": "m", "dependsOn": ["R2"] }
+            ]
+          },
+          {
+            "name": "Plans",
+            "goal": "Free sees voice locked; Plus and Premium are quota-counted",
+            "requirements": [
+              { "id": "R4", "title": "Plan gate and quotas", "description": "Voice mode checks the plan server-side and counts against the plan's voice quotas.", "size": "s", "dependsOn": ["R3"] }
+            ]
+          }
+        ],
+        "technicalGuidance": [
+          { "topic": "Transport", "current": "Speech already goes through OpenRouter audio models with PCM wrapped as WAV.", "recommendation": "Keep it; adding a second speech provider now would double the ledger work.", "pros": ["One key, one ledger path"], "cons": ["Latency is bound to one provider"] },
+          { "topic": "Accounting", "current": "Voice calls are neither budgeted nor ledgered.", "recommendation": "Ledger first, in R1, so the budget gate covers voice before it is opened to learners.", "pros": ["Spend visible from day one"], "cons": ["Delays the visible feature by one phase"] }
+        ]
+      },
+      "expect": { "overallSize": "l", "phases": [{ "requirements": [{ "id": "R1", "dependsOn": [] }] }] }
+    },
+    {
+      "id": "operator-spend-by-plan-breakdown",
+      "input": { "brief": "PRD: spend by plan on the operator overview. Rollup records plan per call; overview shows a series per plan; totals reconcile. Architecture: cost_rollup_daily is rebuilt hourly by a worker job; the ops app reads it through a database function." },
+      "reference": {
+        "summary": "One schema addition, one job change, one chart change. The reconciliation test is the whole point.",
+        "overallSize": "m",
+        "phases": [
+          {
+            "name": "Data",
+            "goal": "The rollup carries plan per row and reconciles to the daily total",
+            "requirements": [
+              { "id": "R1", "title": "Plan column on the rollup", "description": "Migration described for the operator to write; rollup job fills it; test proves per-plan sums equal the daily total.", "size": "m", "dependsOn": [] }
+            ]
+          },
+          {
+            "name": "Overview",
+            "goal": "An operator sees one series per plan",
+            "requirements": [
+              { "id": "R2", "title": "Per-plan series on the spend chart", "description": "The dashboard function returns per-plan rows and the chart draws one series each.", "size": "s", "dependsOn": ["R1"] }
+            ]
+          }
+        ],
+        "technicalGuidance": [
+          { "topic": "Storage", "current": "cost_rollup_daily is rebuilt idempotently every hour from the ledger.", "recommendation": "Add the plan column to the same table rather than a second rollup; the rebuild stays one statement.", "pros": ["One rebuild path"], "cons": ["Rows before the change need a backfill"] }
+        ]
+      },
+      "expect": { "overallSize": "m" }
+    }
+  ]
+}

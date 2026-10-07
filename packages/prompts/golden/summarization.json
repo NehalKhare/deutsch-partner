@@ -1,0 +1,24 @@
+{
+  "evalSet": "golden/summarization",
+  "description": "summarization.thread: a rolling summary of what was learned, not what was said. The expectation checks the summary names the practised pattern or the corrected form; wording is the model's.",
+  "cases": [
+    {
+      "id": "perfekt-practice",
+      "input": { "thread": "Tutor: Was hast du am Wochenende gemacht?\nLearner: Ich habe gekocht und ich bin schwimmen gegangen.\nTutor: Schön! Bist du allein geschwommen?\nLearner: Nein, mit meine Schwester.\nTutor: Mit meiner Schwester. Was habt ihr danach gemacht?\nLearner: Wir haben Eis gegessen." },
+      "reference": { "summary": "Practised the Perfekt with haben and sein (gekocht, gegangen, gegessen) while talking about the weekend. One dative slip after mit (meine Schwester, corrected to meiner Schwester). New words used: schwimmen, Eis." },
+      "expect": { "summary": { "$containsAny": ["Perfekt", "haben and sein", "gegangen"] } }
+    },
+    {
+      "id": "roleplay-at-the-bakery",
+      "input": { "thread": "Tutor: Guten Morgen! Was darf es sein?\nLearner: Ich möchte zwei Brötchen und ein Brot, bitte.\nTutor: Gern. Sonst noch etwas?\nLearner: Nein, danke. Was kostet das?\nTutor: Drei Euro zwanzig.\nLearner: Hier, bitte. Tschüss!" },
+      "reference": { "summary": "Roleplay at the bakery: ordering with möchte, asking the price, paying and saying goodbye. No errors. Words used: Brötchen, Brot, kosten." },
+      "expect": { "summary": { "$containsAny": ["bakery", "Bäckerei", "ordering", "möchte"] } }
+    },
+    {
+      "id": "weil-clauses-with-recurring-error",
+      "input": { "thread": "Tutor: Warum lernst du Deutsch?\nLearner: Weil ich wohne in Hamburg.\nTutor: Weil ich in Hamburg wohne. Und warum Hamburg?\nLearner: Weil mein Mann arbeitet hier.\nTutor: Weil mein Mann hier arbeitet. Gefällt es dir?\nLearner: Ja, sehr, weil die Stadt grün ist." },
+      "reference": { "summary": "Practised weil-clauses. The verb stayed in second position twice before the learner placed it at the end correctly in the third attempt. Theme: reasons for learning German and living in Hamburg." },
+      "expect": { "summary": { "$containsAny": ["weil"] } }
+    }
+  ]
+}

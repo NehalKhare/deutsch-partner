@@ -42,6 +42,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # A workflow_run checks out the default branch's current head by
+          # default, which may already be a later commit than the one CI
+          # passed. Deploy exactly what was verified.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - uses: ./.github/actions/setup
       - id: affected
         name: Which deployables changed

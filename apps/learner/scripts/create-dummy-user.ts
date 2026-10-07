@@ -3,11 +3,13 @@ import { randomBytes } from "node:crypto";
 import { loadEnvConfig } from "@next/env";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
+import { FACTOR_NAME } from "../lib/auth/mfa-state";
 import {
   DUMMY_LEARNER_EMAIL,
   DUMMY_LEARNER_ONBOARDING,
   usesReservedDomain,
 } from "../lib/dev/dummy-learner";
+import { totpCode } from "../lib/dev/totp";
 import { parseEnv, requireEnvValue } from "@dp/env/schema";
 
 /**
@@ -15,10 +17,11 @@ import { parseEnv, requireEnvValue } from "@dp/env/schema";
  *
  * The account is confirmed through the admin API — there is no inbox to click
  * a link in — and then everything else happens down the ordinary path: sign in
- * with the publishable key, complete onboarding through the same RPC the form
- * calls, under the same Row Level Security. Seeding a learner by writing rows
- * behind the application would prove nothing about whether a learner can
- * actually get in.
+ * with the publishable key, enrol and answer an authenticator through the same
+ * MFA calls the step-up pages make, complete onboarding through the same RPC
+ * the form calls, under the same Row Level Security. Seeding a learner by
+ * writing rows behind the application would prove nothing about whether a
+ * learner can actually get in.
  *
  * Run with: pnpm dummy:user
  */
@@ -130,6 +133,51 @@ async function main(): Promise<void> {
   }
   say("  Signed in with the publishable key.");
 
+  // The second factor. An authenticator pinned with DEV_SEED_TOTP_SECRET is
+  // kept if it still answers; otherwise every factor goes and a fresh one is
+  // enrolled and verified with a code computed here, exactly as a phone would.
+  const suppliedSecret = process.env.DEV_SEED_TOTP_SECRET?.trim();
+  let totpSecret: string | null = null;
+
+  const factors = await learner.auth.mfa.listFactors();
+  if (factors.error) abort(`Could not list factors: ${factors.error.message}`);
+  const verifiedFactor = factors.data.totp.find((factor) => factor.status === "verified");
+
+  if (verifiedFactor && suppliedSecret) {
+    const answered = await learner.auth.mfa.challengeAndVerify({
+      factorId: verifiedFactor.id,
+      code: totpCode(suppliedSecret),
+    });
+    if (!answered.error) {
+      totpSecret = suppliedSecret;
+      say("  Authenticator kept: the pinned secret still answers.");
+    }
+  }
+
+  if (!totpSecret) {
+    for (const factor of factors.data.all) {
+      const removed = await admin.auth.admin.mfa.deleteFactor({
+        id: factor.id,
+        userId: userId ?? signIn.data.user.id,
+      });
+      if (removed.error) abort(`Could not remove an old factor: ${removed.error.message}`);
+    }
+
+    const enrolled = await learner.auth.mfa.enroll({ factorType: "totp", friendlyName: FACTOR_NAME });
+    if (enrolled.error || !enrolled.data) {
+      abort(`Could not enrol an authenticator: ${enrolled.error?.message ?? "no factor returned"}`);
+    }
+
+    const confirmed = await learner.auth.mfa.challengeAndVerify({
+      factorId: enrolled.data.id,
+      code: totpCode(enrolled.data.totp.secret),
+    });
+    if (confirmed.error) abort(`Could not verify the new authenticator: ${confirmed.error.message}`);
+
+    totpSecret = enrolled.data.totp.secret;
+    say("  Authenticator enrolled and answered through the same MFA calls the app makes.");
+  }
+
   const status = await learner
     .from("profiles")
     .select("id, onboarded_at")
@@ -166,10 +214,15 @@ async function main(): Promise<void> {
 
   say();
   say(`  Sign in at ${env.APP_URL}/auth/login`);
-  say(`    email     ${email}`);
-  say(`    password  ${password}`);
+  say(`    email        ${email}`);
+  say(`    password     ${password}`);
+  say(`    authenticator secret  ${totpSecret}`);
   if (!supplied) {
-    say(`  Generated just now. Pin it with DEV_SEED_PASSWORD to keep it stable.`);
+    say(`  Password generated just now. Pin it with DEV_SEED_PASSWORD to keep it stable.`);
+  }
+  if (totpSecret !== suppliedSecret) {
+    say(`  Authenticator enrolled just now. Pin its secret with DEV_SEED_TOTP_SECRET, and`);
+    say(`  add it to an authenticator app by hand to sign in from a browser.`);
   }
   say();
   say(

@@ -38,8 +38,10 @@ jobs:
           fi
           pnpm turbo run typecheck lint test build $FILTER --continue
 
+      # The prompt golden sets run every time too: a change anywhere that
+      # moves a schema or a routing ceiling must still fit every fixture.
       - name: The gates that guard the whole tree
-        run: pnpm turbo run test --filter=@dp/security-tests --filter=@dp/db --continue
+        run: pnpm turbo run test --filter=@dp/security-tests --filter=@dp/db --filter=@dp/prompts --continue
 
   e2e:
     runs-on: ubuntu-latest

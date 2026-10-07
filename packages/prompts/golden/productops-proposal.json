@@ -1,0 +1,69 @@
+{
+  "evalSet": "golden/productops-proposal",
+  "description": "productops.proposal_synthesis: one proposal from research findings and internal context, scored on four judgements rather than a priority it chose. The expectation pins complexity, that evidence is cited, and that the impact judgements are honest about weak evidence.",
+  "cases": [
+    {
+      "id": "speaking-anxiety-to-voice-roleplay",
+      "input": { "brief": "Findings: learners freeze in real conversations and ask for low-stakes speaking practice (forum, strong evidence, 3 sources). Internal context: voice input exists on Plus and Premium; roleplay scenarios exist as text only. Prior proposals: none on voice." },
+      "reference": {
+        "title": "Spoken roleplay scenarios",
+        "problemStatement": "Learners who practise by text still freeze when they must speak. The product has voice input and roleplay scenes, but never puts the two together, so the one situation learners fear most is the one it never rehearses.",
+        "targetUsers": "A2 and B1 learners on Plus and Premium who have finished at least one text roleplay.",
+        "marketJustification": "Three forum threads in the scan describe the same freeze, and competitors' apps are criticised for never making the learner speak. Voice-first practice is the clearest unmet demand in the findings.",
+        "userImpact": "A learner can rehearse the bakery, the Bürgeramt and the doctor aloud before doing it for real, with the same gentle correction the text tutor gives.",
+        "proposedSolution": "Let a learner run any existing roleplay scenario by voice: the tutor's lines are read aloud, the learner answers by speaking, the transcript flows through the existing turn pipeline, and corrections appear as they do in text.",
+        "complexity": "medium",
+        "impact": { "reach": 0.5, "severity": 0.8, "evidenceStrength": 0.8, "productFit": 0.95 },
+        "implementationOutline": [
+          "Add a voice mode flag to the scenario thread",
+          "Read tutor lines through the existing text-to-speech route",
+          "Transcribe learner replies through the existing transcription route",
+          "Reuse the turn pipeline unchanged"
+        ],
+        "affectedAreas": ["scenarios", "voice", "billing quotas"],
+        "evidence": [
+          { "url": "https://www.reddit.com/r/German/comments/example-speaking-anxiety", "finding": "Learner with months of practice could not order at a bakery" },
+          { "finding": "Internal: voice input and roleplay scenarios exist separately" }
+        ]
+      },
+      "expect": { "complexity": "medium", "evidence": [{ "url": "https://www.reddit.com/r/German/comments/example-speaking-anxiety" }] }
+    },
+    {
+      "id": "weak-evidence-scored-honestly",
+      "note": "One anecdote is not strong evidence; the proposal may still be made, but evidenceStrength must say so.",
+      "input": { "brief": "Findings: one blog post says learners want grammar flashcards (web, 1 source, weak). Internal context: spaced-repetition review exists for vocabulary only." },
+      "reference": {
+        "title": "Grammar patterns in spaced-repetition review",
+        "problemStatement": "Review covers words but not the grammar patterns the learner keeps getting wrong, so a recurring word-order error never comes back for practice.",
+        "targetUsers": "Learners with at least one recurring grammar error recorded.",
+        "marketJustification": "The scan found a single blog post asking for grammar flashcards. The internal error ledger is the stronger reason: it already knows which patterns recur.",
+        "userImpact": "Recurring grammar errors are drilled until they stop recurring.",
+        "proposedSolution": "Schedule a learner's recurring error patterns in the existing review queue alongside vocabulary, with one example sentence per pattern.",
+        "complexity": "small",
+        "impact": { "reach": 0.6, "severity": 0.5, "evidenceStrength": 0.2, "productFit": 0.9 },
+        "implementationOutline": ["Add grammar items to the review scheduler", "Render a pattern card in the review page"],
+        "affectedAreas": ["review", "learning engine"],
+        "evidence": [{ "url": "https://example-blog.de/grammar-flashcards", "finding": "One author asks for grammar flashcards" }]
+      },
+      "expect": { "complexity": "small", "impact": { "evidenceStrength": 0.2 } }
+    },
+    {
+      "id": "large-change-is-large",
+      "input": { "brief": "Findings: learners want to practise with other humans, not only the tutor (forum, 2 sources). Internal context: no real-time features, no learner-to-learner data access, RLS isolates every learner." },
+      "reference": {
+        "title": "Peer conversation rooms",
+        "problemStatement": "Learners want a human on the other side sometimes. The product has no learner-to-learner surface at all.",
+        "targetUsers": "B1 learners who have completed the curriculum's conversation functions.",
+        "marketJustification": "Two forum threads ask for tandem partners; competitors offer community features that the findings describe as motivating.",
+        "userImpact": "A learner can book a short, moderated conversation with another learner at the same level.",
+        "proposedSolution": "Matchmaking by level and interest, a timed text room, and the tutor present as moderator and corrector.",
+        "complexity": "large",
+        "impact": { "reach": 0.3, "severity": 0.4, "evidenceStrength": 0.6, "productFit": 0.6 },
+        "implementationOutline": ["Design learner-to-learner data access under RLS", "Add a rooms table and matchmaking job", "Build the room UI", "Moderation and reporting"],
+        "affectedAreas": ["database and RLS", "realtime", "moderation", "billing"],
+        "evidence": [{ "url": "https://www.reddit.com/r/German/comments/example-tandem", "finding": "Posters ask where to find tandem partners" }]
+      },
+      "expect": { "complexity": "large" }
+    }
+  ]
+}

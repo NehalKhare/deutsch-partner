@@ -1,14 +1,21 @@
+import type { AssuranceLevel } from "@dp/auth/claims";
+
 /**
  * Route classification.
  *
  * Pure string logic with no framework types, so the rules that decide who is
  * sent where are testable on their own. Note that redirecting is a UX
- * affordance, not the security boundary: the database enforces access through
- * RLS whether or not a request ever reaches the proxy.
+ * affordance, not the security boundary: every page, action and route handler
+ * reads the session again, and the database enforces access through RLS
+ * whether or not a request ever reaches the proxy.
  */
 
 export const LOGIN_PATH = "/auth/login";
 export const SIGN_UP_PATH = "/auth/sign-up";
+/** Where a password-only session answers its authenticator. */
+export const MFA_PATH = "/auth/mfa";
+/** Where an account without an authenticator sets one up. */
+export const ENROL_PATH = "/auth/mfa/enrol";
 export const DEFAULT_SIGNED_IN_PATH = "/dashboard";
 
 /** Prefixes that require a session. API routes authenticate themselves. */
@@ -23,6 +30,9 @@ export const PROTECTED_PREFIXES = [
 
 /** Pages that exist to get a session, so a signed-in learner is sent onward. */
 const AUTH_PREFIXES = [LOGIN_PATH, SIGN_UP_PATH] as const;
+
+/** Pages for a session that has a password but not yet a second factor. */
+const STEP_UP_PATHS = [MFA_PATH, ENROL_PATH] as const;
 
 function matchesPrefix(pathname: string, prefixes: readonly string[]): boolean {
   const normalised =
@@ -44,6 +54,10 @@ export function isAuthPath(pathname: string): boolean {
   // /auth/callback is deliberately excluded: redirecting away from it would
   // abort the code exchange that establishes the session.
   return matchesPrefix(pathname, AUTH_PREFIXES);
+}
+
+export function isStepUpPath(pathname: string): boolean {
+  return matchesPrefix(pathname, STEP_UP_PATHS);
 }
 
 /**
@@ -77,18 +91,36 @@ function sameSitePath(value: string): string | null {
 }
 
 /**
- * Builds the sign-in URL, remembering where the learner was heading — the
- * path and its query, so an order link such as
- * /billing/checkout?offer=… survives the trip.
+ * A page that remembers where the learner was heading: the path and its
+ * query, so an order link such as /billing/checkout?offer=… survives the
+ * trip. The default destination is left off, as noise.
  *
  * The destination is only ever a same-site path. Anything that could point at
  * another origin is dropped rather than sanitised, because a redirect target
  * taken from a URL is a classic open-redirect vector.
  */
-export function signInRedirectTarget(pathWithQuery: string): string {
-  const path = pathWithQuery === "/" ? null : sameSitePath(pathWithQuery);
+function withDestination(page: string, pathWithQuery: string): string {
+  const path =
+    pathWithQuery === "/" || pathWithQuery === DEFAULT_SIGNED_IN_PATH
+      ? null
+      : sameSitePath(pathWithQuery);
 
-  return path ? `${LOGIN_PATH}?next=${encodeURIComponent(path)}` : LOGIN_PATH;
+  return path ? `${page}?next=${encodeURIComponent(path)}` : page;
+}
+
+/** The sign-in URL, remembering where the learner was heading. */
+export function signInRedirectTarget(pathWithQuery: string): string {
+  return withDestination(LOGIN_PATH, pathWithQuery);
+}
+
+/** The second-factor URL, remembering where the learner was heading. */
+export function stepUpRedirectTarget(pathWithQuery: string): string {
+  return withDestination(MFA_PATH, pathWithQuery);
+}
+
+/** The enrolment URL, remembering where the learner was heading. */
+export function enrolRedirectTarget(pathWithQuery: string): string {
+  return withDestination(ENROL_PATH, pathWithQuery);
 }
 
 /**
@@ -101,4 +133,55 @@ export function safeNextPath(next: unknown): string {
   if (typeof next !== "string" || next === "") return DEFAULT_SIGNED_IN_PATH;
 
   return sameSitePath(next) ?? DEFAULT_SIGNED_IN_PATH;
+}
+
+/** The `next` a page was reached with, or null. For forwarding, never for matching. */
+export function destinationFrom(search: string): string | null {
+  return new URLSearchParams(search).get("next");
+}
+
+export interface RouteSession {
+  readonly signedIn: boolean;
+  readonly aal: AssuranceLevel;
+}
+
+/**
+ * Where a request goes, decided from the path, the query and the session.
+ *
+ * | session        | sign-in, sign-up  | /auth/mfa, /auth/mfa/enrol | protected      | public |
+ * | -------------- | ----------------- | -------------------------- | -------------- | ------ |
+ * | none           | pass              | → sign-in                  | → sign-in?next | pass   |
+ * | password only  | → mfa (same next) | pass                       | → mfa?next     | pass   |
+ * | second factor  | → next or home    | → next or home             | pass           | pass   |
+ *
+ * A password alone opens nothing but the step-up pages. The destination a
+ * learner was carrying — a plan chosen on the pricing page — rides along in
+ * `next` from the sign-in page to the second factor and out the other side,
+ * and is validated as a same-site path at every hop. Route handlers under
+ * /api authenticate themselves and are never redirected.
+ */
+export function learnerRouteDecision(
+  pathname: string,
+  search: string,
+  session: RouteSession,
+): string | null {
+  const stepUp = isStepUpPath(pathname);
+  const auth = isAuthPath(pathname);
+  const protectedPath = isProtectedPath(pathname);
+
+  if (!session.signedIn) {
+    if (protectedPath) return signInRedirectTarget(`${pathname}${search}`);
+    if (stepUp) return signInRedirectTarget(destinationFrom(search) ?? "/");
+    return null;
+  }
+
+  if (session.aal !== "aal2") {
+    if (stepUp) return null;
+    if (protectedPath) return stepUpRedirectTarget(`${pathname}${search}`);
+    if (auth) return stepUpRedirectTarget(destinationFrom(search) ?? "/");
+    return null;
+  }
+
+  if (auth || stepUp) return safeNextPath(destinationFrom(search));
+  return null;
 }

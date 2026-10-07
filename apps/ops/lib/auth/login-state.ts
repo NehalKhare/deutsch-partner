@@ -30,6 +30,9 @@ export const INITIAL_ENROLMENT_STATE: EnrolmentFormState = {
   secret: null,
 };
 
+/** What the authenticator app shows beside the code. */
+export const FACTOR_NAME = "Deutsch Partner Ops";
+
 /** One message for every way a sign-in can fail, so nothing is enumerable. */
 export const GENERIC_SIGN_IN_FAILURE = "That email and password did not work.";
 export const CODE_FAILURE = "That code did not work. Try the next one.";

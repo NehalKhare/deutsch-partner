@@ -1,0 +1,13 @@
+{
+  "evalSet": "golden/intent",
+  "description": "classification.intent: one label from vocabulary, grammar, conversation, culture, web. Production routes intent by regex; this set is what the model entry is held to if it is ever switched on, and documents the boundary between the labels.",
+  "cases": [
+    { "id": "vocabulary-what-does-mean", "input": { "message": "Was bedeutet 'umsteigen'?" }, "reference": { "label": "vocabulary" }, "expect": { "label": "vocabulary" } },
+    { "id": "vocabulary-how-do-you-say", "input": { "message": "How do you say 'landlord' in German?" }, "reference": { "label": "vocabulary" }, "expect": { "label": "vocabulary" } },
+    { "id": "grammar-dative-question", "input": { "message": "Warum heißt es 'mit dem Bus' und nicht 'mit den Bus'?" }, "reference": { "label": "grammar" }, "expect": { "label": "grammar" } },
+    { "id": "grammar-weil-word-order", "input": { "message": "Where does the verb go after weil?" }, "reference": { "label": "grammar" }, "expect": { "label": "grammar" } },
+    { "id": "conversation-small-talk", "input": { "message": "Gestern war ich im Park und habe gelesen. Und du?" }, "reference": { "label": "conversation" }, "expect": { "label": "conversation" } },
+    { "id": "culture-pfand", "input": { "message": "Why do people return bottles to the supermarket in Germany?" }, "reference": { "label": "culture" }, "expect": { "label": "culture" } },
+    { "id": "web-current-news", "input": { "message": "Was gibt es heute für Nachrichten aus Hamburg?" }, "reference": { "label": "web" }, "expect": { "label": "web" } }
+  ]
+}

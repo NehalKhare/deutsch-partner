@@ -1,14 +1,15 @@
-import "server-only";
-
 import { z } from "zod";
 
 /**
- * The second factor, as this app uses it.
+ * The second factor, as both apps use it.
  *
  * Supabase Auth holds the factors; this is the narrow slice of its MFA client
- * the login flow needs, typed so a test can hand in a fake. TOTP only: a
- * phone is a channel this product does not otherwise have, and a password
- * plus an authenticator app is what "an operator's second factor" means here.
+ * a login flow needs, typed so a test can hand in a fake. TOTP only: a phone
+ * is a channel this product does not otherwise have, and a password plus an
+ * authenticator app is what "a second factor" means here, for an operator
+ * and for a learner alike. Each app names its own factor (see
+ * beginTotpEnrolment) so a learner who is also an operator can tell the two
+ * entries in their authenticator apart.
  */
 export interface MfaFactor {
   readonly id: string;
@@ -43,8 +44,6 @@ export const totpCodeSchema = z
   .transform((value) => value.replace(/\s+/g, ""))
   .pipe(z.string().regex(/^\d{6}$/, "Enter the six-digit code from your authenticator app."));
 
-export const FACTOR_NAME = "Deutsch Partner Ops";
-
 /** The verified TOTP factor to challenge, if the account has one. */
 export async function verifiedTotpFactor(client: MfaClient): Promise<MfaFactor | null> {
   const { data, error } = await client.auth.mfa.listFactors();
@@ -55,15 +54,16 @@ export async function verifiedTotpFactor(client: MfaClient): Promise<MfaFactor |
 
 /**
  * Starts enrolment, clearing any enrolment that was abandoned half-way: an
- * unverified factor with the same name blocks a new one.
+ * unverified factor with the same name blocks a new one. The name is what the
+ * authenticator app shows beside the code.
  */
-export async function beginTotpEnrolment(client: MfaClient) {
+export async function beginTotpEnrolment(client: MfaClient, factorName: string) {
   const { data } = await client.auth.mfa.listFactors();
   for (const factor of data?.totp ?? []) {
     if (factor.status === "unverified") await client.auth.mfa.unenroll({ factorId: factor.id });
   }
 
-  const enrolled = await client.auth.mfa.enroll({ factorType: "totp", friendlyName: FACTOR_NAME });
+  const enrolled = await client.auth.mfa.enroll({ factorType: "totp", friendlyName: factorName });
   if (enrolled.error || !enrolled.data) return null;
 
   return {
