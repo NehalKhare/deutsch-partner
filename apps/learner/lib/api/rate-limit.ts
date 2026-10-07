@@ -85,6 +85,15 @@ export const RATE_LIMITS = {
   // Second-factor attempts per account. A six-digit code is one in a million
   // per guess; five guesses in five minutes keeps it that way.
   mfa: { limit: 5, windowMs: 5 * 60_000 },
+  // Cancellation and withdrawal notices, per address. The cancellation
+  // button works without a session, so the address is the only key there
+  // is; five in a quarter hour is more than one consumer needs and fewer
+  // than a script filling the table with somebody else's address.
+  legal_notice: { limit: 5, windowMs: 15 * 60_000 },
+  // Taking everything out, per learner: the export is every table about
+  // them in one JSON, and deletion asks Stripe before the auth service.
+  account_export: { limit: 3, windowMs: 60 * 60_000 },
+  account_delete: { limit: 3, windowMs: 60 * 60_000 },
 } as const satisfies Record<string, RateLimitRule>;
 
 export type RateLimitScope = keyof typeof RATE_LIMITS;

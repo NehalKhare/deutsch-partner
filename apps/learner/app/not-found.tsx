@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { Companion } from "@/components/companion/companion";
-import { QuietShell } from "@dp/ui/quiet-shell";
+import { QuietPage } from "@/components/site/quiet-page";
 import { buttonPrimary, pageTitle, prose } from "@dp/ui/styles";
 import { companionStateFor } from "@dp/domain/companion";
 import { cn } from "@dp/ui/utils";
@@ -20,7 +20,7 @@ export const metadata = { title: "Not found", ...PRIVATE_PAGE_METADATA };
  */
 export default function NotFound() {
   return (
-    <QuietShell>
+    <QuietPage>
       <div className="flex flex-col items-center gap-6 text-center">
         <Companion
           state={companionStateFor({ miniLevel: 1, activity: "struggling" })}
@@ -35,6 +35,6 @@ export default function NotFound() {
           Back to the start
         </Link>
       </div>
-    </QuietShell>
+    </QuietPage>
   );
 }

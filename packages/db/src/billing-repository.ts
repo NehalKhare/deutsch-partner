@@ -692,6 +692,12 @@ export interface BillingAdminRepository {
   upsertSubscription(record: SubscriptionRecord): Promise<RepositoryResult<SubscriptionChange>>;
   /** The plan and Price a subscription was last stored with, or null for one never stored. */
   storedSubscription(stripeSubscriptionId: string): Promise<RepositoryResult<StoredSubscriptionPlan | null>>;
+  /**
+   * A learner's subscriptions that could still bill: every row not yet
+   * canceled, with the Stripe ids. For account deletion, which must cancel
+   * them first (spec S10).
+   */
+  liveSubscriptionsFor(learnerId: string): Promise<RepositoryResult<readonly StoredSubscription[]>>;
 
   /** Idempotent on the Checkout Session. */
   grantPass(pass: NewPass): Promise<RepositoryResult<PassGranted>>;
@@ -869,6 +875,18 @@ export function createBillingAdminRepository(client: DatabaseClient): BillingAdm
       });
 
       return decodeRow(outcome, subscriptionChangeSchema);
+    },
+
+    async liveSubscriptionsFor(learnerId) {
+      const id = decodeInput(learnerId, learnerIdSchema);
+      if (!id.ok) return id;
+      const outcome = await client
+        .from(SUBSCRIPTIONS)
+        .select(columnsOf(subscriptionRowSchema))
+        .eq("learner_id", id.data)
+        .neq("status", "canceled")
+        .limit(BILLING_ROWS_READ);
+      return decodeRows(outcome, subscriptionFromRow);
     },
 
     async storedSubscription(stripeSubscriptionId) {

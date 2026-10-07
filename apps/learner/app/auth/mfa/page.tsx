@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { verifiedTotpFactor, type MfaClient } from "@dp/auth/mfa";
-import { QuietShell } from "@dp/ui/quiet-shell";
+import { QuietPage } from "@/components/site/quiet-page";
 import { pageTitle, prose } from "@dp/ui/styles";
 
 import { verifyMfaAction } from "@/app/auth/mfa/actions";
@@ -33,12 +33,12 @@ export default async function MfaPage({
   if (!(await verifiedTotpFactor(supabase))) redirect(enrolRedirectTarget(destination ?? "/"));
 
   return (
-    <QuietShell>
+    <QuietPage>
       <div className="flex flex-col gap-2">
         <h1 className={pageTitle}>One more step</h1>
         <p className={prose}>Enter the code from your authenticator app.</p>
       </div>
       <CodeForm action={verifyMfaAction} initialState={INITIAL_CODE_STATE} next={destination} />
-    </QuietShell>
+    </QuietPage>
   );
 }

@@ -10,7 +10,17 @@ import { absoluteUrl, PRIVATE_PATHS, PUBLIC_PAGES, publicPage, SITE } from "@/li
 
 describe("the public pages", () => {
   it("are the landing page, the prices and the two ways in, and nothing behind sign-in", () => {
-    expect(PUBLIC_PAGES.map((page) => page.path)).toEqual(["/", "/pricing", SIGN_UP_PATH, LOGIN_PATH]);
+    expect(PUBLIC_PAGES.map((page) => page.path)).toEqual([
+      "/",
+      "/pricing",
+      SIGN_UP_PATH,
+      LOGIN_PATH,
+      "/legal/impressum",
+      "/legal/privacy",
+      "/legal/terms",
+      "/legal/withdrawal",
+      "/legal/cancel",
+    ]);
   });
 
   it("rank the prices just below the landing page: it is the second question a visitor asks", () => {

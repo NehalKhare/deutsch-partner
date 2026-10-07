@@ -413,32 +413,50 @@ Stated here so nobody has to discover it by reading the code.
   webhook against the real repository on PGlite. No request has gone to Stripe,
   test mode or live, and `stripe:bootstrap` has never been run against an
   account.
-- **B7 to B10 are not built.** No hands-free conversation mode for Premium
-  (B7); voice is not in the ledger (B8, below); the operator app has no revenue
-  or margin view per plan and no refunds through worker jobs (B9); and none of
-  the consumer-law pages or Stripe Tax live (B10). Comps exist as a grant
-  source — the `plan_comps` table, spec S5 source 3, resolved and shown like
-  any other grant, with the operator's own account seeded Premium by migration
-  — but the operator app has no page to grant or revoke one; that is SQL
-  through the secret key.
+- **B7 to B9 are not built, and B10 is built except for its email.** No
+  hands-free conversation mode for Premium (B7); voice is not in the ledger
+  (B8, below); the operator app has no revenue or margin view per plan and no
+  refunds through worker jobs (B9). Stripe Tax is still behind its flag. Comps
+  exist as a grant source — the `plan_comps` table, spec S5 source 3, resolved
+  and shown like any other grant, with the operator's own account seeded
+  Premium by migration — but the operator app has no page to grant or revoke
+  one; that is SQL through the secret key.
 - **No reconcile job.** Stripe's retry schedule is the only queue: an event
   that fails for longer than Stripe retries (three days in live mode) is never
   applied unless an operator resends it, and
   nothing compares the mirror with Stripe on a schedule. `billing_events` rows
   with `status = 'failed'` are where to look. The worker holds no Stripe key
   until such a job exists.
-- **The live-mode preconditions are not met.** There is no "Cancel contracts
-  here" button (§312k BGB) and no "Withdraw from contract" button (§356a BGB),
-  and both need a confirmation in text form, which needs an email sender this
-  product does not have. `/legal/terms` is a stub that says it is one, and is
-  not indexed; there is no Impressum, privacy policy or withdrawal form. The
-  annual plan's post-first-year cancellation terms (§309 Nr. 9) are not
-  enforced anywhere. A live key must not be configured before these exist
-  (spec S11); `stripe:bootstrap` refuses one.
-- **Deleting an account does not cancel its subscription.** The billing rows
-  go with the profile; the Stripe subscription does not, and would keep
-  charging. The ops deletion action must refuse while a subscription is active
-  (spec S10) and does not yet.
+- **The consumer-law pages exist; the confirmation email does not.** The
+  Impressum, privacy policy, terms and withdrawal instructions are real pages
+  under `/legal`, indexed and linked from every shell, with the operator's
+  details read from `apps/learner/lib/legal/entity.ts` — whose values are
+  bracketed placeholders until the entity is settled, and whose wording a
+  lawyer has not reviewed. "Cancel contracts here" (§312k BGB) is in every
+  footer and works signed out; "Withdraw from contract" (§356a BGB) is behind
+  sign-in on `/billing/withdraw`, in its two steps. Both record a notice in
+  `contract_notices` through the secret key and show the consumer a
+  reference, a time and an address on screen. Neither sends the text-form
+  confirmation, because there is no email sender: `NoticeConfirmer` is the
+  port, `NO_SENDER` the only implementation, and the receipt page says to
+  keep itself. The annual plan's post-first-year cancellation terms (§309 Nr.
+  9) are stated in the terms and not enforced anywhere. A live key must not
+  be configured before the sender exists and the entity is filled in (spec
+  S11); `stripe:bootstrap` refuses one.
+- **No cookie banner, by design.** Nothing in the learner's browser is set
+  by a third party and everything stored is strictly necessary (§25(2)
+  TDDDG); the privacy policy prints the list from
+  `apps/learner/lib/legal/storage.ts`, a test holds that list to every
+  `deutsch-partner.*` key in the code, and
+  `packages/security-tests/tests/third-party-scripts.test.ts` fails the build
+  on the first analytics package, tag manager or CDN font. Adding one means
+  deciding about consent first.
+- **Self-service export and deletion exist for learners.** Settings has
+  "Export my data" (`/api/account/export`, the same SQL function as the
+  operator's export) and "Delete my account", which ends every live Stripe
+  subscription at its paid period before the auth user is deleted, and
+  deletes nothing if any of them cannot be ended. The operator's deletion
+  action does not yet do the same check.
 - **The Customer Portal is Stripe's default one.** No portal configuration is
   created or passed, so what the portal allows — plan changes, cancellation,
   card updates — is whatever the Dashboard says. The app withholds the portal

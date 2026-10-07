@@ -209,6 +209,14 @@ export function createMemoryBillingStore(): MemoryBillingStore {
       return ok({ before, after, applied: true });
     },
 
+    async liveSubscriptionsFor(learnerId) {
+      const failed = failure("liveSubscriptionsFor");
+      if (failed) return failed;
+      return ok(
+        [...subscriptions.values()].filter((row) => row.learnerId === learnerId && row.status !== "canceled"),
+      );
+    },
+
     async storedSubscription(stripeSubscriptionId) {
       const failed = failure("storedSubscription");
       if (failed) return failed;

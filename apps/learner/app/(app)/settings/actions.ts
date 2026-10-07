@@ -1,8 +1,14 @@
 "use server";
 
 import { refresh, revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
-import { actionLogger, pseudonymOrUnavailable } from "@/lib/api/composition";
+import { createAuthService, type AuthClient } from "@dp/auth/service";
+
+import { createDeletionDeps } from "@/lib/account/server";
+import { DELETION_ERRORS, deleteOwnAccount } from "@/lib/account/deletion";
+import { actionLogger, pseudonymFor, pseudonymOrUnavailable } from "@/lib/api/composition";
+import { LOGIN_PATH } from "@/lib/auth/routes";
 import { requireAuthenticatedUserId } from "@/lib/auth/current-user";
 import {
   SETTINGS_SAVED,
@@ -109,4 +115,33 @@ export async function resetTrainerCoachingAction(
     status: "saved",
     message: "Forgotten. Your next session starts from the defaults.",
   };
+}
+
+/**
+ * Deletes the signed-in learner's own account (Art. 17 GDPR).
+ *
+ * The decision — the typed phrase, the live subscriptions ended first, the
+ * auth user last — is made in lib/account/deletion.ts and tested there. On
+ * success the session is signed out and the learner lands on sign-in: the
+ * account their cookie names no longer exists.
+ */
+export async function deleteAccountAction(
+  _previous: SettingsFormState,
+  formData: FormData,
+): Promise<SettingsFormState> {
+  const learnerId = await requireAuthenticatedUserId();
+
+  let userIdHash: string;
+  try {
+    userIdHash = pseudonymFor(learnerId);
+  } catch {
+    return settingsError(DELETION_ERRORS.auth_failed);
+  }
+
+  const outcome = await deleteOwnAccount({ learnerId, userIdHash }, formData.get("confirm"), await createDeletionDeps());
+  if (!outcome.ok) return settingsError(DELETION_ERRORS[outcome.error]);
+
+  const supabase = await createServerSupabaseClient();
+  await createAuthService(supabase as AuthClient).signOut();
+  redirect(`${LOGIN_PATH}?deleted=1`);
 }

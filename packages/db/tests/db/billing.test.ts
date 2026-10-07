@@ -615,6 +615,21 @@ describe("the admin repository", () => {
     expect(await admin().storedSubscription("sub_Nobody")).toEqual({ ok: true, data: null });
   });
 
+  it("lists a learner's subscriptions that could still bill, with their Stripe ids, and nobody else's", async () => {
+    await admin().upsertSubscription(subscription());
+    await admin().upsertSubscription(
+      subscription({ stripeSubscriptionId: "sub_Alice2", status: "canceled", canceledAt: NOW }),
+    );
+    await admin().upsertSubscription(subscription({ learnerId: BOB, stripeSubscriptionId: "sub_Bob1" }));
+
+    const live = await admin().liveSubscriptionsFor(ALICE);
+
+    expect(live.ok).toBe(true);
+    if (!live.ok) return;
+    expect(live.data.map((row) => row.stripeSubscriptionId)).toEqual(["sub_Alice1"]);
+    expect(live.data[0]?.learnerId).toBe(ALICE);
+  });
+
   it("finishes an event with a code, never a sentence", async () => {
     await admin().claimEvent({ eventId: "evt_Two", type: "charge.refunded", createdAt: NOW });
 

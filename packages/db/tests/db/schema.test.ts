@@ -29,6 +29,7 @@ const EXPECTED_TABLES = [
   "budget_counters",
   "budget_limits",
   "code_changes",
+  "contract_notices",
   "conversation_threads",
   "cost_rollup_daily",
   "embedding_cache",

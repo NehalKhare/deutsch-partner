@@ -1,4 +1,11 @@
 import { LOGIN_PATH, SIGN_UP_PATH } from "@/lib/auth/routes";
+import {
+  CANCEL_CONTRACT_PATH,
+  IMPRESSUM_PATH,
+  PRIVACY_PATH,
+  TERMS_PATH,
+  WITHDRAWAL_PATH,
+} from "@/lib/legal/routes";
 
 export { PRIVATE_PATHS } from "@/lib/seo/private-paths";
 
@@ -75,6 +82,46 @@ export const PUBLIC_PAGES: readonly PublicPage[] = [
     title: "Sign in",
     description: "Sign in to Deutsch Partner and carry on where you left off.",
     priority: 0.3,
+    changeFrequency: "yearly",
+  },
+  // The legal pages. Public and indexed: a consumer checking who they are
+  // buying from, or what happens to their voice, should find the answer from
+  // a search as readily as from the footer.
+  {
+    path: IMPRESSUM_PATH,
+    title: "Impressum",
+    description: "Who operates Deutsch Partner, and how to reach them.",
+    priority: 0.2,
+    changeFrequency: "yearly",
+  },
+  {
+    path: PRIVACY_PATH,
+    title: "Privacy policy",
+    description:
+      "What Deutsch Partner stores about you, why, who processes it, and your rights under the GDPR.",
+    priority: 0.3,
+    changeFrequency: "yearly",
+  },
+  {
+    path: TERMS_PATH,
+    title: "Terms of service",
+    description:
+      "The terms an order is placed under: plans, prices, renewal, cancellation and the right of withdrawal.",
+    priority: 0.3,
+    changeFrequency: "yearly",
+  },
+  {
+    path: WITHDRAWAL_PATH,
+    title: "Right of withdrawal",
+    description: "How to withdraw from an order within 14 days, with the model withdrawal form.",
+    priority: 0.2,
+    changeFrequency: "yearly",
+  },
+  {
+    path: CANCEL_CONTRACT_PATH,
+    title: "Cancel contracts here",
+    description: "Cancel a Deutsch Partner subscription or pass, without signing in.",
+    priority: 0.2,
     changeFrequency: "yearly",
   },
 ];

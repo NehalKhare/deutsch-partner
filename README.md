@@ -45,6 +45,13 @@ your vocabulary, and a per-level score.
   Product Ops board described below — which opens every scan with what learners
   said about the trainer. It records jobs; a worker runs them.
 
+## Walkthrough
+
+[![A five-minute walkthrough: the product, the model gateway, retrieval and the security tests](https://img.youtube.com/vi/<YOUTUBE_ID>/maxresdefault.jpg)](https://youtu.be/<YOUTUBE_ID>)
+
+Five minutes, screen only: sixty seconds of the product, then the gateway,
+retrieval and the tests that guard the boundaries.
+
 ## Documentation
 
 | Document | What it answers |

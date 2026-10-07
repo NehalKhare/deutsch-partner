@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { signOutAction } from "@/app/auth/actions";
 import { AccountMenu } from "@/components/site/account-menu";
 import { AppNav, tabBarSpace } from "@/components/site/app-nav";
+import { CompactLegalFooter } from "@/components/site/public-footer";
 import { Wordmark } from "@dp/ui/wordmark";
 import { accountLabel } from "@dp/auth/account";
 import { requireAuthenticatedAccount } from "@/lib/auth/current-user";
@@ -73,6 +74,10 @@ export default async function AuthenticatedLayout({
         </div>
       </header>
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">{children}</div>
+      {/* One line, under the scrolling region and above the tab bar: the
+          Impressum and "Cancel contracts here" are owed on every page, and a
+          learner mid-conversation is still a consumer (§312k BGB). */}
+      <CompactLegalFooter />
       <div aria-hidden className={tabBarSpace} />
     </div>
   );

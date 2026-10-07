@@ -1,9 +1,11 @@
 import Link from "next/link";
 
 import {
+  deleteAccountAction,
   resetTrainerCoachingAction,
   updateSettingsAction,
 } from "@/app/(app)/settings/actions";
+import { AccountControls } from "@/components/settings/account-controls";
 import { PlanStrip } from "@/components/settings/plan-strip";
 import { SettingsForm } from "@/components/settings/settings-form";
 import { TrainerCoachingSettings } from "@/components/settings/trainer-coaching";
@@ -157,6 +159,13 @@ export default async function SettingsPage() {
           the votes and any note you add, never the reply they were about.
         </p>
       </details>
+
+      <section aria-labelledby="account-heading" className={panel}>
+        <h2 id="account-heading" className={sectionLabel}>
+          Your data
+        </h2>
+        <AccountControls action={deleteAccountAction} initialState={INITIAL_SETTINGS_STATE} />
+      </section>
     </main>
   );
 }

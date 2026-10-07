@@ -13,10 +13,17 @@ import { Wordmark } from "./wordmark";
 export function QuietShell({
   children,
   width = "narrow",
+  footer,
 }: {
   children: React.ReactNode;
   /** Onboarding is a form with real content in it; the rest is a card. */
   width?: "narrow" | "wide";
+  /**
+   * What stands at the foot of the page. The learner app puts its legal
+   * links here on every shell, because the law wants them on every page
+   * and a sign-in card is a page; the shell itself knows nothing about them.
+   */
+  footer?: React.ReactNode;
 }) {
   return (
     <div className="flex min-h-dvh flex-col bg-ground font-body text-copy">
@@ -36,6 +43,7 @@ export function QuietShell({
       >
         {children}
       </main>
+      {footer}
     </div>
   );
 }

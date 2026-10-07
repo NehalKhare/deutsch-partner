@@ -1,5 +1,5 @@
 import { CredentialsForm } from "@/components/auth/credentials-form";
-import { QuietShell } from "@dp/ui/quiet-shell";
+import { QuietPage } from "@/components/site/quiet-page";
 import { pageTitle, prose } from "@dp/ui/styles";
 import { signUpAction } from "@/app/auth/actions";
 import { INITIAL_AUTH_STATE } from "@dp/auth/form-state";
@@ -23,7 +23,7 @@ export default async function SignUpPage({
   const destination = typeof next === "string" && next !== "" ? safeNextPath(next) : undefined;
 
   return (
-    <QuietShell>
+    <QuietPage>
       <div className="flex flex-col gap-2">
         <h1 className={pageTitle}>Start learning German</h1>
         <p className={prose}>Your progress is saved as you go.</p>
@@ -34,6 +34,6 @@ export default async function SignUpPage({
         initialState={INITIAL_AUTH_STATE}
         next={destination}
       />
-    </QuietShell>
+    </QuietPage>
   );
 }

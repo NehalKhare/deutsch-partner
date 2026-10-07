@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { verifiedTotpFactor, type MfaClient } from "@dp/auth/mfa";
-import { QuietShell } from "@dp/ui/quiet-shell";
+import { QuietPage } from "@/components/site/quiet-page";
 import { pageTitle, prose } from "@dp/ui/styles";
 
 import { enrolmentAction } from "@/app/auth/mfa/actions";
@@ -28,7 +28,7 @@ export default async function EnrolPage({
   if (await verifiedTotpFactor(supabase)) redirect(stepUpRedirectTarget(destination ?? "/"));
 
   return (
-    <QuietShell>
+    <QuietPage>
       <div className="flex flex-col gap-2">
         <h1 className={pageTitle}>Keep your account yours</h1>
         <p className={prose}>
@@ -37,6 +37,6 @@ export default async function EnrolPage({
         </p>
       </div>
       <EnrolForm action={enrolmentAction} initialState={INITIAL_ENROLMENT_STATE} next={destination} />
-    </QuietShell>
+    </QuietPage>
   );
 }

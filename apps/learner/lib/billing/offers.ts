@@ -33,8 +33,8 @@ export const BILLING_PATH = "/billing";
 export const CHECKOUT_PATH = "/billing/checkout";
 export const TRIAL_PATH = "/billing/trial";
 export const PRICING_PATH = "/pricing";
-/** Where the terms an order is placed under live. A stub until B10 (spec S11). */
-export const TERMS_PATH = "/legal/terms";
+/** Where the terms an order is placed under live. Re-exported: the order page knew it here first. */
+export { TERMS_PATH } from "@/lib/legal/routes";
 
 /** What reading the mirror came to: its active rows, or that it could not be read. */
 export type PriceList =

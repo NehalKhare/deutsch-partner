@@ -46,6 +46,7 @@ const OPERATOR_TABLES = [
   "rate_limit_buckets",
   "billing_prices",
   "billing_events",
+  "contract_notices",
 ];
 
 /**
