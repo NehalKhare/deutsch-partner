@@ -296,3 +296,6 @@ against scripted models. [Architecture](docs/architecture.md#what-is-not-built)
 lists what is deliberately not built.
 
 The database is the only meeting point. The learner writes learner state and its own model spend. The operator app only enqueues rows. pg_cron enqueues the scheduled jobs on its own. The worker polls the same table and drains whatever is there. Nothing here needs another app's hostname.
+
+
+<img width="3840" height="2160" alt="Cover 1920×1080@2x" src="https://github.com/user-attachments/assets/1e7eb350-707a-4bc7-a68b-5d1a4257b0c0" />
