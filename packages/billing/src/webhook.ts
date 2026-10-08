@@ -1,6 +1,7 @@
 import type { BillingAdminRepository, CheckoutStatus } from "@dp/db/billing-repository";
 import type { RepositoryResult } from "@dp/db/errors";
-import { offerFor, passDaysSchema, subscriptionStatusSchema, type OfferKind } from "@dp/domain/billing";
+import { offerFor, passDaysSchema, subscriptionStatusSchema, type OfferKind, type SubscriptionStatus } from "@dp/domain/billing";
+import type { LearnerNotificationEvent, LearnerNotificationSink, OpsNotificationSink } from "@dp/domain/notifications";
 import { paidPlanCodeSchema, type PaidPlanCode } from "@dp/domain/plans";
 import { withFields, type Logger } from "@dp/observability/logger";
 
@@ -31,6 +32,13 @@ import type { BillingProvider, NormalizedCheckout, PriceReference, VerifiedEvent
  * The log carries the event id and type, the outcome, plan codes, statuses
  * and the learner's pseudonym (spec S13). Never a Stripe object id, a learner
  * id, an amount, or any text Stripe sent.
+ *
+ * What changed a learner's plan is also what they are told about, through
+ * the notification sink: a subscription that started or ended, a payment
+ * that failed, a pass granted or refunded. Told after the write, from the
+ * plan code and the status alone, and never as a reason to fail the event —
+ * a learner whose nudge could not be written still has the plan. An event
+ * that fails is an operator's to look at, through the other sink.
  */
 
 export const HANDLED_EVENT_TYPES = [
@@ -80,6 +88,10 @@ export interface BillingEventDeps {
   readonly now: () => Date;
   /** The learner's pseudonym for the audit trail. The id itself is never logged. */
   readonly pseudonymFor: (learnerId: string) => string;
+  /** Where a learner is told what changed. Absent means nobody is told. */
+  readonly notify?: LearnerNotificationSink;
+  /** Where an operator is told an event is failing. Absent means nobody is told. */
+  readonly alerts?: OpsNotificationSink;
 }
 
 /**
@@ -116,6 +128,40 @@ function stored<T>(result: RepositoryResult<T>): T {
 
 interface Context extends BillingEventDeps {
   readonly log: Logger;
+}
+
+/** Tells the learner, if anyone is listening. A sink never throws; this makes sure. */
+async function tell(ctx: Context, learnerId: string, event: LearnerNotificationEvent): Promise<void> {
+  if (!ctx.notify) return;
+  await ctx.notify.notify(learnerId, event).catch(() => undefined);
+}
+
+const STARTED: readonly SubscriptionStatus[] = ["active", "trialing"];
+const FAILING: readonly SubscriptionStatus[] = ["past_due", "unpaid"];
+const ENDED: readonly SubscriptionStatus[] = ["canceled", "incomplete_expired"];
+
+/**
+ * What a learner is told when their subscription moved from one status to
+ * another, or nothing. Decided on the stored before and after, so a re-read
+ * that changed nothing tells nobody anything, and a subscription first seen
+ * already cancelled is not announced as having started.
+ */
+export function subscriptionNotice(
+  before: { readonly status: SubscriptionStatus } | null,
+  after: { readonly status: SubscriptionStatus; readonly planCode: PaidPlanCode },
+): LearnerNotificationEvent | null {
+  const was = before?.status ?? null;
+  const is = after.status;
+  const left = (set: readonly SubscriptionStatus[]) => was === null || !set.includes(was);
+
+  if (STARTED.includes(is) && left(STARTED)) {
+    return { kind: "billing.subscription_started", plan: after.planCode, trial: is === "trialing" };
+  }
+  if (FAILING.includes(is) && left(FAILING)) return { kind: "billing.payment_failed", plan: after.planCode };
+  if (ENDED.includes(is) && was !== null && !ENDED.includes(was)) {
+    return { kind: "billing.subscription_ended", plan: after.planCode };
+  }
+  return null;
 }
 
 // --- which plan a Price sells ------------------------------------------------------
@@ -220,6 +266,8 @@ async function syncSubscription(subscriptionId: string, ctx: Context): Promise<A
       toStatus: after.status,
       cancelAtPeriodEnd: after.cancelAtPeriodEnd,
     });
+    const notice = subscriptionNotice(before, after);
+    if (notice) await tell(ctx, learnerId, notice);
   } else {
     ctx.log.debug("billing.subscription_synced", { userIdHash: ctx.pseudonymFor(learnerId), applied: change.applied });
   }
@@ -282,6 +330,12 @@ async function grantPass(session: NormalizedCheckout, learnerId: string, ctx: Co
       startsAt: granted.pass.startsAt.toISOString(),
       endsAt: granted.pass.endsAt.toISOString(),
     });
+    await tell(ctx, learnerId, {
+      kind: "billing.pass_granted",
+      plan: granted.pass.planCode,
+      days: days.data,
+      endsAt: granted.pass.endsAt,
+    });
   }
 
   await markCheckout(session.id, "completed", ctx);
@@ -335,6 +389,7 @@ async function refund(chargeId: string, ctx: Context): Promise<Applied> {
     userIdHash: ctx.pseudonymFor(revoked.learnerId),
     plan: revoked.planCode,
   });
+  await tell(ctx, revoked.learnerId, { kind: "billing.pass_revoked", plan: revoked.planCode });
   return PROCESSED;
 }
 
@@ -393,6 +448,18 @@ function appliedFrom(error: unknown): Applied {
 const codeOf = (applied: Applied): string | null => (applied.status === "processed" ? null : applied.code);
 
 export async function applyBillingEvent(event: VerifiedEvent, deps: BillingEventDeps): Promise<BillingEventOutcome> {
+  const outcome = await applyEvent(event, deps);
+  if (outcome.outcome === "failed" && deps.alerts) {
+    // Stripe will retry; an operator should know it is having to. Once per
+    // event, under the sink's dedupe key, however many retries fail.
+    await deps.alerts
+      .notify({ kind: "billing.event_failed", eventId: event.id, eventType: event.type, code: outcome.code })
+      .catch(() => undefined);
+  }
+  return outcome;
+}
+
+async function applyEvent(event: VerifiedEvent, deps: BillingEventDeps): Promise<BillingEventOutcome> {
   const log = withFields(deps.logger, { eventId: event.id, eventType: event.type });
   const ctx: Context = { ...deps, log };
 

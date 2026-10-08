@@ -211,6 +211,7 @@ export const EXPORTED_TABLES = [
   "subscriptions",
   "plan_passes",
   "plan_comps",
+  "learner_notifications",
 ] as const;
 
 const exportSchema = z.object({

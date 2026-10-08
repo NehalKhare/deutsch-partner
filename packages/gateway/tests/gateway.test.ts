@@ -15,6 +15,7 @@ import type {
   StreamResponse,
 } from "../src/transport";
 import { REASONING_RESERVE_TOKENS, createModelRegistry } from "../src/registry";
+import type { OpsNotificationEvent } from "@dp/domain/notifications";
 import { createLogger } from "@dp/observability/logger";
 
 const NOW = new Date("2026-08-21T12:00:00.000Z");
@@ -130,10 +131,12 @@ function harness(
     budgets?: BudgetSource;
     fxRate?: number | null;
     sink?: (line: string) => void;
+    alerts?: OpsNotificationEvent[];
   } = {},
 ) {
   const { ledger, rows, increments } = recordingLedger();
   const transport = over.transport ?? transportReturning("Guten Tag! Wie geht es dir?");
+  const alerts = over.alerts;
   const gateway = createModelGateway({
     registry: createModelRegistry(),
     transport,
@@ -142,9 +145,21 @@ function harness(
     fx: fxAt(over.fxRate === undefined ? 0.92 : over.fxRate),
     logger: createLogger({ sink: over.sink ?? (() => {}) }),
     now: () => NOW,
+    ...(alerts
+      ? {
+          alerts: {
+            async notify(event: OpsNotificationEvent) {
+              alerts.push(event);
+            },
+          },
+        }
+      : {}),
   });
   return { gateway, rows, increments, transport };
 }
+
+/** Lets a fire-and-forget alert land before it is asserted on. */
+const settled = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 function researchSpec() {
   const spec = callSpecFor("productops.market_research", {
@@ -1059,5 +1074,66 @@ describe("web search", () => {
     await gateway.complete(researchSpec(), PROMPT, CONTEXT);
 
     expect(JSON.stringify(rows)).not.toContain("citation");
+  });
+});
+
+describe("the budget alert", () => {
+  it("tells the operators when the global daily budget reaches its warning mark, with the day", async () => {
+    const alerts: OpsNotificationEvent[] = [];
+    const { gateway } = harness({ budgets: budgetsAt({ global: 70 }), alerts });
+
+    await gateway.complete(spec, PROMPT, CONTEXT);
+    await settled();
+
+    expect(alerts).toEqual([
+      expect.objectContaining({
+        kind: "budget.threshold",
+        scope: "global_daily",
+        state: "warn",
+        limitEur: 100,
+        day: "2026-08-21",
+      }),
+    ]);
+    expect((alerts[0] as { ratio: number }).ratio).toBeGreaterThanOrEqual(0.7);
+  });
+
+  it("says denied when the day is spent, even though no call was made", async () => {
+    const alerts: OpsNotificationEvent[] = [];
+    const { gateway } = harness({ budgets: budgetsAt({ global: 100 }), alerts });
+
+    const outcome = await gateway.complete(spec, PROMPT, CONTEXT);
+    await settled();
+
+    expect(outcome.ok).toBe(false);
+    expect(alerts.map((alert) => (alert as { state: string }).state)).toEqual(["deny"]);
+  });
+
+  it("says nothing about one learner's own cap: that is theirs, not the product's", async () => {
+    const alerts: OpsNotificationEvent[] = [];
+    const { gateway } = harness({ budgets: budgetsAt({ "hash-alice": 1 }), alerts });
+
+    await gateway.complete(spec, PROMPT, CONTEXT);
+    await settled();
+
+    expect(alerts).toEqual([]);
+  });
+
+  it("neither delays nor fails a call when the alert sink is broken", async () => {
+    const { ledger, rows } = recordingLedger();
+    const gateway = createModelGateway({
+      registry: createModelRegistry(),
+      transport: transportReturning("Guten Tag!"),
+      ledger,
+      budgets: budgetsAt({ global: 90 }),
+      fx: fxAt(0.92),
+      now: () => NOW,
+      alerts: { notify: () => Promise.reject(new Error("sink down")) },
+    });
+
+    const outcome = await gateway.complete(spec, PROMPT, CONTEXT);
+    await settled();
+
+    expect(outcome.ok).toBe(true);
+    expect(rows).toHaveLength(1);
   });
 });

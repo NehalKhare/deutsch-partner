@@ -1,4 +1,5 @@
 import type { JobPayload } from "@dp/domain/jobs";
+import { failedStageOf } from "@dp/domain/product-ops";
 import { driveRunGraph } from "@dp/product-ops/graph/graph";
 
 import type { JobHandler } from "./types";
@@ -27,6 +28,25 @@ export const driveRun: JobHandler<Drive> = async (payload, context, run) => {
 
   // The store could not be read or written; nothing was decided. Later.
   if (result.status === "unavailable") return { status: "retry", errorCode: "store_unavailable" };
+
+  // The three ends an operator should hear about: parked on them, failed,
+  // or done. Each is one notification per run and stage, under the sink's
+  // dedupe key, so driving a parked run again says nothing new.
+  const { runId } = payload;
+  if (result.status === "waiting" && result.stage !== null) {
+    await context.notifications.notify({ kind: "productops.review_needed", runId, stage: result.stage });
+  } else if (result.status === "failed") {
+    // The row says only 'failed'; the timeline says where.
+    const events = await context.runs.listEvents(runId);
+    await context.notifications.notify({
+      kind: "productops.run_failed",
+      runId,
+      stage: events.ok ? failedStageOf(events.data) : null,
+      detail: result.detail,
+    });
+  } else if (result.status === "finished" && result.stage === "completed") {
+    await context.notifications.notify({ kind: "productops.run_completed", runId });
+  }
 
   // Everything else is the run's business now: a failed run is an operator's
   // retry, not the queue's.

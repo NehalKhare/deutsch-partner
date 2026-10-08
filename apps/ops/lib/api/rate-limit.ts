@@ -47,6 +47,10 @@ export const RATE_LIMITS = {
   ops_learner_lookup: { limit: 20, windowMs: 60_000 },
   // Correcting, exporting or deleting one learner's data.
   ops_learner_write: { limit: 30, windowMs: 60_000 },
+  // The bell: its poll, once a minute per open tab while visible, and the
+  // marks an operator makes. Cheap reads of one small table, so the bound
+  // is about a script and not about cost.
+  ops_notifications: { limit: 30, windowMs: 60_000 },
   // Sign-in attempts per address, on top of the auth service's own per-IP
   // limits: an operator's password is worth guessing at.
   ops_login: { limit: 5, windowMs: 15 * 60_000 },

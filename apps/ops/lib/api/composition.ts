@@ -7,6 +7,7 @@ import {
   type LearnerAdminRepository,
 } from "@dp/db/learner-admin-repository";
 import { createLedgerRepository, type LedgerRepository } from "@dp/db/ledger-repository";
+import { createOpsNotificationsRepository, type OpsNotificationsRepository } from "@dp/db/notifications-repository";
 import {
   createLearnerFeedbackRepository,
   type LearnerFeedbackRepository,
@@ -104,6 +105,23 @@ export function createCostAdmin(): CostAdmin {
     pricing: createPricingRepository(client),
     ledger: createLedgerRepository(client),
     jobs: createJobsRepository(client),
+    logger: createLogger({ base: { service: "ops", environment: env.NODE_ENV } }),
+  };
+}
+
+export interface OpsNotificationsAdmin {
+  /** The operators' one inbox: list, count, and mark read by pseudonym. */
+  readonly notifications: OpsNotificationsRepository;
+  readonly logger: Logger;
+}
+
+/** The inbox's dependencies: the secret key, because the table has no policy. */
+export function createOpsNotifications(): OpsNotificationsAdmin {
+  const env = serverEnv();
+  const client = createSecretKeySupabaseClient() as unknown as DatabaseClient;
+
+  return {
+    notifications: createOpsNotificationsRepository(client),
     logger: createLogger({ base: { service: "ops", environment: env.NODE_ENV } }),
   };
 }

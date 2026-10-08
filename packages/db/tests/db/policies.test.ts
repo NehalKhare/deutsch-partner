@@ -47,6 +47,7 @@ const OPERATOR_TABLES = [
   "billing_prices",
   "billing_events",
   "contract_notices",
+  "ops_notifications",
 ];
 
 /**
@@ -61,6 +62,13 @@ const READ_ONLY_OWNED_TABLES = [
   "plan_passes",
   "plan_comps",
 ];
+
+/**
+ * Rows written about a learner that they may read and acknowledge, and
+ * nothing more: select, and update on the one column that says "read".
+ * A learner who could insert one could tell themselves they bought a plan.
+ */
+const ACKNOWLEDGED_OWNED_TABLES = ["learner_notifications"];
 
 beforeAll(async () => {
   database = await createTestDatabase();
@@ -182,6 +190,52 @@ describe.each(READ_ONLY_OWNED_TABLES)("%s policies", (table) => {
     ).rows;
 
     expect(grants).toEqual([{ grantee: "authenticated", privilege_type: "SELECT" }]);
+  });
+});
+
+describe.each(ACKNOWLEDGED_OWNED_TABLES)("%s policies", (table) => {
+  it("has exactly two policies: read, and update", () => {
+    const found = policies.filter((policy) => policy.tablename === table);
+
+    expect(found.map((policy) => [policy.cmd, policy.roles])).toEqual([
+      ["SELECT", "{authenticated}"],
+      ["UPDATE", "{authenticated}"],
+    ]);
+  });
+
+  it("scopes both to the signed-in learner's own rows, the update on both halves", () => {
+    for (const policy of policies.filter((row) => row.tablename === table)) {
+      expect(policy.qual).toContain("SELECT auth.uid()");
+      expect(policy.qual).toContain("learner_id");
+      if (policy.cmd === "UPDATE") expect(policy.with_check).toContain("learner_id");
+    }
+  });
+
+  it("grants a learner select, and update on the read mark alone", async () => {
+    const table_grants = (
+      await database.db.query(
+        `select grantee, privilege_type
+         from information_schema.role_table_grants
+         where table_schema='public' and table_name=$1
+           and grantee in ('anon','authenticated')
+         order by grantee, privilege_type`,
+        [table],
+      )
+    ).rows;
+    expect(table_grants).toEqual([{ grantee: "authenticated", privilege_type: "SELECT" }]);
+
+    const column_grants = (
+      await database.db.query(
+        `select column_name, privilege_type
+         from information_schema.role_column_grants
+         where table_schema='public' and table_name=$1
+           and grantee in ('anon','authenticated')
+           and privilege_type <> 'SELECT'
+         order by column_name, privilege_type`,
+        [table],
+      )
+    ).rows;
+    expect(column_grants).toEqual([{ column_name: "read_at", privilege_type: "UPDATE" }]);
   });
 });
 

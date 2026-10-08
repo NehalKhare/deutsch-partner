@@ -152,6 +152,18 @@ OpenRouter may substitute. Alerts fire at 70%, 90% and 100% of the daily budget.
 `budget_denied` rows are a security audit event as well as a cost one: a learner
 who can trigger unbounded spend has found a financial denial of service.
 
+**Something needed a person and nobody saw.** The bell in the operator app's
+header is one inbox for every operator: a market scan parked on a decision, a
+run that failed, a job that gave up (`worker.job_dead_lettered` in the logs),
+a Stripe event that keeps failing, a cancellation or withdrawal notice, the
+daily budget at 70, 90 or 100 percent. Reading one reads it for everyone and
+records who, by pseudonym. It is `/notifications` in the ops app, polled
+once a minute while a tab is open, and the rows are `ops_notifications`;
+nothing is emailed or paged. Read rows are purged after ninety days and
+unread ones after a year by the `dp_notifications_purge` schedule. The
+learner's bell is the same component over `learner_notifications`, written
+only through the secret key.
+
 **Euro figures are zero.** The rate table is empty and nothing can be
 converted. The worker snapshots the rate hourly — asking the source at most
 once a day, guarded on when it was last *read* rather than which date it

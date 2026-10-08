@@ -1,6 +1,8 @@
 import { signOutAction } from "@/app/login/actions";
+import { OpsNotifications } from "@/components/ops-notifications";
 import { OpsShell } from "@/components/ops-shell";
 import { requireOperator } from "@/lib/auth/require-operator";
+import { currentOpsNotifications } from "@/lib/notifications";
 
 /**
  * The operator shell.
@@ -12,9 +14,15 @@ import { requireOperator } from "@/lib/auth/require-operator";
  */
 export default async function OperatorLayout({ children }: LayoutProps<"/">) {
   const operator = await requireOperator({ route: "layout", audit: false });
+  // After the gate, never before: the inbox is operator scope.
+  const notifications = await currentOpsNotifications();
 
   return (
-    <OpsShell email={operator.email} signOut={signOutAction}>
+    <OpsShell
+      email={operator.email}
+      signOut={signOutAction}
+      notifications={<OpsNotifications initial={notifications} />}
+    >
       {children}
     </OpsShell>
   );

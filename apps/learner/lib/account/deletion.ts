@@ -1,6 +1,7 @@
 import type { BillingProvider } from "@dp/billing/provider";
 import type { BillingAdminRepository } from "@dp/db/billing-repository";
 import type { RateLimiter } from "@dp/db/rate-limit-repository";
+import type { OpsNotificationSink } from "@dp/domain/notifications";
 import type { Logger } from "@dp/observability/logger";
 
 /**
@@ -47,6 +48,8 @@ export interface DeletionDeps {
   readonly accounts: AuthAccounts;
   readonly limiter: RateLimiter;
   readonly logger: Logger;
+  /** Where the operators hear a learner left. By pseudonym, like the audit line. */
+  readonly alerts?: OpsNotificationSink;
 }
 
 export async function deleteOwnAccount(
@@ -86,5 +89,8 @@ export async function deleteOwnAccount(
   }
 
   deps.logger.info("account.deleted", { audit: true, userIdHash: identity.userIdHash, subscriptionsEnded: ended });
+  await deps.alerts
+    ?.notify({ kind: "account.deleted", userIdHash: identity.userIdHash, subscriptionsEnded: ended })
+    .catch(() => undefined);
   return { ok: true, subscriptionsEnded: ended };
 }

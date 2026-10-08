@@ -3,11 +3,13 @@ import type { Metadata } from "next";
 import { signOutAction } from "@/app/auth/actions";
 import { AccountMenu } from "@/components/site/account-menu";
 import { AppNav, tabBarSpace } from "@/components/site/app-nav";
+import { NotificationsBell } from "@/components/site/notifications-bell";
 import { CompactLegalFooter } from "@/components/site/public-footer";
 import { Wordmark } from "@dp/ui/wordmark";
 import { accountLabel } from "@dp/auth/account";
 import { requireAuthenticatedAccount } from "@/lib/auth/current-user";
 import { currentSummary } from "@/lib/dashboard/current-summary";
+import { currentNotifications } from "@/lib/notifications/server";
 import { requireOnboarded } from "@/lib/onboarding/gate";
 import { PRIVATE_PAGE_METADATA } from "@/lib/seo/metadata";
 
@@ -49,7 +51,9 @@ export default async function AuthenticatedLayout({
   // per-request memo, so a dashboard visit still runs this aggregate once.
   // A read that fails yields nothing waiting: an unreadable database must not
   // invent urgency in the nav bar.
-  const summary = await currentSummary();
+  // Both reads at once: the aggregate and the bell's feed are independent,
+  // and the feed likewise answers empty rather than failing the shell.
+  const [summary, notifications] = await Promise.all([currentSummary(), currentNotifications()]);
   const dueCount = summary.ok ? summary.data.vocabulary.due : 0;
 
   return (
@@ -63,9 +67,11 @@ export default async function AuthenticatedLayout({
       <header className="flex items-center justify-between gap-4 border-b border-edge/60 px-4 py-2.5 sm:px-6 md:grid md:grid-cols-[1fr_auto_1fr] md:justify-items-start md:py-3 lg:px-10">
         <Wordmark href="/dashboard" />
         <AppNav dueCount={dueCount} />
-        {/* Everything about the account rather than about German: which one
-            you are in, its settings, and the way out. */}
-        <div className="md:justify-self-end">
+        {/* Everything about the account rather than about German: what the
+            product has told you, which account you are in, its settings, and
+            the way out. */}
+        <div className="flex items-center gap-2 md:justify-self-end">
+          <NotificationsBell initial={notifications} />
           <AccountMenu
             label={accountLabel(account.email)}
             email={account.email}

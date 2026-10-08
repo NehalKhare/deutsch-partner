@@ -6,6 +6,7 @@ import { requireEnvValue, type AppEnv } from "@dp/env/schema";
 import { createLogger, type Logger } from "@dp/observability/logger";
 import { createUsageAccounting } from "./repositories/usage-repository";
 import type { DatabaseClient } from "@dp/db/types";
+import type { OpsNotificationSink } from "@dp/domain/notifications";
 
 /**
  * The composition root.
@@ -20,10 +21,16 @@ import type { DatabaseClient } from "@dp/db/types";
  * explicit argument keeps the privileged decision visible at the call site
  * instead of buried in a factory.
  */
+export interface GatewayOptions {
+  /** Where the global daily budget's thresholds are reported. Optional. */
+  readonly alerts?: OpsNotificationSink;
+}
+
 export function createGateway(
   client: DatabaseClient,
   env: AppEnv,
   logger?: Logger,
+  options: GatewayOptions = {},
 ): ModelGateway {
   // Asserted at the point of use rather than at boot: development and test
   // boot without it, and only this path actually needs it.
@@ -53,5 +60,6 @@ export function createGateway(
     }),
     pricing: accounting,
     logger: resolved,
+    ...(options.alerts ? { alerts: options.alerts } : {}),
   });
 }

@@ -3,6 +3,7 @@ import {
   type BudgetDecision,
   type BudgetSource,
   type BudgetScope,
+  type BudgetSnapshot,
 } from "./budget-gate";
 import { preflight, type TurnBudget } from "./budgeter";
 import {
@@ -34,6 +35,8 @@ import type {
   ProviderUsage,
   StreamResponse,
 } from "./transport";
+import { budgetState } from "@dp/domain/budgets";
+import type { OpsNotificationSink } from "@dp/domain/notifications";
 import type { PlanCode } from "@dp/domain/plans";
 import { webSearchFor, type Tier, reasoningEffortFor, type ReasoningEffort } from "@dp/domain/tasks";
 import { nullLogger, type Logger } from "@dp/observability/logger";
@@ -153,6 +156,13 @@ export interface GatewayDeps {
   readonly pricing?: PricingStore;
   readonly logger?: Logger;
   readonly now?: () => Date;
+  /**
+   * Where the global daily budget's thresholds are reported, so an operator
+   * is told rather than left to notice (cost-dashboard-spec.md S6). Optional,
+   * never awaited, and never a reason to refuse or delay a call: the gate is
+   * the control; this is the word that it moved.
+   */
+  readonly alerts?: OpsNotificationSink;
 }
 
 /** How far the output ceiling is cut when a budget scope reaches its degrade mark. */
@@ -295,6 +305,7 @@ export function createModelGateway(deps: GatewayDeps): ModelGateway {
     }
 
     const decision: BudgetDecision = evaluateBudgets(snapshots, projectedEur);
+    alertOnGlobalBudget(snapshots, projectedEur);
 
     if (decision.state === "deny") {
       await account.write(
@@ -385,6 +396,36 @@ export function createModelGateway(deps: GatewayDeps): ModelGateway {
       degraded,
       scopeHit: decision.state === "allow" ? null : decision.scope,
     };
+  }
+
+  /**
+   * The global daily scope alone, whatever the worst scope was: a learner at
+   * their own cap is their business, the product at its cap is everyone's.
+   * One notification per state per UTC day, under the sink's dedupe key;
+   * fire-and-forget, so an alert store that is slow cannot slow a turn.
+   */
+  function alertOnGlobalBudget(
+    snapshots: readonly BudgetSnapshot[] | null,
+    projectedEur: number,
+  ): void {
+    if (!deps.alerts || snapshots === null) return;
+    const global = snapshots.find((snapshot) => snapshot.scope === "global_daily");
+    if (!global) return;
+
+    const state = budgetState(global, projectedEur);
+    if (state === "allow") return;
+
+    const ratio = global.limitEur <= 0 ? 1 : (global.spentEur + projectedEur) / global.limitEur;
+    void deps.alerts
+      .notify({
+        kind: "budget.threshold",
+        scope: "global_daily",
+        state,
+        ratio,
+        limitEur: global.limitEur,
+        day: now().toISOString().slice(0, 10),
+      })
+      .catch(() => undefined);
   }
 
   /**

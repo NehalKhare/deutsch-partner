@@ -59,8 +59,9 @@ convenience; `requireOperator` and the database are the boundary.
 | `app/(ops)/learners/` | The learner directory, one learner, and a per-learner `export` route |
 | `app/(ops)/feedback/` | What learners said about the trainer |
 | `app/(ops)/product/` | The Product Ops board, one proposal, and `runs` |
+| `app/(ops)/notifications/` | The operators' one inbox: runs waiting on a decision, failed jobs, the budget closing, notices. The bell in the header reads the same rows |
 | `app/login/`, `app/mfa/` | Password sign-in, the second-factor step, and enrolment |
-| `app/api/` | `health`, and the server-sent event stream for a run (`runs/[runId]/events`) |
+| `app/api/` | `health`, the server-sent event stream for a run (`runs/[runId]/events`), and the bell's poll (`notifications`) |
 | `lib/` | Auth, the queries behind each dashboard, env and the Supabase clients |
 | `components/` | The app's React components |
 

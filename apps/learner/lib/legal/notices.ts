@@ -9,6 +9,7 @@ import type {
   NoticeKind,
 } from "@dp/db/contract-notices-repository";
 import type { RateLimiter } from "@dp/db/rate-limit-repository";
+import type { LearnerNotificationSink, OpsNotificationSink } from "@dp/domain/notifications";
 import type { Logger } from "@dp/observability/logger";
 
 /**
@@ -123,6 +124,16 @@ export interface NoticeDeps {
   readonly keyFor: (email: string) => string;
   readonly logger: Logger;
   readonly now: () => Date;
+  /**
+   * Who else hears about the notice. The operators always: the law puts a
+   * clock on the confirmation. The learner when there is one and it is a
+   * withdrawal — the cancellation button works signed out, and a notice is
+   * confirmed to the address, not to an account that may be someone else's.
+   */
+  readonly notify?: {
+    readonly learner?: LearnerNotificationSink;
+    readonly ops?: OpsNotificationSink;
+  };
 }
 
 export async function sendNotice(
@@ -165,6 +176,17 @@ export async function sendNotice(
     senderHash: key,
     confirmed: sent,
   });
+
+  // Told after the record, by reference alone — never the address or the
+  // consumer's words — and never a reason to lose the receipt.
+  await deps.notify?.ops
+    ?.notify({ kind: "contract_notice.received", noticeKind: kind, contract: notice.contract, reference: notice.reference })
+    .catch(() => undefined);
+  if (kind === "withdrawal" && learnerId !== null) {
+    await deps.notify?.learner
+      ?.notify(learnerId, { kind: "account.withdrawal_received", reference: notice.reference })
+      .catch(() => undefined);
+  }
 
   return {
     status: "done",

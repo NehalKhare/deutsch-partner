@@ -40,6 +40,7 @@ const EXPECTED_TABLES = [
   "knowledge_documents",
   "learner_errors",
   "learner_memories",
+  "learner_notifications",
   "learner_states",
   "learner_vocabulary",
   "level_performances",
@@ -48,6 +49,7 @@ const EXPECTED_TABLES = [
   "model_invocations",
   "model_pricing_snapshots",
   "ops_jobs",
+  "ops_notifications",
   "plan_comps",
   "plan_passes",
   "product_prds",
@@ -157,6 +159,7 @@ describe("indexes", () => {
       "subscriptions",
       "plan_passes",
       "plan_comps",
+      "learner_notifications",
     ];
 
     for (const table of owned) {

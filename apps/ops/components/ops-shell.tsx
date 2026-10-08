@@ -36,10 +36,12 @@ import { OpsNav, tabBarSpace } from "@/components/ops-nav";
 export interface OpsShellProps {
   readonly email: string | null;
   readonly signOut: () => Promise<void>;
+  /** The bell, rendered by the layout with the feed it read. */
+  readonly notifications?: React.ReactNode;
   readonly children: React.ReactNode;
 }
 
-export function OpsShell({ email, signOut, children }: OpsShellProps) {
+export function OpsShell({ email, signOut, notifications, children }: OpsShellProps) {
   return (
     <div className="flex h-dvh flex-col bg-ground font-body text-copy">
       <header className="flex items-center justify-between gap-4 border-b border-edge/60 px-4 py-2.5 sm:px-6 md:grid md:grid-cols-[1fr_auto_1fr] md:justify-items-start md:py-3 lg:px-10">
@@ -53,7 +55,9 @@ export function OpsShell({ email, signOut, children }: OpsShellProps) {
 
         <OpsNav />
 
-        <div className="md:justify-self-end">
+        {/* What needs a person, then who is signed in. */}
+        <div className="flex items-center gap-2 md:justify-self-end">
+          {notifications}
           <OpsAccountMenu label={accountLabel(email)} email={email} signOut={signOut} />
         </div>
       </header>

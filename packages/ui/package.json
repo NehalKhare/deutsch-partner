@@ -19,7 +19,9 @@
     "./theme-store": "./src/theme-store.ts",
     "./use-disclosure": "./src/use-disclosure.ts",
     "./theme-ops.css": "./src/theme-ops.css",
-    "./palette": "./src/palette.ts"
+    "./palette": "./src/palette.ts",
+    "./notifications-menu": "./src/notifications-menu.tsx",
+    "./time-ago": "./src/time-ago.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -28,6 +30,7 @@
   },
   "dependencies": {
     "clsx": "catalog:",
+    "lucide-react": "catalog:",
     "tailwind-merge": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",

@@ -171,3 +171,56 @@ describe("sending a notice", () => {
     expect(INITIAL_NOTICE_STATE).toEqual({ status: "idle", message: null, receipt: null });
   });
 });
+
+describe("who else hears about a notice", () => {
+  const form = { email: "lea@example.com", contract: "subscription", detail: "" } as const;
+  const LEARNER = "22222222-2222-4222-8222-222222222222";
+
+  function listening() {
+    const learner = vi.fn(async (_learnerId: string, _event: unknown) => {});
+    const ops = vi.fn(async (_event: unknown) => {});
+    return { learner, ops, notify: { learner: { notify: learner }, ops: { notify: ops } } };
+  }
+
+  it("the operators always, by reference and never by address", async () => {
+    const { ops, notify } = listening();
+
+    await sendNotice("cancellation", form, null, deps({ notify }));
+
+    expect(ops).toHaveBeenCalledTimes(1);
+    const event = ops.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(event).toMatchObject({ kind: "contract_notice.received", noticeKind: "cancellation", contract: "subscription" });
+    expect(JSON.stringify(event)).not.toContain("lea@example.com");
+  });
+
+  it("the learner too, for a withdrawal sent while signed in", async () => {
+    const { learner, notify } = listening();
+
+    await sendNotice("withdrawal", form, LEARNER, deps({ notify }));
+
+    expect(learner).toHaveBeenCalledWith(LEARNER, {
+      kind: "account.withdrawal_received",
+      reference: expect.stringMatching(/^[A-Z0-9]{10}$/),
+    });
+  });
+
+  it("not the learner for a cancellation, which is confirmed to the address and may be somebody else's account", async () => {
+    const { learner, notify } = listening();
+
+    await sendNotice("cancellation", form, LEARNER, deps({ notify }));
+
+    expect(learner).not.toHaveBeenCalled();
+  });
+
+  it("and the receipt still stands when a sink is broken", async () => {
+    const notify = {
+      ops: { notify: async () => { throw new Error("down"); } },
+      learner: { notify: async () => { throw new Error("down"); } },
+    };
+
+    const state = await sendNotice("withdrawal", form, LEARNER, deps({ notify }));
+
+    expect(state.status).toBe("done");
+    expect(state.receipt?.reference).toMatch(/^[A-Z0-9]{10}$/);
+  });
+});

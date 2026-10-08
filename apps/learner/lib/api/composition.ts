@@ -13,6 +13,7 @@ import {
 } from "@dp/db/billing-repository";
 
 import { createEvaluator } from "@/lib/ai/evaluation";
+import { createLearnerNotificationSink, createOpsNotificationSink } from "@dp/db/notifications-repository";
 import {
   createEmbeddingService,
   type EmbeddingService,
@@ -271,7 +272,10 @@ export async function createRequestGraph(): Promise<RequestGraph> {
   const operatorClient =
     createSecretKeySupabaseClient() as unknown as DatabaseClient;
 
-  const gateway = createGateway(operatorClient, env, logger);
+  // Both sinks ride the secret key: a learner is told about their own move
+  // by the server, never by themselves, and the operators' inbox is theirs.
+  const alerts = createOpsNotificationSink(operatorClient, { logger });
+  const gateway = createGateway(operatorClient, env, logger, { alerts });
   const embeddings = createEmbeddingServiceOrNull(env, operatorClient, logger);
 
   if (!embeddings) {
@@ -302,6 +306,7 @@ export async function createRequestGraph(): Promise<RequestGraph> {
         : RETRIEVAL_UNAVAILABLE,
       evaluator: createEvaluator({ gateway, logger }),
       gateway,
+      notifications: createLearnerNotificationSink(operatorClient, { logger, pseudonymFor: pseudonymOrUnavailable }),
       logger,
     },
   };
@@ -360,7 +365,9 @@ export async function createTrainerGraph(): Promise<{
       budgets: accounting,
       // The chat gateway's own transport, reused for the answer analyzer's
       // structured call — no new connection-opener, same ledger discipline.
-      gateway: createGateway(operatorClient, env, logger),
+      gateway: createGateway(operatorClient, env, logger, {
+        alerts: createOpsNotificationSink(operatorClient, { logger }),
+      }),
       createModels: (context) =>
         createTrainerModelLadder({ env, accounting, logger }, context),
       loadMcp: (identity) => loadMcpTools(env, identity, logger),
@@ -530,5 +537,9 @@ export function createBillingWebhookGraph(): BillingWebhookDeps | null {
     // The audit trail's pseudonym, or a marker saying there is none: an
     // unset salt must not turn every payment event into a retry.
     pseudonymFor: pseudonymOrUnavailable,
+    // What changed a plan is what the learner is told about, and an event
+    // that keeps failing is what an operator is told about.
+    notify: createLearnerNotificationSink(operatorClient, { logger: billingLogger(), pseudonymFor: pseudonymOrUnavailable }),
+    alerts: createOpsNotificationSink(operatorClient, { logger: billingLogger() }),
   };
 }

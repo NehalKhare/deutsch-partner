@@ -15,7 +15,7 @@ import {
 } from "@/lib/auth/routes";
 
 describe("isProtectedPath", () => {
-  it.each(["/dashboard", "/dashboard/progress", "/review", "/chat", "/settings", "/billing", "/billing/checkout"])(
+  it.each(["/dashboard", "/dashboard/progress", "/review", "/chat", "/settings", "/billing", "/billing/checkout", "/notifications"])(
     "protects %s",
     (path) => {
       expect(isProtectedPath(path)).toBe(true);

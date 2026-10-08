@@ -93,6 +93,7 @@ describe("pg_cron", () => {
     "dp_cost_rollup",
     "dp_pricing_snapshot",
     "dp_checkpoints_prune",
+    "dp_notifications_purge",
   ])("schedules %s", (name) => {
     expect(sql).toMatch(new RegExp(`cron\\.schedule\\('${name}'`));
   });
@@ -101,15 +102,16 @@ describe("pg_cron", () => {
     expect(sql).toMatch(/'dp_productops_reconcile',\s*'\*\/5 \* \* \* \*'/);
   });
 
-  it("keeps the schedule block strippable for the test harness", () => {
-    // The harness removes exactly `do $cron$ … $cron$;`. A schedule outside
-    // that block would break PGlite; a renamed tag would break the strip.
-    const block = sql.match(/do \$cron\$[\s\S]*?\$cron\$;/i)?.[0] ?? "";
+  it("keeps every schedule block strippable for the test harness", () => {
+    // The harness removes every `do $cron$ … $cron$;`, one per migration that
+    // schedules something. A schedule outside such a block would break
+    // PGlite; a renamed tag would break the strip.
+    const blocks = [...sql.matchAll(/do \$cron\$[\s\S]*?\$cron\$;/gi)].map((match) => match[0]);
     const scheduled = sql.match(/cron\.schedule\(/g) ?? [];
-    const inBlock = block.match(/cron\.schedule\(/g) ?? [];
+    const inBlocks = blocks.flatMap((block) => block.match(/cron\.schedule\(/g) ?? []);
 
     expect(scheduled.length).toBeGreaterThan(0);
-    expect(inBlock.length).toBe(scheduled.length);
+    expect(inBlocks.length).toBe(scheduled.length);
   });
 });
 

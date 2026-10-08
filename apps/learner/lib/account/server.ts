@@ -6,6 +6,7 @@ import type { DatabaseClient } from "@dp/db/types";
 
 import { createBillingGraph } from "@/lib/api/composition";
 import { limiterFor } from "@/lib/api/rate-limit";
+import { createOpsAlerts } from "@/lib/notifications/server";
 import { createSecretKeySupabaseClient } from "@/lib/supabase/server-client";
 import type { DeletionDeps } from "@/lib/account/deletion";
 
@@ -40,5 +41,6 @@ export async function createDeletionDeps(): Promise<DeletionDeps> {
     },
     limiter: limiterFor("account_delete"),
     logger: graph.logger,
+    alerts: createOpsAlerts(),
   };
 }

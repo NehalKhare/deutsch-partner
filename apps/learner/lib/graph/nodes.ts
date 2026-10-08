@@ -21,6 +21,7 @@ import {
 import type { Evaluator } from "@/lib/ai/evaluation";
 import type { BudgetScope } from "@dp/domain/budgets";
 import { isSceneMode, type ConversationMode } from "@dp/domain/conversation";
+import type { LearnerNotificationSink } from "@dp/domain/notifications";
 import { PLAN_CATALOGUE, type PlanCode } from "@dp/domain/plans";
 import type { ModelGateway } from "@dp/gateway/gateway";
 import { callSpecFor } from "@dp/gateway/call-spec";
@@ -65,6 +66,11 @@ export interface GraphDeps {
   readonly retriever: GermanLearningRetriever;
   readonly evaluator: Evaluator;
   readonly gateway: ModelGateway;
+  /**
+   * Where the learner is told they moved. Optional: a turn without one still
+   * moves them. The sink never throws and never fails the turn.
+   */
+  readonly notifications?: LearnerNotificationSink;
   readonly logger?: Logger;
   readonly now?: () => Date;
 }
@@ -347,6 +353,23 @@ async function applyMove(
   const saved = await deps.learners.upsertState(moved.state);
   if (!saved.ok) {
     return note(state, node, "degraded", saved.error.kind);
+  }
+
+  // Written down, so now it can be said. A move made inside the turn — by
+  // asking or by earning — is a milestone the learner may want to find
+  // again; a placement when a thread opens is not. After the write and
+  // never a reason to fail the turn: the sink keeps its own failures.
+  if (because !== null && deps.notifications) {
+    await deps.notifications
+      .notify(state.input.learnerId, {
+        kind: "level.advanced",
+        from: moved.from,
+        to: moved.to,
+        theme: moved.level.theme,
+        cefr: saved.data.effectiveLevel.cefr,
+        earned: because === "earned",
+      })
+      .catch(() => undefined);
   }
 
   const learner: LoadedLearner = {

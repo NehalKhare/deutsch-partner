@@ -168,6 +168,10 @@ learner-id argument:
 | `billing_revoke_pass` | A refund revokes once and brings the passes stacked behind it forward |
 | `billing_open_trial_checkout` | One trial checkout at a time, and one trial ever, under a per-learner lock |
 | `billing_replace_prices` | The price mirror replaced in one transaction; a Price Stripe dropped is kept, inactive |
+| `record_learner_notification` / `record_ops_notification` | Written about a learner by the server, or into the operators' inbox: the same event twice is one row, under its dedupe key |
+| `mark_learner_notifications_read` | The owner is the session, never an argument; the learner's only write to the table, on the one column that says "read" |
+| `mark_ops_notifications_read` / `ops_notifications_list` | One inbox for every operator: read once for all, by pseudonym; unread first |
+| `purge_notifications` | A notification is a nudge, not a record: read rows go after ninety days, unread after a year, on a pg_cron schedule |
 
 None of them is `SECURITY DEFINER`. A migration test fails the build if one
 appears.
@@ -341,16 +345,68 @@ Price nothing can place is a failure Stripe retries, not an acknowledgement.
 > `packages/billing/src/webhook.ts`, `apps/learner/lib/billing/`,
 > `apps/learner/lib/api/quota.ts`, `packages/db/src/billing-repository.ts`
 
+## Notifications
+
+Both products tell their people about the things that happened without them
+watching, in the same bell at the same corner of the same header. A
+notification is a sentence, a severity, a time, maybe a link, and whether it
+has been read; the domain declares the closed set of kinds for each audience
+and composes the sentence from a typed event — a level, a plan code, a
+stage, a reference — so nothing at a call site can quote a learner's words or
+a Stripe id into one (`packages/domain/src/notifications.ts`).
+
+**A learner is told** when they moved on a mini-level inside a conversation,
+by asking or by earning it; when a subscription or a pass started, ended,
+failed to pay or was refunded, as the webhook learns it from Stripe; and when
+their withdrawal notice was recorded, with its reference. **An operator is
+told** when a market scan parks on a decision, fails or completes; when the
+global daily budget crosses its warning, degrade or deny mark (one notification
+per state per day); when a job spends its attempts or cannot be parsed; when a
+Stripe event keeps failing; when a cancellation or withdrawal notice arrives,
+which the law puts a clock on; and when a learner deletes their account, by
+pseudonym.
+
+Two tables, because the two audiences are two trust boundaries.
+`learner_notifications` is written about a learner by the server through the
+secret key — a learner who could insert one could tell themselves they bought
+a plan — and read and acknowledged by the learner under RLS, with the update
+privilege on `read_at` alone. `ops_notifications` is operator scope like the
+queue: RLS on, no policy, one inbox for every operator, read once for all and
+stamped with the reader's pseudonym. The same event twice is one row, under a
+dedupe key the composer chooses: a gate per run and stage, a budget state per
+day, a job id, a notice reference.
+
+Every producer holds a *sink* — `LearnerNotificationSink`,
+`OpsNotificationSink` — rather than a repository, and a sink never throws and
+never fails the thing that raised the event: a move that cannot be announced is
+still a move, a run is still parked when the alert about it is not. The chat
+graph, the billing webhook, the notice and deletion flows, the gateway's budget
+gate, the worker's loop and its drive handler are each given one at their
+composition root and tested with a fake. The bell itself is one client
+component in `@dp/ui`, server-rendered with the first feed so the badge is
+right before any script runs, polling a small JSON route only while its tab is
+visible, and marking read optimistically through a server action. Each app has
+a `/notifications` page with the whole list, on plain forms.
+
+Nothing is delivered anywhere else: no email, no push, no Slack. The inbox is
+where an operator looks, not what wakes them up, and the cost dashboard's
+"page at 100%" is still a log line until a pager exists.
+
+> `packages/domain/src/notifications.ts`, `packages/db/src/notifications-repository.ts`,
+> `packages/ui/src/notifications-menu.tsx`, `apps/learner/lib/notifications/`,
+> `apps/ops/lib/notifications.ts`
+
 ## Two Supabase clients, deliberately
 
 The request-scoped client carries the learner's session, so Row Level Security
 decides what is reachable and a bug cannot reach another learner's thread. The
 secret-key client bypasses RLS and is used for a short, named list: the
 accounting tables, which have RLS on and no policy at all; the shared
-embedding cache; the rate-limit and quota buckets; and billing's writes — the
-webhook, which has no session; the order record and the Stripe customer
-mapping, which a learner may read but never write; and the price mirror, which
-holds no learner data.
+embedding cache; the rate-limit and quota buckets; the notification sinks,
+which write about a learner and into the operators' inbox; and billing's
+writes — the webhook, which has no session; the order record and the Stripe
+customer mapping, which a learner may read but never write; and the price
+mirror, which holds no learner data.
 
 Which client a piece of code gets is an explicit argument at the composition
 root, not a default.
@@ -443,6 +499,13 @@ Stated here so nobody has to discover it by reading the code.
   9) are stated in the terms and not enforced anywhere. A live key must not
   be configured before the sender exists and the entity is filled in (spec
   S11); `stripe:bootstrap` refuses one.
+- **Notifications are in-app only.** Both bells and both `/notifications`
+  pages are built and tested, with the producers listed under Notifications
+  above. Nothing sends an email, a push or a chat message; an operator who is
+  not looking at the ops app is not told. The per-user denial spike, the
+  cost-per-turn regression, the fallback-rate and the stale-FX alerts the cost
+  dashboard spec names are not raised as notifications — only the global daily
+  budget's thresholds are.
 - **No cookie banner, by design.** Nothing in the learner's browser is set
   by a third party and everything stored is strictly necessary (§25(2)
   TDDDG); the privacy policy prints the list from

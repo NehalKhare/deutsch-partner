@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { resolveEntitlement } from "@dp/domain/entitlement";
+import type { LearnerNotificationEvent, OpsNotificationEvent } from "@dp/domain/notifications";
 import type { Logger } from "@dp/observability/logger";
 
 import { createMockBillingProvider, type MockBillingProvider } from "../src/mock";
@@ -34,6 +35,8 @@ let provider: MockBillingProvider;
 let store: MemoryBillingStore;
 let lines: LogLine[];
 let clock: Date;
+let told: Array<{ learnerId: string; event: LearnerNotificationEvent }>;
+let alerted: OpsNotificationEvent[];
 
 function capture(): Logger {
   const push = (level: string) => (event: string, fields: Record<string, unknown> = {}) => {
@@ -49,6 +52,16 @@ function deps(): BillingEventDeps {
     logger: capture(),
     now: () => clock,
     pseudonymFor: (learnerId) => `hash-${learnerId.slice(0, 8)}`,
+    notify: {
+      async notify(learnerId, event) {
+        told.push({ learnerId, event });
+      },
+    },
+    alerts: {
+      async notify(event) {
+        alerted.push(event);
+      },
+    },
   };
 }
 
@@ -141,6 +154,8 @@ beforeEach(async () => {
   provider = createMockBillingProvider();
   store = createMemoryBillingStore();
   lines = [];
+  told = [];
+  alerted = [];
   clock = NOW;
   sequence = 0;
   await store.saveCustomer(ALICE, "cus_Alice");
@@ -904,5 +919,125 @@ describe("the log", () => {
     }
     // What a payment is followed by: the event, its type, the outcome, the plan, the pseudonym.
     expect(lines.every((line) => typeof line.fields.eventId === "string" && typeof line.fields.eventType === "string")).toBe(true);
+  });
+});
+
+describe("what a learner is told", () => {
+  it("that their subscription started, once, when Stripe first says it is active", async () => {
+    provider.setSubscription(subscription());
+
+    await applyBillingEvent(subscriptionEvent("customer.subscription.created"), deps());
+    await applyBillingEvent(subscriptionEvent("customer.subscription.updated"), deps());
+
+    expect(told).toEqual([
+      { learnerId: ALICE, event: { kind: "billing.subscription_started", plan: "plus", trial: false } },
+    ]);
+  });
+
+  it("that their trial started, as a trial", async () => {
+    provider.setSubscription(
+      subscription({
+        status: "trialing",
+        trialEnd: new Date(NOW.getTime() + 7 * DAY),
+        price: { priceId: "price_PremiumMonth", lookupKey: "dp_premium_month", planCode: "premium", passDays: null },
+      }),
+    );
+
+    await applyBillingEvent(subscriptionEvent("customer.subscription.created"), deps());
+
+    expect(told.map((entry) => entry.event)).toEqual([{ kind: "billing.subscription_started", plan: "premium", trial: true }]);
+  });
+
+  it("that a payment failed, and then that the subscription ended", async () => {
+    provider.setSubscription(subscription());
+    await applyBillingEvent(subscriptionEvent("customer.subscription.created"), deps());
+    provider.setSubscription(subscription({ status: "past_due" }));
+    await applyBillingEvent(subscriptionEvent("invoice.payment_failed"), deps());
+    provider.setSubscription(subscription({ status: "unpaid" }));
+    await applyBillingEvent(subscriptionEvent("customer.subscription.updated"), deps());
+    provider.setSubscription(subscription({ status: "canceled", canceledAt: NOW }));
+    await applyBillingEvent(subscriptionEvent("customer.subscription.deleted"), deps());
+
+    expect(told.map((entry) => entry.event.kind)).toEqual([
+      "billing.subscription_started",
+      "billing.payment_failed",
+      "billing.subscription_ended",
+    ]);
+  });
+
+  it("nothing about a subscription first seen already cancelled", async () => {
+    provider.setSubscription(subscription({ status: "canceled", canceledAt: NOW }));
+
+    await applyBillingEvent(subscriptionEvent("customer.subscription.created"), deps());
+
+    expect(told).toEqual([]);
+  });
+
+  it("that a pass is theirs, with its length and end, once however many events announce it", async () => {
+    provider.setCheckoutSession(passCheckout());
+
+    await applyBillingEvent(checkoutEvent("checkout.session.completed", "cs_test_Pass1"), deps());
+    await applyBillingEvent(checkoutEvent("checkout.session.async_payment_succeeded", "cs_test_Pass1"), deps());
+
+    expect(told).toEqual([
+      {
+        learnerId: ALICE,
+        event: { kind: "billing.pass_granted", plan: "plus", days: 180, endsAt: new Date(NOW.getTime() + 180 * DAY) },
+      },
+    ]);
+  });
+
+  it("that a refunded pass was withdrawn", async () => {
+    provider.setCheckoutSession(passCheckout());
+    await applyBillingEvent(checkoutEvent("checkout.session.completed", "cs_test_Pass1"), deps());
+    provider.setCharge({ id: "ch_Pass1", paymentIntentId: "pi_Pass1", refunded: true });
+
+    await applyBillingEvent(event("charge.refunded", { objectId: "ch_Pass1" }), deps());
+
+    expect(told.map((entry) => entry.event)).toEqual([
+      expect.objectContaining({ kind: "billing.pass_granted" }),
+      { kind: "billing.pass_revoked", plan: "plus" },
+    ]);
+  });
+
+  it("is told after the write and never instead of it: a sink that throws changes nothing", async () => {
+    provider.setSubscription(subscription());
+    const throwing = { ...deps(), notify: { notify: async () => { throw new Error("sink down"); } } };
+
+    const outcome = await applyBillingEvent(subscriptionEvent("customer.subscription.created"), throwing);
+
+    expect(outcome).toEqual({ outcome: "processed", httpStatus: 200 });
+    expect(await planOf(ALICE)).toBe("plus");
+  });
+
+  it("nothing at all when no sink is wired", async () => {
+    provider.setSubscription(subscription());
+    const { notify: _notify, alerts: _alerts, ...silent } = deps();
+
+    const outcome = await applyBillingEvent(subscriptionEvent("customer.subscription.created"), silent);
+
+    expect(outcome.outcome).toBe("processed");
+    expect(told).toEqual([]);
+  });
+});
+
+describe("what an operator is told", () => {
+  it("that an event is failing, with its type and the code, and never a learner", async () => {
+    provider.setSubscription(subscription());
+    provider.failWith("retrieveSubscription", "stripe_unavailable");
+
+    await applyBillingEvent(subscriptionEvent(), deps());
+
+    expect(alerted).toEqual([
+      { kind: "billing.event_failed", eventId: "evt_1", eventType: "customer.subscription.updated", code: "stripe_unavailable" },
+    ]);
+  });
+
+  it("nothing about an event that was applied or deliberately ignored", async () => {
+    provider.setSubscription(subscription());
+    await applyBillingEvent(subscriptionEvent(), deps());
+    await applyBillingEvent(event("customer.updated", { objectId: "cus_Alice" }), deps());
+
+    expect(alerted).toEqual([]);
   });
 });

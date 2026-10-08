@@ -54,6 +54,17 @@ const sleep = (ms: number, signal: AbortSignal) =>
     signal.addEventListener("abort", done, { once: true });
   });
 
+/**
+ * A job that will not be retried on its own is an operator's to look at,
+ * so it is said in the ops app as well as in the audit log. The code and
+ * the ids, never the payload.
+ */
+async function deadLettered(job: ClaimedJob, errorCode: string, context: WorkerContext): Promise<void> {
+  await context.notifications
+    .notify({ kind: "jobs.dead_lettered", jobId: job.id, jobKind: job.kind, errorCode, attempts: job.attempts })
+    .catch(() => undefined);
+}
+
 /** How a job ended, as the span attribute and the metrics spell it. */
 type JobOutcome = "done" | "retry" | "dead_letter" | "invalid" | "threw";
 
@@ -103,6 +114,7 @@ export async function processJob(
     logger.error("worker.job_invalid", { audit: true, issues: payload.error.issues.length });
     await jobs.fail(job.id, workerId, "invalid_payload", job.attempts, { final: true });
     metrics.deadLettered.add(1, { kind: job.kind, queue: job.queue, errorCode: "invalid_payload" });
+    await deadLettered(job, "invalid_payload", context);
     finish("invalid", "invalid_payload");
     return;
   }
@@ -158,6 +170,7 @@ export async function processJob(
         durationMs,
       });
       metrics.deadLettered.add(1, { kind: job.kind, queue: job.queue, errorCode: outcome.errorCode });
+      await deadLettered(job, outcome.errorCode, context);
       finish("dead_letter", outcome.errorCode);
     } else {
       logger.warn("worker.job_retry", { errorCode: outcome.errorCode, durationMs });

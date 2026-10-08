@@ -17,6 +17,7 @@ export const PRIVATE_PATHS = [
   "/chat",
   "/curriculum",
   "/dashboard",
+  "/notifications",
   "/onboarding",
   "/review",
   "/scenarios",

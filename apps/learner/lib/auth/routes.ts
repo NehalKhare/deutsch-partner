@@ -26,6 +26,7 @@ export const PROTECTED_PREFIXES = [
   "/review",
   "/settings",
   "/billing",
+  "/notifications",
 ] as const;
 
 /** Pages that exist to get a session, so a signed-in learner is sent onward. */

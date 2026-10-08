@@ -94,6 +94,10 @@ export const RATE_LIMITS = {
   // them in one JSON, and deletion asks Stripe before the auth service.
   account_export: { limit: 3, windowMs: 60 * 60_000 },
   account_delete: { limit: 3, windowMs: 60 * 60_000 },
+  // The bell's poll: one small read a minute per open tab, and the bell
+  // asks only while its tab is visible. Thirty leaves room for a learner
+  // with several tabs and none for a script that wants a live feed.
+  notifications: { limit: 30, windowMs: 60_000 },
 } as const satisfies Record<string, RateLimitRule>;
 
 export type RateLimitScope = keyof typeof RATE_LIMITS;

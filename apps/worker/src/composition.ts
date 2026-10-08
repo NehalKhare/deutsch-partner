@@ -10,7 +10,9 @@ import {
   createLearnerFeedbackRepository,
   type LearnerFeedbackRepository,
 } from "@dp/db/learner-feedback-repository";
+import { createOpsNotificationSink } from "@dp/db/notifications-repository";
 import type { DatabaseClient } from "@dp/db/types";
+import type { OpsNotificationSink } from "@dp/domain/notifications";
 import { requireEnvValue } from "@dp/env/schema";
 import { createGateway } from "@dp/gateway/factory";
 import { createTaskModelLadder } from "@dp/gateway/langchain-model";
@@ -47,6 +49,12 @@ export interface WorkerContext {
   readonly feedback: LearnerFeedbackRepository;
   readonly accounting: UsageAccounting;
   readonly registry: ModelRegistry;
+  /**
+   * Where the operators are told what needs a person: a run parked at a
+   * gate, a job that gave up, a budget closing. Never throws, never awaited
+   * for the job's sake.
+   */
+  readonly notifications: OpsNotificationSink;
   /** The product-ops workflow's dependencies, with the checkout if there is one. */
   readonly workflow: WorkflowDeps;
 }
@@ -92,6 +100,7 @@ export function createWorkerContext(env: WorkerEnv, telemetry: Telemetry = nullT
   const feedback = createLearnerFeedbackRepository(client);
   const accounting = createUsageAccounting(client, logger);
   const registry = createModelRegistry(registryOverridesFromEnv(env.app));
+  const notifications = createOpsNotificationSink(client, { logger });
 
   // A path is not a checkout. The image names one for the coder to clone
   // into; a process that serves only the jobs queue finds nothing there and
@@ -110,9 +119,12 @@ export function createWorkerContext(env: WorkerEnv, telemetry: Telemetry = nullT
     feedback,
     accounting,
     registry,
+    notifications,
     workflow: {
       runs,
-      gateway: createGateway(client, env.app, logger),
+      // The same alert sink the learner app's gateway holds: a stage that
+      // spends the product past its daily mark is told about just the same.
+      gateway: createGateway(client, env.app, logger, { alerts: notifications }),
       models: (context) => createTaskModelLadder({ env: env.app, accounting, logger }, context),
       // The planner reads the checkout this process was given. No checkout,
       // no browser, and the planning stage says so rather than guessing.

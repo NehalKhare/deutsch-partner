@@ -45,10 +45,10 @@ first run.
 
 | Path | What it holds |
 | --- | --- |
-| `app/(app)/` | The signed-in pages: `chat`, `curriculum`, `trainer`, `scenarios`, `review`, `dashboard`, `settings`, and `billing` — Plan & billing, the order page (`billing/checkout`), the trial (`billing/trial`) and the return from Stripe (`billing/success`) |
+| `app/(app)/` | The signed-in pages: `chat`, `curriculum`, `trainer`, `scenarios`, `review`, `dashboard`, `settings`, `notifications` (what the product has told you; the bell in the header reads the same rows), and `billing` — Plan & billing, the order page (`billing/checkout`), the trial (`billing/trial`) and the return from Stripe (`billing/success`) |
 | `app/pricing/`, `app/legal/terms/` | The public pricing page, and the terms an order is placed under — a stub until the consumer-law pages are written (spec S11) |
 | `app/auth/`, `app/onboarding/` | Sign-in, sign-up, the second factor (`auth/mfa` answers an authenticator app, `auth/mfa/enrol` sets one up on the first visit) and the onboarding form. A `next` destination — the plan picked on the pricing page — is carried through all of them, and only ever as a same-site path |
-| `app/api/` | Route handlers: `chat`, `trainer` (and its `feedback`), `scenarios`, `transcribe`, `speak`, `billing/webhook` (Stripe's events; no session, the signature is its authentication), `health` |
+| `app/api/` | Route handlers: `chat`, `trainer` (and its `feedback`), `scenarios`, `transcribe`, `speak`, `notifications` (the bell's poll), `billing/webhook` (Stripe's events; no session, the signature is its authentication), `health` |
 | `app/robots.ts`, `app/sitemap.ts`, `app/manifest.ts`, `app/llms.txt/`, `app/opengraph-image.tsx`, `app/icon.tsx` | What a crawler, a phone or a chat preview asks for. The policy behind them is in `lib/seo/`; see [search and answer engines](../../docs/seo-and-geo.md) |
 | `lib/` | Server logic by feature — `trainer`, `retrieval`, `scenarios`, `curriculum`, `dashboard`, `settings`, `billing` (the plan per request, offers, orders, refusals) and the rest — plus `env` and `supabase`. `lib/api/quota.ts` holds the plans' daily quotas. `lib/seo/` is the site identity, the crawl policy, the head metadata, the structured data and `llms.txt`; `lib/landing/` the landing page's rooms, questions and timeline, which the SEO layer reads |
 | `components/` | The app's React components, composed from the class strings in `@dp/ui/styles` |

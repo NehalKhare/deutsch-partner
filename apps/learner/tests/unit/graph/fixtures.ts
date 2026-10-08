@@ -119,6 +119,8 @@ export interface FakeOptions {
   readonly vocabularyWriteFails?: boolean;
   readonly message?: string;
   readonly sink?: (line: string) => void;
+  /** The notification sink refuses, as a broken store would. */
+  readonly notifyThrows?: boolean;
 }
 
 export function fakeGraph(options: FakeOptions = {}) {
@@ -133,6 +135,7 @@ export function fakeGraph(options: FakeOptions = {}) {
   const retrievalContexts: Record<string, unknown>[] = [];
   const retrievalOptions: Record<string, unknown>[] = [];
   const evaluationContexts: Record<string, unknown>[] = [];
+  const notified: Array<{ learnerId: string; event: Record<string, unknown> }> = [];
 
   const replyText = options.replyText ?? "Guten Tag! Wohin fährst du?";
 
@@ -344,12 +347,19 @@ export function fakeGraph(options: FakeOptions = {}) {
     retriever,
     evaluator,
     gateway,
+    notifications: {
+      async notify(learnerId: string, event: Record<string, unknown>) {
+        if (options.notifyThrows) throw new Error("sink down");
+        notified.push({ learnerId, event });
+      },
+    },
     logger: createLogger({ sink: options.sink ?? (() => {}) }),
     now: () => new Date("2026-08-21T12:00:00.000Z"),
   };
 
   return {
     deps,
+    notified,
     recordedErrors,
     recordedTurns,
     vocabularyWrites,

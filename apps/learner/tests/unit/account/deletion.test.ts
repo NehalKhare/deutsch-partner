@@ -112,3 +112,30 @@ describe("deleting your own account", () => {
     expect(await deleteOwnAccount(IDENTITY, DELETION_PHRASE, d)).toEqual({ ok: false, error: "rate_limited" });
   });
 });
+
+describe("what the operators are told", () => {
+  it("that a learner left, by pseudonym, with how many subscriptions were ended", async () => {
+    const notify = vi.fn(async () => {});
+    const { d } = deps([subscription()], { alerts: { notify } });
+
+    await deleteOwnAccount(IDENTITY, DELETION_PHRASE, d);
+
+    expect(notify).toHaveBeenCalledWith({ kind: "account.deleted", userIdHash: "abc123", subscriptionsEnded: 1 });
+    expect(JSON.stringify(notify.mock.calls)).not.toContain(IDENTITY.learnerId);
+  });
+
+  it("nothing when nothing was deleted", async () => {
+    const notify = vi.fn(async () => {});
+    const { d } = deps([subscription()], { alerts: { notify }, accounts: { delete: async () => ({ ok: false }) } });
+
+    await deleteOwnAccount(IDENTITY, DELETION_PHRASE, d);
+
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it("and the deletion stands when the sink is broken", async () => {
+    const { d } = deps([], { alerts: { notify: async () => { throw new Error("down"); } } });
+
+    expect(await deleteOwnAccount(IDENTITY, DELETION_PHRASE, d)).toEqual({ ok: true, subscriptionsEnded: 0 });
+  });
+});

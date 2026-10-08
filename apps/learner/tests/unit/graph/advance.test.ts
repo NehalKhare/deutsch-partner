@@ -110,3 +110,42 @@ describe("when it cannot be done", () => {
     expect(state.notes.find((n) => n.node === "advance")?.outcome).toBe("skipped");
   });
 });
+
+describe("what the learner is told", () => {
+  it("that they moved on, by asking: the levels, the new theme, and that it was asked for", async () => {
+    const { graph, before, state } = await turnSaying("weiter");
+
+    expect(graph.notified).toEqual([
+      {
+        learnerId: INPUT.learnerId,
+        event: {
+          kind: "level.advanced",
+          from: before,
+          to: before + 1,
+          theme: state.learner?.miniLevel.theme,
+          cefr: state.learner?.cefr,
+          earned: false,
+        },
+      },
+    ]);
+  });
+
+  it("that they earned it, when the tally had opened the gate", async () => {
+    const { graph } = await turnSaying("weiter", { tally: { turns: 12, strongTurns: 11 } });
+
+    expect(graph.notified[0]?.event).toMatchObject({ kind: "level.advanced", earned: true });
+  });
+
+  it("nothing when the move was not written", async () => {
+    const { graph } = await turnSaying("weiter", { upsertFails: true });
+
+    expect(graph.notified).toEqual([]);
+  });
+
+  it("still moves them when the sink is broken", async () => {
+    const { state, note, before } = await turnSaying("weiter", { notifyThrows: true });
+
+    expect(note?.outcome).toBe("ok");
+    expect(state.learner?.state.miniLevel).toBe(before + 1);
+  });
+});

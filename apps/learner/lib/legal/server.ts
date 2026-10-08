@@ -9,6 +9,7 @@ import { actionLogger } from "@/lib/api/composition";
 import { limiterFor } from "@/lib/api/rate-limit";
 import { serverEnv } from "@/lib/env/server";
 import { NO_SENDER, type NoticeDeps } from "@/lib/legal/notices";
+import { createLearnerNotifications, createOpsAlerts } from "@/lib/notifications/server";
 import { createSecretKeySupabaseClient } from "@/lib/supabase/server-client";
 
 /**
@@ -29,5 +30,6 @@ export function createNoticeDeps(): NoticeDeps {
     keyFor: (email) => hashUserId({ userId: email, salt }),
     logger: actionLogger(),
     now: () => new Date(),
+    notify: { learner: createLearnerNotifications(), ops: createOpsAlerts() },
   };
 }

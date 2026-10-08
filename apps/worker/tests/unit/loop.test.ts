@@ -105,6 +105,7 @@ function contextWith(
     workerId: "w1",
     logger: nullLogger,
     telemetry,
+    notifications: { notify: vi.fn(async () => {}) },
     env: { app: {} },
     runs: {
       pruneCheckpoints: vi.fn(async () =>
@@ -278,5 +279,44 @@ describe("the loop's slow lane", () => {
     release();
     controller.abort();
     await done;
+  });
+});
+
+describe("what the operators are told", () => {
+  it("about a job that gave up: its kind, its id and the code, never the payload", async () => {
+    const { jobs } = fakeJobs();
+    (jobs.fail as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: true, data: "failed" });
+    const context = contextWith(jobs, { ok: false });
+
+    await processJob(job(PRUNE, 5), context, 90);
+
+    expect(context.notifications.notify).toHaveBeenCalledWith({
+      kind: "jobs.dead_lettered",
+      jobId: 7,
+      jobKind: "checkpoints.prune",
+      errorCode: "store_unavailable",
+      attempts: 5,
+    });
+  });
+
+  it("about a job it could not read, as a dead letter with no content", async () => {
+    const { jobs } = fakeJobs();
+    const context = contextWith(jobs, { ok: true, data: 0 });
+
+    await processJob(job({ kind: "rm.rf", secret: "hunter2" }), context, 90);
+
+    const notify = context.notifications.notify as ReturnType<typeof vi.fn>;
+    expect(notify).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(notify.mock.calls[0])).not.toContain("hunter2");
+    expect(notify.mock.calls[0]?.[0]).toMatchObject({ kind: "jobs.dead_lettered", errorCode: "invalid_payload" });
+  });
+
+  it("nothing about a job that will be retried", async () => {
+    const { jobs } = fakeJobs();
+    const context = contextWith(jobs, { ok: false });
+
+    await processJob(job(PRUNE, 2), context, 90);
+
+    expect(context.notifications.notify).not.toHaveBeenCalled();
   });
 });
