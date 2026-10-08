@@ -1,5 +1,4 @@
 # Deutsch Partner
-
 An AI German-conversation tutor for English speakers, from absolute beginner to
 B1. A pnpm and Turborepo workspace: two Next.js apps and a Node worker over
 shared packages, TypeScript throughout, Supabase and OpenRouter.
